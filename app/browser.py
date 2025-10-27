@@ -1,17 +1,17 @@
 import contextlib
 import random
-import time
 from collections.abc import AsyncGenerator
 from enum import Enum
 from typing import Self
 
 import anyio
-from playwright.async_api import BrowserContext, Page, async_playwright
+from playwright.async_api import Page, async_playwright
 
+from app.consts import COLORS_ID
 from app.schemas import FetchMeResponse
 from app.utils import WplacePixelCoords
 
-from .config import WplaceCredentials, config
+from .config import WplaceCredentials
 from .log import logger
 
 PW_INIT_SCRIPT = """\
@@ -19,65 +19,66 @@ PW_INIT_SCRIPT = """\
     Object.defineProperty(navigator, 'webdriver', {get: () => undefined})
     localStorage.setItem('view-rules', 'true');
     localStorage.setItem('void-message-2', 'true');
+    localStorage.setItem('selected-color', '{{color_id}}');
 })()
 """
-
-
-@contextlib.asynccontextmanager
-async def open_wplace_url(
-    credentials: WplaceCredentials,
-    url: str,
-) -> AsyncGenerator[tuple[BrowserContext, Page], None]:
-    async with (
-        async_playwright() as p,
-        await p.chromium.launch(headless=False) as browser,
-        await browser.new_context() as context,
-    ):
-        await context.add_init_script(PW_INIT_SCRIPT)
-        await context.add_cookies(config.credentials.to_cookies())
-        async with await context.new_page() as page:
-            await page.goto(url, wait_until="networkidle")
-            # await find_and_close_modal(page)
-            yield context, page
-
-
-# async def find_and_close_modal(page: Page):
-#     if modal := await page.query_selector(".modal[open]"):
-#         logger.info(f"Found modal dialog: {modal!r}")
-#         for el in await modal.query_selector_all("button.btn"):
-#             if await el.text_content() == "Close":
-#                 await el.click()
-#                 logger.info("Closed modal dialog")
-#                 return
-#         logger.info("No Close button found in modal dialog")
-
-
 PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+
+
+async def find_and_close_modal(page: Page):
+    if modal := await page.query_selector(".modal[open]"):
+        logger.info(f"Found modal dialog: {modal!r}")
+        for el in await modal.query_selector_all("button.btn"):
+            if await el.text_content() == "Close":
+                await el.click()
+                logger.info("Closed modal dialog")
+                return
+        logger.info("No Close button found in modal dialog")
 
 
 class ZoomParams(Enum):
     Z_17_5 = 17.5, 44
-    Z_16 = 16., 16
-    Z_15 = 15., 8
+    Z_16 = 16.0, 16
+    Z_15 = 15.0, 8
 
 
 class WplacePage:
     def __init__(
         self,
         credentials: WplaceCredentials,
+        color_name: str,
         coord: WplacePixelCoords,
         zoom: ZoomParams,
     ) -> None:
         self.credentials = credentials
+        self.color_name = color_name
         self._coord = coord
         self._zoom = zoom
 
     @contextlib.asynccontextmanager
     async def begin(self) -> AsyncGenerator[Self, None]:
         url = self._coord.to_share_url(zoom=self._zoom.value[0])
-        async with open_wplace_url(self.credentials, url) as (self.context, self.page):
-            self._current_coord = self._coord.offset(0, 0)
-            yield self
+        script = PW_INIT_SCRIPT.replace("{{color_id}}", str(COLORS_ID[self.color_name]))
+
+        async with (
+            async_playwright() as p,
+            await p.chromium.launch(headless=False) as browser,
+            await browser.new_context(
+                user_agent=USER_AGENT,
+                viewport={"width": 1920, "height": 1080},
+                java_script_enabled=True,
+            ) as context,
+        ):
+            self.context = context
+            await context.add_init_script(script)
+            await context.add_cookies(self.credentials.to_cookies())
+            async with await context.new_page() as page:
+                self.page = page
+                await page.goto(url, wait_until="networkidle")
+                self._current_coord = self._coord.offset(0, 0)
+                yield self
+
         del self.context, self.page
 
     async def find_and_click_paint_btn(self) -> None:
@@ -88,56 +89,6 @@ class WplacePage:
             logger.info("Clicked paint button")
         else:
             logger.info("No paint button found on the page")
-
-    async def idle_around(self, seconds: float) -> None:
-        """Keep the page idle for a while to avoid being detected as a bot.
-
-        Simulates natural user behavior including:
-        - Mouse movement
-        - Zooming (wheel)
-        - Dragging
-        """
-        start = time.time()
-        while time.time() - start < seconds:
-            match random.choice(("move", "drag", "zoom")):
-                case "move":
-                    # Simple mouse movement
-                    x = random.randint(100, 800)
-                    y = random.randint(100, 600)
-                    await self.page.mouse.move(x, y)
-                    await self.page.wait_for_timeout(random.randint(200, 500))
-                case "zoom":
-                    # Simulate zoom by wheel scroll
-                    x = random.randint(100, 800)
-                    y = random.randint(100, 600)
-                    await self.page.mouse.move(x, y)
-                    zoom_direction = random.choice([-1, 1])
-                    await self.page.mouse.wheel(
-                        0, zoom_direction * random.randint(50, 100)
-                    )
-                    await self.page.wait_for_timeout(random.randint(300, 800))
-                case "drag":
-                    # Drag interaction
-                    start_x = random.randint(100, 600)
-                    start_y = random.randint(100, 500)
-                    end_x = start_x + random.randint(-100, 100)
-                    end_y = start_y + random.randint(-100, 100)
-
-                    await self.page.mouse.move(start_x, start_y)
-                    await self.page.mouse.down()
-                    await self.page.wait_for_timeout(random.randint(100, 300))
-
-                    # Simulate smooth dragging with intermediate steps
-                    steps = random.randint(3, 8)
-                    for step in range(steps):
-                        progress = (step + 1) / steps
-                        current_x = int(start_x + (end_x - start_x) * progress)
-                        current_y = int(start_y + (end_y - start_y) * progress)
-                        await self.page.mouse.move(current_x, current_y)
-                        await self.page.wait_for_timeout(random.randint(30, 100))
-
-                    await self.page.mouse.up()
-                    await self.page.wait_for_timeout(random.randint(200, 500))
 
     @property
     def current_coord(self) -> WplacePixelCoords:
@@ -155,7 +106,7 @@ class WplacePage:
         w, h = self.current_page_viewport
         return w // 2, h // 2
 
-    async def pixel_move(self, dx: int, dy: int) -> None:
+    async def _move_by_pixel(self, dx: int, dy: int) -> None:
         """Move the page by pixel offsets."""
         pixel_size = self._zoom.value[1]
         x, y = self.current_center_px
@@ -170,6 +121,12 @@ class WplacePage:
         await anyio.sleep(0.1)
         await self.page.mouse.up(button="left")
         self._current_coord = self._current_coord.offset(dx, dy)
+
+    async def move_by_pixel(self, dx: int, dy: int) -> None:
+        if dx:
+            await self._move_by_pixel(dx, 0)
+        if dy:
+            await self._move_by_pixel(0, dy)
 
     async def click_current_pixel(self) -> None:
         """Click the current pixel on the page."""
