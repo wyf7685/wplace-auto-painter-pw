@@ -323,8 +323,6 @@ COLORS_MAP = [
 ]
 COLORS_ID: dict[str, int] = {entry["name"]: idx for idx, entry in enumerate(COLORS_MAP)}
 
-ALL_COLORS: dict[str, tuple[int, int, int]] = {
-    color["name"]: color["rgb"] for color in COLORS_MAP[1:]
-}
+ALL_COLORS: dict[str, tuple[int, int, int]] = {color["name"]: color["rgb"] for color in COLORS_MAP[1:]}
 FREE_COLORS: list[str] = [color["name"] for color in COLORS_MAP[1:32]]
 PAID_COLORS: list[str] = [color["name"] for color in COLORS_MAP[32:]]

@@ -13,3 +13,6 @@ dependencies = [
     "playwright==1.55.0",
     "pydantic>=2.12.3",
 ]
+
+[tool.ruff]
+line-length = 120

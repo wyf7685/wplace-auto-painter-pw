@@ -54,10 +54,7 @@ class FetchMeResponse(BaseModel):
     showLastPixel: bool
 
     def next_level_pixels(self) -> int:
-        return math.ceil(
-            math.pow(math.floor(self.level) * math.pow(30, 0.65), (1 / 0.65))
-            - self.pixelsPainted
-        )
+        return math.ceil(math.pow(math.floor(self.level) * math.pow(30, 0.65), (1 / 0.65)) - self.pixelsPainted)
 
     def format_target_droplets(self, target_droplets: int) -> str:
         droplets_needed = target_droplets - self.droplets
@@ -66,9 +63,9 @@ class FetchMeResponse(BaseModel):
         droplets_gained = 0
 
         while droplets_gained < droplets_needed:
-            pixels_to_next_level = math.ceil(
-                math.pow(current_level * math.pow(30, 0.65), (1 / 0.65))
-            ) - (self.pixelsPainted + pixels_to_paint)
+            pixels_to_next_level = math.ceil(math.pow(current_level * math.pow(30, 0.65), (1 / 0.65))) - (
+                self.pixelsPainted + pixels_to_paint
+            )
 
             # 如果仅靠绘制像素就能达到目标
             if droplets_gained + pixels_to_next_level >= droplets_needed:
@@ -85,10 +82,7 @@ class FetchMeResponse(BaseModel):
         total_seconds = max(0, net_pixels_needed) * self.charges.cooldownMs / 1000.0
         eta_time = datetime.now() + timedelta(seconds=total_seconds)
 
-        return (
-            f"[目标: 💧{target_droplets}] 还需 {pixels_to_paint} 像素\n"
-            f"预计达成: {eta_time:%Y-%m-%d %H:%M}"
-        )
+        return f"[目标: 💧{target_droplets}] 还需 {pixels_to_paint} 像素\n预计达成: {eta_time:%Y-%m-%d %H:%M}"
 
     def format_notification(self, target_droplets: int | None = None) -> str:
         flag = f" {get_flag_emoji(self.equippedFlag)}" if self.equippedFlag else ""
@@ -110,9 +104,7 @@ class FetchMeResponse(BaseModel):
     @functools.cached_property
     def own_flags(self) -> frozenset[int]:
         b = base64.b64decode(self.flagsBitmap.encode("ascii"))
-        return frozenset(
-            i for i in range(len(b) * 8) if b[-(i // 8) - 1] & (1 << (i % 8))
-        )
+        return frozenset(i for i in range(len(b) * 8) if b[-(i // 8) - 1] & (1 << (i % 8)))
 
     @functools.cached_property
     def own_colors(self) -> frozenset[str]:

@@ -1,5 +1,5 @@
-from collections import deque
 import io
+from collections import deque
 from typing import Protocol
 
 import bot7685_ext
@@ -45,9 +45,7 @@ async def calc_template_diff(
     actual_bytes = await download_preview(*coords)
 
     with PerfLog.for_action("calculating template diff") as perf:
-        diff = await bot7685_ext.wplace.compare(
-            template_bytes, actual_bytes, include_pixels
-        )
+        diff = await bot7685_ext.wplace.compare(template_bytes, actual_bytes, include_pixels)
     logger.info(f"Calculated template diff in <y>{perf.elapsed:.3f}</>s")
     logger.info(f"Template diff count: <y>{sum(e.count for e in diff)}</> pixels")
 
@@ -94,6 +92,7 @@ def group_adjacent(points: list[tuple[int, int]]) -> list[list[tuple[int, int]]]
             bfs(p)
 
     return sorted(groups, key=len, reverse=True)
+
 
 def select_outline_from_group(points: list[tuple[int, int]]) -> list[tuple[int, int]]:
     point_set = set(points)

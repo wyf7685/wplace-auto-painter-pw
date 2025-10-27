@@ -26,10 +26,7 @@ async def download_preview(
 ) -> bytes:
     coord1, coord2 = coord1.fix_with(coord2)
     tile_imgs: dict[tuple[int, int], bytes] = {}
-    logger.opt(colors=True).info(
-        f"Downloading preview "
-        f"from <y>{coord1.human_repr()}</> to <y>{coord2.human_repr()}</>"
-    )
+    logger.opt(colors=True).info(f"Downloading preview from <y>{coord1.human_repr()}</> to <y>{coord2.human_repr()}</>")
 
     @with_semaphore(4)
     @with_retry(
@@ -47,9 +44,7 @@ async def download_preview(
     ):
         for x, y in coord1.all_tile_coords(coord2):
             tg.start_soon(fetch_tile, x, y)
-    logger.opt(colors=True).info(
-        f"Downloaded <g>{len(tile_imgs)}</> tiles (<y>{perf.elapsed:.2f}</>s)"
-    )
+    logger.opt(colors=True).info(f"Downloaded <g>{len(tile_imgs)}</> tiles (<y>{perf.elapsed:.2f}</>s)")
 
     def create_image() -> bytes:
         bg_color = (0, 0, 0, 0)

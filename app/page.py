@@ -23,7 +23,9 @@ PW_INIT_SCRIPT = """\
 })()
 """
 PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+)
 
 
 async def find_and_close_modal(page: Page):
@@ -57,7 +59,7 @@ class WplacePage:
         self.zoom = zoom
 
     @contextlib.asynccontextmanager
-    async def begin(self) -> AsyncGenerator[Self, None]:
+    async def begin(self) -> AsyncGenerator[Self]:
         url = self.coord.to_share_url(zoom=self.zoom.value[0])
         script = PW_INIT_SCRIPT.replace("{{color_id}}", str(COLORS_ID[self.color_name]))
 

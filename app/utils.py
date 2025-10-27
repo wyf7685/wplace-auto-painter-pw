@@ -46,9 +46,7 @@ class LatLon(NamedTuple):
 
 # Blue Marble 格式
 # f"Tl X: {self.tlx}, Tl Y: {self.tly}, Px X: {self.pxx}, Px Y: {self.pxy}"
-BLUE_MARBLE_COORDS_PATTERN = re.compile(
-    r".*Tl X: (\d+), Tl Y: (\d+), Px X: (\d+), Px Y: (\d+).*"
-)
+BLUE_MARBLE_COORDS_PATTERN = re.compile(r".*Tl X: (\d+), Tl Y: (\d+), Px X: (\d+), Px Y: (\d+).*")
 
 
 @dataclass
@@ -106,20 +104,14 @@ class WplacePixelCoords:
             raise ValueError(f"Invalid coords: {s}")
         return cls(int(m[1]), int(m[2]), int(m[3]), int(m[4]))
 
-    def fix_with(
-        self, other: WplacePixelCoords
-    ) -> tuple[WplacePixelCoords, WplacePixelCoords]:
+    def fix_with(self, other: WplacePixelCoords) -> tuple[WplacePixelCoords, WplacePixelCoords]:
         (x1, y1), (x2, y2) = self.to_abs(), other.to_abs()
         (x1, x2), (y1, y2) = sorted((x1, x2)), sorted((y1, y2))
         return WplaceAbsCoords(x1, y1).to_pixel(), WplaceAbsCoords(x2, y2).to_pixel()
 
     def all_tile_coords(self, other: WplacePixelCoords) -> Iterable[tuple[int, int]]:
         coord1, coord2 = self.fix_with(other)
-        yield from (
-            (x, y)
-            for x in range(coord1.tlx, coord2.tlx + 1)
-            for y in range(coord1.tly, coord2.tly + 1)
-        )
+        yield from ((x, y) for x in range(coord1.tlx, coord2.tlx + 1) for y in range(coord1.tly, coord2.tly + 1))
 
     def size_with(self, other: WplacePixelCoords) -> tuple[int, int]:
         coord1, coord2 = self.fix_with(other)
@@ -154,9 +146,7 @@ def find_color_name(rgba: tuple[int, int, int, int]) -> str:
     return closest_name
 
 
-_NORMALIZED_COLOR_NAMES: dict[str, str] = {
-    name.lower().replace(" ", "_"): name for name in ALL_COLORS
-}
+_NORMALIZED_COLOR_NAMES: dict[str, str] = {name.lower().replace(" ", "_"): name for name in ALL_COLORS}
 
 
 def normalize_color_name(name: str) -> str | None:
@@ -222,10 +212,7 @@ def with_retry[**P, R](
                 try:
                     return await func(*args, **kwargs)
                 except exc_types as e:
-                    logger.debug(
-                        f"函数 {func.__name__} "
-                        f"第 {attempt + 1}/{retries} 次调用失败: {e!r}"
-                    )
+                    logger.debug(f"函数 {func.__name__} 第 {attempt + 1}/{retries} 次调用失败: {e!r}")
                     caught.append(e)
                     await anyio.sleep(delay)
 
