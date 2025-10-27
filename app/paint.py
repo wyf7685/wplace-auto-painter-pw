@@ -2,6 +2,8 @@ import random
 
 import anyio
 
+from app.highlight import Highlight
+
 from .config import config
 from .log import logger
 from .page import WplacePage, ZoomParams
@@ -24,11 +26,11 @@ async def paint_pixels(name: str):
     page = WplacePage(config.credentials, color_name, coord, ZoomParams.Z_15)
     async with page.begin() as page:
         user_info = await page.fetch_user_info()
-        logger.info(f"Logged in as: {user_info!r}")
+        logger.opt(colors=True).info(f"Logged in as: {Highlight.apply(user_info)}")
         logger.opt(colors=True).info(
             f"Current charge: <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>"
         )
-        logger.opt(colors=True).info(f"Remaining: <y>{user_info.charges.remaining_secs()}</>s")
+        logger.opt(colors=True).info(f"Remaining: <y>{user_info.charges.remaining_secs():.2f}</>s")
         pixels_to_paint = min(
             (int(user_info.charges.count) - random.randint(5, 10)),
             len(coords) - 1,

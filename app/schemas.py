@@ -4,7 +4,7 @@ import functools
 import math
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -35,11 +35,13 @@ class FavoriteLocation(BaseModel):
 class FetchMeResponse(BaseModel):
     allianceId: int | None = None
     allianceRole: str | None = None
+    banned: bool
     charges: Charges
     country: str
     discord: str | None = None
     droplets: int
     equippedFlag: int  # 0 when not equipped
+    experiments: dict[str, Any]
     extraColorsBitmap: int
     favoriteLocations: list[FavoriteLocation]
     flagsBitmap: str
@@ -52,6 +54,7 @@ class FetchMeResponse(BaseModel):
     picture: str
     pixelsPainted: int
     showLastPixel: bool
+    timeoutUntil: datetime
 
     def next_level_pixels(self) -> int:
         return math.ceil(math.pow(math.floor(self.level) * math.pow(30, 0.65), (1 / 0.65)) - self.pixelsPainted)
