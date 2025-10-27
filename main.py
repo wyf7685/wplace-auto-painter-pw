@@ -3,7 +3,7 @@ import random
 
 import anyio
 
-from app.browser import WplacePage, ZoomParams
+from app.page import WplacePage, ZoomParams
 from app.config import config
 from app.log import logger
 from app.template import get_color_location, group_adjacent

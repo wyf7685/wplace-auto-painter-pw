@@ -53,30 +53,30 @@ class WplacePage:
     ) -> None:
         self.credentials = credentials
         self.color_name = color_name
-        self._coord = coord
-        self._zoom = zoom
+        self.coord = coord
+        self.zoom = zoom
 
     @contextlib.asynccontextmanager
     async def begin(self) -> AsyncGenerator[Self, None]:
-        url = self._coord.to_share_url(zoom=self._zoom.value[0])
+        url = self.coord.to_share_url(zoom=self.zoom.value[0])
         script = PW_INIT_SCRIPT.replace("{{color_id}}", str(COLORS_ID[self.color_name]))
 
         async with (
             async_playwright() as p,
             await p.chromium.launch(headless=False) as browser,
             await browser.new_context(
-                user_agent=USER_AGENT,
-                viewport={"width": 1920, "height": 1080},
+                # user_agent=USER_AGENT,
+                viewport={"width": 1600, "height": 900},
                 java_script_enabled=True,
             ) as context,
         ):
-            self.context = context
             await context.add_init_script(script)
             await context.add_cookies(self.credentials.to_cookies())
             async with await context.new_page() as page:
-                self.page = page
                 await page.goto(url, wait_until="networkidle")
-                self._current_coord = self._coord.offset(0, 0)
+                self.context = context
+                self.page = page
+                self._current_coord = self.coord.offset(0, 0)
                 yield self
 
         del self.context, self.page
@@ -108,7 +108,7 @@ class WplacePage:
 
     async def _move_by_pixel(self, dx: int, dy: int) -> None:
         """Move the page by pixel offsets."""
-        pixel_size = self._zoom.value[1]
+        pixel_size = self.zoom.value[1]
         x, y = self.current_center_px
         await self.page.mouse.up(button="left")
         await self.page.mouse.move(x, y)
