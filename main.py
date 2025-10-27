@@ -3,9 +3,10 @@ import random
 
 import anyio
 
-from app.page import WplacePage, ZoomParams
+from app.browser import shutdown_playwright
 from app.config import config
 from app.log import logger
+from app.page import WplacePage, ZoomParams
 from app.template import get_color_location, group_adjacent
 from app.utils import normalize_color_name
 
@@ -21,7 +22,7 @@ async def test_zoom(page: WplacePage) -> None:
     input()
 
 
-async def main():
+async def test():
     color_name = normalize_color_name("light yellow")
     assert color_name is not None, "Color not found"
     coords = await get_color_location(config.template, color_name)
@@ -71,6 +72,11 @@ async def main():
             await anyio.sleep(1)  # wait for submit
 
         input()
+
+
+async def main() -> None:
+    await test()
+    await shutdown_playwright()
 
 
 if __name__ == "__main__":

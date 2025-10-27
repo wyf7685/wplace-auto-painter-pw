@@ -5,14 +5,14 @@ from enum import Enum
 from typing import Self
 
 import anyio
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Page
 
-from app.consts import COLORS_ID
-from app.schemas import FetchMeResponse
-from app.utils import WplacePixelCoords
-
+from .browser import get_browser
 from .config import WplaceCredentials
+from .consts import COLORS_ID
 from .log import logger
+from .schemas import FetchMeResponse
+from .utils import WplacePixelCoords
 
 PW_INIT_SCRIPT = """\
 (()=>{
@@ -61,23 +61,21 @@ class WplacePage:
         url = self.coord.to_share_url(zoom=self.zoom.value[0])
         script = PW_INIT_SCRIPT.replace("{{color_id}}", str(COLORS_ID[self.color_name]))
 
-        async with (
-            async_playwright() as p,
-            await p.chromium.launch(headless=False) as browser,
-            await browser.new_context(
-                # user_agent=USER_AGENT,
-                viewport={"width": 1600, "height": 900},
-                java_script_enabled=True,
-            ) as context,
-        ):
-            await context.add_init_script(script)
-            await context.add_cookies(self.credentials.to_cookies())
-            async with await context.new_page() as page:
-                await page.goto(url, wait_until="networkidle")
-                self.context = context
-                self.page = page
-                self._current_coord = self.coord.offset(0, 0)
-                yield self
+        browser = await get_browser()
+        context = await browser.new_context(
+            # user_agent=USER_AGENT,
+            viewport={"width": 1600, "height": 900},
+            java_script_enabled=True,
+        )
+        await context.add_init_script(script)
+        await context.add_cookies(self.credentials.to_cookies())
+        async with context, await context.new_page() as page:
+            await page.goto(url, wait_until="networkidle")
+            self.context = context
+            self.page = page
+            self._current_coord = self.coord.offset(0, 0)
+
+            yield self
 
         del self.context, self.page
 
