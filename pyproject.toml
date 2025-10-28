@@ -18,3 +18,7 @@ dependencies = [
 
 [tool.ruff]
 line-length = 120
+
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"

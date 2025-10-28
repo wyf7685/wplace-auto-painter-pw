@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import sys
+from typing import Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap, QIcon
@@ -38,13 +39,20 @@ class ImageDropLabel(QLabel):
         self.setStyleSheet("border: 2px dashed #aaa; padding: 10px;")
         self.setAcceptDrops(True)
         self.filepath = None
+    def dragEnterEvent(self,a0: Optional[QDragEnterEvent]) -> None:
+        if a0 is None:
+            return
+        md = a0.mimeData()
+        if md is not None and md.hasUrls():
+            a0.acceptProposedAction()
 
-    def dragEnterEvent(self, e: QDragEnterEvent) -> None:
-        if e.mimeData().hasUrls():
-            e.acceptProposedAction()
-
-    def dropEvent(self, e: QDropEvent) -> None:
-        urls = e.mimeData().urls()
+    def dropEvent(self, a0: Optional[QDropEvent]) -> None:
+        if a0 is None:
+            return
+        md = a0.mimeData()
+        if md is None:
+            return
+        urls = md.urls()
         if not urls:
             return
         path = urls[0].toLocalFile()
@@ -220,13 +228,14 @@ class ConfigInitWindow(QWidget):
         except Exception:
             pass
 
-        if getattr(self.img_label, "filepath", None):
+        fp = getattr(self.img_label, "filepath", None)
+        if isinstance(fp, str) and fp:
             dest = os.path.join(templates_dir, f"{file_id}.png")
             if os.path.exists(dest):
                 pass
             else:
                 try:
-                    shutil.copy2(self.img_label.filepath, dest)
+                    shutil.copy2(fp, dest)
                 except Exception as e:
                     QMessageBox.warning(self, "保存图片失败", f"无法保存图片: {e}")
 
@@ -254,8 +263,10 @@ class ConfigInitWindow(QWidget):
             return False
 
         QMessageBox.information(self, "保存成功", f"配置已保存到:\n{CONFIG_PATH}\n模板图片目录: {templates_dir}")
-
-        self.users_list.item(row).setText(user.get("identifier", ""))
+        # 更新用户列表显示
+        user_name = self.users_list.item(row)
+        if user_name:
+            user_name.setText(user.get("identifier", ""))
         return True
 
     def write_config_to_disk(self) -> bool:
