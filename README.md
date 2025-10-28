@@ -25,7 +25,7 @@ cd wplace-auto-painter-pw
 uv sync
 ```
 
-1. Install browser for playwright:
+3. Install browser for playwright:
 
 ```bash
 # install chromium for playwright
