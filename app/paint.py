@@ -14,7 +14,7 @@ logger = logger.opt(colors=True)
 
 
 @with_semaphore(1)
-async def paint_pixels(user: UserConfig, zoom: ZoomLevel):
+async def paint_pixels(user: UserConfig, zoom: ZoomLevel) -> float | None:
     user_info = await fetch_user_info(user.credentials)
     logger.info(f"Logged in as: {Highlight.apply(user_info)}")
     logger.info(f"Current charge: <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>")
@@ -27,13 +27,13 @@ async def paint_pixels(user: UserConfig, zoom: ZoomLevel):
             break
     else:
         logger.warning("No available colors to paint the template.")
-        return
+        return None
 
     coords = group_adjacent(entry.pixels)[0]
     pixels_to_paint = min((int(user_info.charges.count) - random.randint(5, 10)), len(coords) - 1)
     if pixels_to_paint < 10:
         logger.warning("Not enough charges to paint pixels.")
-        return
+        return None
     logger.info(f"Preparing to paint <y>{pixels_to_paint}</> pixels...")
 
     coord = user.template.coords.offset(*coords[0])

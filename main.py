@@ -3,7 +3,7 @@ import contextlib
 import anyio
 
 from app.browser import shutdown_playwright
-from app.config import UserConfig, Config
+from app.config import Config, UserConfig
 from app.log import logger
 from app.page import WplacePage, ZoomLevel
 from app.paint import paint_loop
@@ -29,7 +29,7 @@ async def test_zoom(user: UserConfig, page: WplacePage) -> None:
         await page.find_and_click_paint_btn()
         await page.click_current_pixel()
         for idx in range(20):
-            await page._move_by_pixel(1, 1)
+            await page.move_by_pixel(1, 1)
             await page.click_current_pixel()
             logger.info(f"Clicked pixel #{idx + 1} at {page.current_coord.human_repr()}")
 

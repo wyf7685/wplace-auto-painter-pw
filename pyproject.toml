@@ -15,5 +15,100 @@ dependencies = [
     "tarina>=0.7.3",
 ]
 
+[tool.pyright]
+pythonVersion = "3.14"
+pythonPlatform = "All"
+typeCheckingMode = "standard"
+ignore = [".venv", "data", "**/build", "**/scripts"]
+disableBytesTypePromotions = true
+
 [tool.ruff]
 line-length = 120
+target-version = "py314"
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = [
+  "F",     # Pyflakes
+  "W",     # pycodestyle warnings
+  "E",     # pycodestyle errors
+  "UP",    # pyupgrade
+  "RUF",   # Ruff-specific rules
+  "ERA",   # eradicate
+  "FLY",   # flynt
+  "FURB",  # refurb
+  "I",     # isort
+  "N",     # PEP8-naming
+  "PD",    # pandas-vet
+  "PERF",  # Perflint
+  "PGH",   # pygrep-hooks
+  "TRY",   # tryceratops
+  "ASYNC", # flake8-async
+  "ANN",   # flake8-annotations
+  "S",     # flake8-bandit
+  # "FBT",   # flake8-boolean-trap
+  "A",    # flake8-builtins
+  "B",    # flake8-bugbear
+  "COM",  # flake8-commas
+  "C4",   # flake8-comprehensions
+  "DTZ",  # flake8-datetimez
+  "T10",  # flake8-debugger
+  "EM",   # flake8-errmsg
+  "FA",   # flake8-future-annotations
+  "ISC",  # flake8-implicit-str-concat
+  "ICN",  # flake8-import-conventions
+  "PIE",  # flake8-pie
+  "T20",  # flake8-print
+  "PYI",  # flake8-pyi
+  "PT",   # flake8-pytest-style
+  "Q",    # flake8-quotes
+  "RSE",  # flake8-raise
+  "RET",  # flake8-return
+  "SLF",  # flake8-self
+  "SIM",  # flake8-simplify
+  "SLOT", # flake8-slots
+  "TID",  # flake8-tidy-imports
+  "ARG",  # flake8-unused-arguments
+  "PTH",  # flake8-use-pathlib
+  "TCH",  # flake8-type-checking
+  "YTT",  # flake8-2020
+]
+ignore = [
+  "E402",   # module-import-not-at-top-of-file
+  "RUF001", # ambiguous-unicode-character-string
+  "RUF002", # ambiguous-unicode-character-docstring
+  "RUF003", # ambiguous-unicode-character-comment
+  "ANN401", # any-type
+  "TRY003", # raise-vanilla-args
+  "TRY301", # raise-within-try
+  "EM102",  # f-string-in-exception
+  "COM812", # missing-trailing-comma
+  "ERA001", # commented-out-code
+  "EM101",  # raw-string-in-exception
+  "TID252", # relative-imports
+  "ISC001", # single-line-implicit-string-concatenation
+  "DTZ005", # call-datetime-now-without-tzinfo
+  "S311",   # suspicious-non-cryptographic-random-usage
+  "PGH003", # blanket-type-ignore
+  "N818",   # error-suffix-on-exception-name  # stupid
+  "PYI041", # redundant-numeric-union  # int | float
+  "S101",   # assert
+  "B911",   # batched-without-explicit-strict
+  "PGH004", # blanket-noqa
+  "PLC",
+  "TC001",  # typing-only-first-party-import
+  "TC002",  # typing-only-third-party-import
+  "TC003",  # typing-only-standard-library-import
+]
+
+[tool.ruff.lint.flake8-builtins]
+builtins-ignorelist = ["id", "dir"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests/*"]
+extra-standard-library = ["typing_extensions"]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true

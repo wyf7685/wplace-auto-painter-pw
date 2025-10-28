@@ -28,7 +28,7 @@ USER_AGENT = (
 )
 
 
-async def find_and_close_modal(page: Page):
+async def find_and_close_modal(page: Page) -> None:
     if modal := await page.query_selector(".modal[open]"):
         logger.info(f"Found modal dialog: {modal!r}")
         for el in await modal.query_selector_all("button.btn"):
