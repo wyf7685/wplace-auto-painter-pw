@@ -6,7 +6,7 @@ import anyio
 from app.browser import shutdown_playwright
 from app.config import config
 from app.log import logger
-from app.page import WplacePage, ZoomParams
+from app.page import WplacePage, ZoomLevel
 from app.paint import paint_pixels
 from app.template import get_color_location, group_adjacent
 from app.utils import normalize_color_name
@@ -24,7 +24,7 @@ async def test_zoom(page: WplacePage) -> None:
     coords = group_adjacent(coords)[0]
 
     coord = config.template.coords.offset(*coords[0])
-    page = WplacePage(config.credentials, color_name, coord, ZoomParams.Z_15)
+    page = WplacePage(config.credentials, color_name, coord, ZoomLevel.Z_15)
     async with page.begin() as page:
         await anyio.sleep(0.5)
         await page.find_and_click_paint_btn()
@@ -41,7 +41,7 @@ async def main() -> None:
     while True:
         try:
             logger.info("Starting painting cycle...")
-            await paint_pixels("black")
+            await paint_pixels("black", ZoomLevel.Z_16)
             wait_secs = random.uniform(25 * 60, 35 * 60)
             logger.info(f"Sleeping for {wait_secs / 60:.2f} minutes...")
             await anyio.sleep(wait_secs)

@@ -39,10 +39,17 @@ async def find_and_close_modal(page: Page):
         logger.info("No Close button found in modal dialog")
 
 
-class ZoomParams(Enum):
-    Z_17_5 = 17.5, 44
-    Z_16 = 16.0, 16
-    Z_15 = 15.0, 8
+class ZoomLevel(int, Enum):
+    Z_17_5 = 17.5
+    Z_16 = 16.0
+    Z_15 = 15.0
+
+
+_ZOOM_PIXEL_SIZE: dict[ZoomLevel, int] = {
+    ZoomLevel.Z_17_5: 44,
+    ZoomLevel.Z_16: 16,
+    ZoomLevel.Z_15: 8,
+}
 
 
 class WplacePage:
@@ -51,7 +58,7 @@ class WplacePage:
         credentials: WplaceCredentials,
         color_name: str,
         coord: WplacePixelCoords,
-        zoom: ZoomParams,
+        zoom: ZoomLevel,
     ) -> None:
         self.credentials = credentials
         self.color_name = color_name
@@ -60,7 +67,7 @@ class WplacePage:
 
     @contextlib.asynccontextmanager
     async def begin(self) -> AsyncGenerator[Self]:
-        url = self.coord.to_share_url(zoom=self.zoom.value[0])
+        url = self.coord.to_share_url(zoom=self.zoom.value)
         script = PW_INIT_SCRIPT.replace("{{color_id}}", str(COLORS_ID[self.color_name]))
 
         browser = await get_browser()
@@ -108,7 +115,7 @@ class WplacePage:
 
     async def _move_by_pixel(self, dx: int, dy: int) -> None:
         """Move the page by pixel offsets."""
-        pixel_size = self.zoom.value[1]
+        pixel_size = _ZOOM_PIXEL_SIZE[self.zoom]
         x, y = self.current_center_px
         await self.page.mouse.up(button="left")
         await self.page.mouse.move(x, y)

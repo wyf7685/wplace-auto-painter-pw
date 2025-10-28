@@ -15,7 +15,10 @@ async def get_browser() -> Browser:
     global _BROWSER
     if _BROWSER is None:
         pw = await get_playwright()
-        _BROWSER = await pw.chromium.launch(headless=False)
+        _BROWSER = await pw.chromium.launch(
+            headless=False,
+            args=["--disable-notifications", "--disable-infobars"],
+        )
     return _BROWSER
 
 
