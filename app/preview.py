@@ -5,15 +5,14 @@ import anyio.to_thread
 import httpx
 from PIL import Image
 
-from app.utils import with_semaphore
-
-from .config import config
+from .config import Config
 from .log import logger
 from .utils import (
     PerfLog,
     WplacePixelCoords,
     parse_rgb_str,
     with_retry,
+    with_semaphore,
 )
 
 TILE_URL = "https://backend.wplace.live/files/s0/tiles/{x}/{y}.png"
@@ -39,7 +38,7 @@ async def download_preview(
 
     async with (
         PerfLog.for_action("downloading tiles") as perf,
-        httpx.AsyncClient(proxy=config.proxy) as client,
+        httpx.AsyncClient(proxy=Config.load().proxy) as client,
         anyio.create_task_group() as tg,
     ):
         for x, y in coord1.all_tile_coords(coord2):

@@ -7,7 +7,7 @@ from typing import Self
 import anyio
 from playwright.async_api import Page
 
-from .browser import get_browser, get_browser_type
+from .browser import get_browser
 from .config import WplaceCredentials
 from .consts import COLORS_ID
 from .log import logger
@@ -40,15 +40,12 @@ async def find_and_close_modal(page: Page):
 
 
 async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
-    b = await get_browser_type()
-    async with (
-        await b.launch(headless=True) as browser,
-        await browser.new_context(
-            user_agent=USER_AGENT,
-            viewport={"width": 1920, "height": 1080},
-            java_script_enabled=True,
-        ) as context,
-    ):
+    browser = await get_browser(headless=True)
+    async with await browser.new_context(
+        user_agent=USER_AGENT,
+        viewport={"width": 1920, "height": 1080},
+        java_script_enabled=True,
+    ) as context:
         await context.add_init_script(PW_INIT_SCRIPT.replace("{{color_id}}", "1"))
         await context.add_cookies(credentials.to_cookies())
         async with await context.new_page() as page:

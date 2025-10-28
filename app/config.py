@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Self
 
 from PIL import Image
 from playwright._impl._api_structures import SetCookieParam
@@ -8,6 +8,9 @@ from pydantic import BaseModel
 from .utils import WplacePixelCoords
 
 DATA_DIR = Path("data")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+TEMPLATE_DIR = DATA_DIR.joinpath("templates")
+TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = DATA_DIR.joinpath("config.json")
 TEMPLATE_FILE = DATA_DIR.joinpath("template.png")
 
@@ -36,8 +39,12 @@ class WplaceCredentials(BaseModel):
 
 
 class TemplateConfig(BaseModel):
-    file: ClassVar[Path] = TEMPLATE_FILE
+    file_id: str
     coords: WplacePixelCoords
+
+    @property
+    def file(self) -> Path:
+        return TEMPLATE_DIR.joinpath(f"{self.file_id}.png")
 
     def load(self) -> tuple[Image.Image, tuple[WplacePixelCoords, WplacePixelCoords]]:
         im = Image.open(self.file)
@@ -45,11 +52,21 @@ class TemplateConfig(BaseModel):
         return im, (self.coords, self.coords.offset(w - 1, h - 1))
 
 
-class Config(BaseModel):
-    template: TemplateConfig
+class UserConfig(BaseModel):
+    identifier: str
     credentials: WplaceCredentials
+    template: TemplateConfig
+
+
+class Config(BaseModel):
+    _cache: ClassVar[Self | None] = None
+
+    users: list[UserConfig]
     browser: Literal["chromium", "firefox", "webkit"] = "chromium"
     proxy: str | None = None
 
-
-config = Config.model_validate_json(CONFIG_FILE.read_text("utf-8"))
+    @classmethod
+    def load(cls) -> Self:
+        if cls._cache is None:
+            cls._cache = cls.model_validate_json(CONFIG_FILE.read_text("utf-8"))
+        return cls._cache

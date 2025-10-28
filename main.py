@@ -1,21 +1,20 @@
 import contextlib
-import random
 
 import anyio
 
 from app.browser import shutdown_playwright
-from app.config import config
+from app.config import UserConfig, Config
 from app.log import logger
 from app.page import WplacePage, ZoomLevel
-from app.paint import paint_pixels
+from app.paint import paint_loop
 from app.template import get_color_location, group_adjacent
 from app.utils import normalize_color_name
 
 
-async def test_zoom(page: WplacePage) -> None:
+async def test_zoom(user: UserConfig, page: WplacePage) -> None:
     color_name = normalize_color_name("black")
     assert color_name is not None, "Color not found"
-    coords = await get_color_location(config.template, color_name)
+    coords = await get_color_location(user.template, color_name)
     if not coords:
         logger.info(f"No pixels found for color '{color_name}' in the template area.")
         return
@@ -23,8 +22,8 @@ async def test_zoom(page: WplacePage) -> None:
     # find the largest group
     coords = group_adjacent(coords)[0]
 
-    coord = config.template.coords.offset(*coords[0])
-    page = WplacePage(config.credentials, color_name, coord, ZoomLevel.Z_15)
+    coord = user.template.coords.offset(*coords[0])
+    page = WplacePage(user.credentials, color_name, coord, ZoomLevel.Z_15)
     async with page.begin() as page:
         await anyio.sleep(0.5)
         await page.find_and_click_paint_btn()
@@ -38,19 +37,10 @@ async def test_zoom(page: WplacePage) -> None:
 
 
 async def main() -> None:
-    while True:
-        try:
-            logger.info("Starting painting cycle...")
-            await paint_pixels(ZoomLevel.Z_16)
-            wait_secs = random.uniform(25 * 60, 35 * 60)
-            logger.info(f"Sleeping for {wait_secs / 60:.2f} minutes...")
-            await anyio.sleep(wait_secs)
-        except KeyboardInterrupt:
-            logger.info("Received exit signal. Shutting down...")
-            break
-        except Exception as e:
-            logger.exception(f"An error occurred: {e}")
-
+    try:
+        await paint_loop(Config.load().users[0], ZoomLevel.Z_16)
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
     await shutdown_playwright()
 
 
