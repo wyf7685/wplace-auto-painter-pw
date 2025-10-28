@@ -1,4 +1,7 @@
-from playwright.async_api import Browser, Playwright, async_playwright
+from playwright.async_api import Browser, BrowserType, Playwright, async_playwright
+
+from .config import config
+from .log import logger
 
 _PLAYWRIGHT: Playwright | None = None
 _BROWSER: Browser | None = None
@@ -15,10 +18,9 @@ async def get_browser() -> Browser:
     global _BROWSER
     if _BROWSER is None:
         pw = await get_playwright()
-        _BROWSER = await pw.chromium.launch(
-            headless=False,
-            args=["--disable-notifications", "--disable-infobars"],
-        )
+        browser_type: BrowserType = getattr(pw, config.browser)
+        logger.opt(colors=True).info(f"Launching browser: <g>{config.browser}</>")
+        _BROWSER = await browser_type.launch(headless=False)
     return _BROWSER
 
 

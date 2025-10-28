@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from PIL import Image
 from playwright._impl._api_structures import SetCookieParam
@@ -48,6 +48,7 @@ class TemplateConfig(BaseModel):
 class Config(BaseModel):
     template: TemplateConfig
     credentials: WplaceCredentials
+    browser: Literal["chromium", "firefox", "webkit"] = "chromium"
     proxy: str | None = None
 
 
