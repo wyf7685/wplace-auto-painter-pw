@@ -41,7 +41,7 @@ async def main() -> None:
     while True:
         try:
             logger.info("Starting painting cycle...")
-            await paint_pixels("black", ZoomLevel.Z_16)
+            await paint_pixels(ZoomLevel.Z_16)
             wait_secs = random.uniform(25 * 60, 35 * 60)
             logger.info(f"Sleeping for {wait_secs / 60:.2f} minutes...")
             await anyio.sleep(wait_secs)

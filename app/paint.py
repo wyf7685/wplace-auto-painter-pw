@@ -6,40 +6,34 @@ from app.highlight import Highlight
 
 from .config import config
 from .log import logger
-from .page import WplacePage, ZoomLevel
-from .template import get_color_location, group_adjacent
-from .utils import normalize_color_name
+from .page import WplacePage, ZoomLevel, fetch_user_info
+from .template import group_adjacent, calc_template_diff
 
 
-async def paint_pixels(name: str, zoom: ZoomLevel):
-    color_name = normalize_color_name(name)
-    assert color_name is not None, "Color not found"
-    coords = await get_color_location(config.template, color_name)
-    if not coords:
-        logger.info(f"No pixels found for color '{color_name}' in the template area.")
+async def paint_pixels(zoom: ZoomLevel):
+    user_info = await fetch_user_info(config.credentials)
+    logger.opt(colors=True).info(f"Logged in as: {Highlight.apply(user_info)}")
+    logger.opt(colors=True).info(f"Current charge: <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>")
+    logger.opt(colors=True).info(f"Remaining: <y>{user_info.charges.remaining_secs():.2f}</>s")
+
+    diff = await calc_template_diff(config.template, include_pixels=True)
+    for entry in sorted(diff, key=lambda e: e.count, reverse=True):
+        if entry.name in user_info.own_colors:
+            logger.opt(colors=True).info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
+            break
+    else:
+        logger.warning("No available colors to paint the template.")
         return
 
-    # find the largest group
-    coords = group_adjacent(coords)[0]
+    coords = group_adjacent(entry.pixels)[0]
+    pixels_to_paint = min((int(user_info.charges.count) - random.randint(5, 10)), len(coords) - 1)
+    if pixels_to_paint < 10:
+        logger.warning("Not enough charges to paint pixels.")
+        return
+    logger.opt(colors=True).info(f"Preparing to paint <y>{pixels_to_paint}</> pixels...")
 
     coord = config.template.coords.offset(*coords[0])
-    page = WplacePage(config.credentials, color_name, coord, zoom)
-    async with page.begin() as page:
-        user_info = await page.fetch_user_info()
-        logger.opt(colors=True).info(f"Logged in as: {Highlight.apply(user_info)}")
-        logger.opt(colors=True).info(
-            f"Current charge: <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>"
-        )
-        logger.opt(colors=True).info(f"Remaining: <y>{user_info.charges.remaining_secs():.2f}</>s")
-        pixels_to_paint = min(
-            (int(user_info.charges.count) - random.randint(5, 10)),
-            len(coords) - 1,
-        )
-        if pixels_to_paint < 10:
-            logger.warning("Not enough charges to paint pixels.")
-            return
-        logger.opt(colors=True).info(f"Preparing to paint <y>{pixels_to_paint}</> pixels...")
-
+    async with WplacePage(config.credentials, entry.name, coord, zoom).begin() as page:
         delay = random.uniform(1, 10)
         logger.opt(colors=True).info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
         await anyio.sleep(delay)

@@ -7,15 +7,15 @@ from typing import Self
 import anyio
 from playwright.async_api import Page
 
-from .browser import get_browser
+from .browser import get_browser, get_browser_type
 from .config import WplaceCredentials
 from .consts import COLORS_ID
 from .log import logger
-from .schemas import FetchMeResponse
+from .schemas import WplaceUserInfo
 from .utils import WplacePixelCoords
 
 PW_INIT_SCRIPT = """\
-(()=>{
+(() => {
     Object.defineProperty(navigator, 'webdriver', {get: () => undefined})
     localStorage.setItem('view-rules', 'true');
     localStorage.setItem('void-message-2', 'true');
@@ -37,6 +37,28 @@ async def find_and_close_modal(page: Page):
                 logger.info("Closed modal dialog")
                 return
         logger.info("No Close button found in modal dialog")
+
+
+async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
+    b = await get_browser_type()
+    async with (
+        await b.launch(headless=True) as browser,
+        await browser.new_context(
+            user_agent=USER_AGENT,
+            viewport={"width": 1920, "height": 1080},
+            java_script_enabled=True,
+        ) as context,
+    ):
+        await context.add_init_script(PW_INIT_SCRIPT.replace("{{color_id}}", "1"))
+        await context.add_cookies(credentials.to_cookies())
+        async with await context.new_page() as page:
+            resp = await page.goto(
+                "https://backend.wplace.live/me",
+                wait_until="networkidle",
+            )
+            if not resp:
+                raise RuntimeError("Failed to fetch user info")
+            return WplaceUserInfo.model_validate_json(await resp.text())
 
 
 class ZoomLevel(int, Enum):
@@ -139,14 +161,3 @@ class WplacePage:
         """Click the current pixel on the page."""
         await self.page.mouse.up(button="left")
         await self.page.mouse.click(*self.current_center_px, delay=0.05, button="left")
-
-    async def fetch_user_info(self) -> FetchMeResponse:
-        """Fetch the current user info from the backend."""
-        async with await self.context.new_page() as api_page:
-            resp = await api_page.goto(
-                "https://backend.wplace.live/me",
-                wait_until="networkidle",
-            )
-            if not resp:
-                raise RuntimeError("Failed to fetch user info")
-            return FetchMeResponse.model_validate_json(await resp.text())

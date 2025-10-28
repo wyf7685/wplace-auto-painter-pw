@@ -14,6 +14,11 @@ async def get_playwright() -> Playwright:
     return _PLAYWRIGHT
 
 
+async def get_browser_type() -> BrowserType:
+    pw = await get_playwright()
+    return getattr(pw, config.browser)
+
+
 async def get_browser() -> Browser:
     global _BROWSER
     if _BROWSER is None:

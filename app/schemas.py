@@ -32,7 +32,7 @@ class FavoriteLocation(BaseModel):
         return WplacePixelCoords.from_lat_lon(self.latitude, self.longitude)
 
 
-class FetchMeResponse(BaseModel):
+class WplaceUserInfo(BaseModel):
     allianceId: int | None = None
     allianceRole: str | None = None
     banned: bool
