@@ -102,6 +102,10 @@ class WplacePage:
 
         del self.context, self.page
 
+    async def is_painting(self) -> bool:
+        el = await self.page.query_selector("div.absolute.w-full")
+        return el is not None
+
     async def find_and_click_paint_btn(self) -> None:
         """Find and click the paint button on the page."""
         if paint_btn := await self.page.query_selector(PAINT_BTN_SELECTOR):
@@ -110,6 +114,17 @@ class WplacePage:
             logger.info("Clicked paint button")
         else:
             logger.info("No paint button found on the page")
+
+    async def submit_paint(self) -> None:
+        if not await self.is_painting():
+            logger.warning("Not currently painting, skipping submit")
+            return
+
+        await self.find_and_click_paint_btn()
+        while await self.is_painting():
+            logger.info("Waiting for paint submission to complete...")
+            await anyio.sleep(0.5)
+        logger.info("Submitted paint")
 
     @property
     def current_coord(self) -> WplacePixelCoords:

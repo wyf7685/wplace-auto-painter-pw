@@ -54,8 +54,7 @@ async def paint_pixels(user: UserConfig, zoom: ZoomLevel):
         delay = random.uniform(1, 10)
         logger.info(f"Waiting for <y>{delay:.2f}</> seconds before submitting...")
         await anyio.sleep(delay)
-        await page.find_and_click_paint_btn()
-        await anyio.sleep(1)  # wait for submit
+        await page.submit_paint()
 
     user_info = await fetch_user_info(user.credentials)
     logger.info(f"Current charge: <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>")
@@ -66,7 +65,7 @@ async def paint_pixels(user: UserConfig, zoom: ZoomLevel):
 
 
 async def paint_loop(user: UserConfig, zoom: ZoomLevel) -> NoReturn:
-    prefix = f"<c>{escape_tag(user.identifier)}</> |"
+    prefix = f"<m>{escape_tag(user.identifier)}</> |"
     while True:
         try:
             logger.info(f"{prefix} Starting painting cycle...")
