@@ -16,23 +16,24 @@ async def get_playwright() -> Playwright:
     return _PLAYWRIGHT
 
 
-async def _browser_type() -> BrowserType:
+async def _browser_type() -> tuple[str, BrowserType]:
     pw = await get_playwright()
-    return getattr(pw, Config.load().browser)
+    name = Config.load().browser
+    return name, getattr(pw, name)
 
 
 async def get_browser(*, headless: bool = False) -> Browser:
     global _BROWSER, _BROWSER_HEADLESS
     if not headless:
         if _BROWSER is None:
-            browser_type = await _browser_type()
-            logger.opt(colors=True).debug(f"Launching browser: <g>{Config.load().browser}</>")
+            name, browser_type = await _browser_type()
+            logger.opt(colors=True).debug(f"Launching browser: <g>{name}</>")
             _BROWSER = await browser_type.launch(headless=False)
         return _BROWSER
 
     if _BROWSER_HEADLESS is None:
-        browser_type = await _browser_type()
-        logger.opt(colors=True).debug(f"Launching headless browser: <g>{Config.load().browser}</>")
+        name, browser_type = await _browser_type()
+        logger.opt(colors=True).debug(f"Launching headless browser: <g>{name}</>")
         _BROWSER_HEADLESS = await browser_type.launch(headless=True)
 
     return _BROWSER_HEADLESS

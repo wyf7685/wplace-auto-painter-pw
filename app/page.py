@@ -86,18 +86,13 @@ class WplacePage:
 
     @contextlib.asynccontextmanager
     async def begin(self) -> AsyncGenerator[Self]:
-        url = self.coord.to_share_url(zoom=self.zoom.value)
-        script = PW_INIT_SCRIPT.replace("{{color_id}}", str(COLORS_ID[self.color_name]))
-
         browser = await get_browser()
-        context = await browser.new_context(
-            # user_agent=USER_AGENT,
-            viewport={"width": 1600, "height": 900},
-            java_script_enabled=True,
-        )
-        await context.add_init_script(script)
+        context = await browser.new_context(viewport={"width": 1600, "height": 900}, java_script_enabled=True)
+        await context.add_init_script(PW_INIT_SCRIPT.replace("{{color_id}}", str(COLORS_ID[self.color_name])))
         await context.add_cookies(self.credentials.to_cookies())
+
         async with context, await context.new_page() as page:
+            url = self.coord.to_share_url(zoom=self.zoom.value)
             await page.goto(url, wait_until="networkidle")
             self.context = context
             self.page = page
