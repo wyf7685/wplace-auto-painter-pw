@@ -1,9 +1,13 @@
+import hashlib
 import random
-from typing import NoReturn
+import time
+from typing import Any, NoReturn
 
 import anyio
 
-from .config import UserConfig
+from app.consts import COLORS_ID
+
+from .config import TemplateConfig, UserConfig
 from .highlight import Highlight
 from .log import escape_tag, logger
 from .page import WplacePage, ZoomLevel, fetch_user_info
@@ -11,6 +15,16 @@ from .template import calc_template_diff, group_adjacent
 from .utils import with_semaphore
 
 logger = logger.opt(colors=True)
+
+
+def pixels_to_paint_arg(template: TemplateConfig, color_id: int, pixels: list[tuple[int, int]]) -> list[dict[str, Any]]:
+    base = template.coords
+    result = []
+    for x, y in pixels:
+        coord = base.offset(x, y)
+        item = {"tile": [coord.tlx, coord.tly], "season": 0, "colorIdx": color_id, "pixel": [coord.pxx, coord.pxy]}
+        result.append(item)
+    return result
 
 
 @with_semaphore(1)
@@ -36,8 +50,15 @@ async def paint_pixels(user: UserConfig, zoom: ZoomLevel) -> float | None:
         return None
     logger.info(f"Preparing to paint <y>{pixels_to_paint}</> pixels...")
 
+    script_data = {
+        "user_id": str(user_info.id),
+        "btn_id": f"paint-button-{int(time.time())}",
+        "paint_args": pixels_to_paint_arg(user.template, COLORS_ID[entry.name], coords[:pixels_to_paint]),
+        "fp": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
+    }
+
     coord = user.template.coords.offset(*coords[0])
-    async with WplacePage(user.credentials, entry.name, coord, zoom).begin() as page:
+    async with WplacePage(user.credentials, entry.name, coord, zoom).begin(script_data) as page:
         delay = random.uniform(1, 10)
         logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
         await anyio.sleep(delay)
