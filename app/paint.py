@@ -135,7 +135,7 @@ async def paint_pixels(user: UserConfig, zoom: ZoomLevel) -> float | None:
     return wait_secs
 
 
-async def paint_loop(user: UserConfig, zoom: ZoomLevel) -> NoReturn:
+async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> NoReturn:
     prefix = f"<m>{escape_tag(user.identifier)}</> |"
     while True:
         try:

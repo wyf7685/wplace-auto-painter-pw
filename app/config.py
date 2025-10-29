@@ -1,18 +1,20 @@
 from pathlib import Path
-from typing import ClassVar, Literal, Self
+from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
-from PIL import Image
-from playwright._impl._api_structures import SetCookieParam
 from pydantic import BaseModel
 
 from .utils import WplacePixelCoords
 
-DATA_DIR = Path("data")
+if TYPE_CHECKING:
+    from PIL import Image
+    from playwright._impl._api_structures import SetCookieParam
+
+
+DATA_DIR = Path.cwd().resolve().joinpath("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-TEMPLATE_DIR = DATA_DIR.joinpath("templates")
-TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
-CONFIG_FILE = DATA_DIR.joinpath("config.json")
-TEMPLATE_FILE = DATA_DIR.joinpath("template.png")
+TEMPLATES_DIR = DATA_DIR / "templates"
+TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_FILE = DATA_DIR / "config.json"
 
 
 def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:
@@ -44,9 +46,11 @@ class TemplateConfig(BaseModel):
 
     @property
     def file(self) -> Path:
-        return TEMPLATE_DIR.joinpath(f"{self.file_id}.png")
+        return TEMPLATES_DIR / f"{self.file_id}.png"
 
     def load(self) -> tuple[Image.Image, tuple[WplacePixelCoords, WplacePixelCoords]]:
+        from PIL import Image
+
         im = Image.open(self.file)
         w, h = im.size
         return im, (self.coords, self.coords.offset(w - 1, h - 1))
