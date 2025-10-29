@@ -17,14 +17,6 @@ from .log import logger
 from .schemas import WplaceUserInfo
 from .utils import WplacePixelCoords
 
-PW_INIT_SCRIPT = """\
-(() => {
-    Object.defineProperty(navigator, 'webdriver', {get: () => undefined})
-    localStorage.setItem('view-rules', 'true');
-    localStorage.setItem('void-message-2', 'true');
-    localStorage.setItem('selected-color', '{{color_id}}');
-})()
-"""
 PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
@@ -49,7 +41,7 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
         viewport={"width": 1920, "height": 1080},
         java_script_enabled=True,
     ) as context:
-        await context.add_init_script(PW_INIT_SCRIPT.replace("{{color_id}}", "1"))
+        await context.add_init_script(ASSETS.page_init.replace("{{color_id}}", "1"))
         await context.add_cookies(credentials.to_cookies())
         async with await context.new_page() as page:
             resp = await page.goto(
