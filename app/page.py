@@ -9,7 +9,7 @@ from typing import Any, Self
 import anyio
 from playwright.async_api import Page
 
-from .assets import ASSETS
+from .assets import assets
 from .browser import get_browser
 from .config import WplaceCredentials
 from .consts import COLORS_ID
@@ -35,13 +35,15 @@ async def find_and_close_modal(page: Page) -> None:
 
 
 async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
-    browser = await get_browser(headless=True)
-    async with await browser.new_context(
-        user_agent=USER_AGENT,
-        viewport={"width": 1920, "height": 1080},
-        java_script_enabled=True,
-    ) as context:
-        await context.add_init_script(ASSETS.page_init.replace("{{color_id}}", "1"))
+    async with (
+        await get_browser(headless=True) as browser,
+        await browser.new_context(
+            user_agent=USER_AGENT,
+            viewport={"width": 1920, "height": 1080},
+            java_script_enabled=True,
+        ) as context,
+    ):
+        await context.add_init_script(assets.page_init.replace("{{color_id}}", "1"))
         await context.add_cookies(credentials.to_cookies())
         async with await context.new_page() as page:
             resp = await page.goto(
@@ -79,29 +81,31 @@ class WplacePage:
 
     @contextlib.asynccontextmanager
     async def begin(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
-        browser = await get_browser()
-        context = await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True)
+        scripts = [
+            assets.page_init.replace("{{color_id}}", str(COLORS_ID[self.color_name])),
+            assets.paint_btn.replace("{{script_data}}", base64.b64encode(json.dumps(script_data).encode()).decode()),
+        ]
+        async with (
+            await get_browser(headless=False) as browser,
+            await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
+        ):
+            for script in scripts:
+                await context.add_init_script(script)
+            await context.add_cookies(self.credentials.to_cookies())
+            self._btn_id = script_data.get("btn_id", "paint-button-7685")
 
-        script = ASSETS.page_init.replace("{{color_id}}", str(COLORS_ID[self.color_name]))
-        await context.add_init_script(script)
-        script = ASSETS.paint_btn.replace(
-            "{{script_data}}", base64.b64encode(json.dumps(script_data).encode()).decode()
-        )
-        await context.add_init_script(script)
+            async with await context.new_page() as page:
+                url = self.coord.to_share_url(zoom=self.zoom.value)
+                await page.goto(url, wait_until="networkidle")
 
-        await context.add_cookies(self.credentials.to_cookies())
-        self._btn_id = script_data.get("btn_id", "paint-button-7685")
+                self.context = context
+                self.page = page
+                self._current_coord = self.coord.offset(0, 0)
 
-        async with context, await context.new_page() as page:
-            url = self.coord.to_share_url(zoom=self.zoom.value)
-            await page.goto(url, wait_until="networkidle")
-            self.context = context
-            self.page = page
-            self._current_coord = self.coord.offset(0, 0)
-
-            yield self
-
-        del self.context, self.page
+                try:
+                    yield self
+                finally:
+                    del self.context, self.page
 
     async def is_painting(self) -> bool:
         el = await self.page.query_selector("div.absolute.w-full")
