@@ -2,10 +2,8 @@ import json
 import os
 import shutil
 import sys
-from typing import Optional
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap, QIcon
+from PyQt6.QtGui import QPixmap, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -21,52 +19,11 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QMessageBox,
 )
+
+from .image import ImageDropLabel
+from .config import CONFIG_PATH, TEMPLATES_DIR, GUI_ICO, read_config, write_config, ensure_data_dirs
+from .user import create_user
 from app.utils import WplacePixelCoords
-
-GUI_DIR = os.path.join(os.path.dirname(__file__), "gui")
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
-TEMPLATE_PATH = os.path.join(DATA_DIR, "template.png")
-
-
-class ImageDropLabel(QLabel):
-    """接受图片拖放并显示预览的 QLabel。"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setText("拖放图片到此处或点击上传")
-        self.setStyleSheet("border: 2px dashed #aaa; padding: 10px;")
-        self.setAcceptDrops(True)
-        self.filepath = None
-    def dragEnterEvent(self,a0: Optional[QDragEnterEvent]) -> None:
-        if a0 is None:
-            return
-        md = a0.mimeData()
-        if md is not None and md.hasUrls():
-            a0.acceptProposedAction()
-
-    def dropEvent(self, a0: Optional[QDropEvent]) -> None:
-        if a0 is None:
-            return
-        md = a0.mimeData()
-        if md is None:
-            return
-        urls = md.urls()
-        if not urls:
-            return
-        path = urls[0].toLocalFile()
-        if os.path.isfile(path):
-            self.set_image(path)
-
-    def set_image(self, path: str) -> None:
-        pix = QPixmap(path)
-        if pix.isNull():
-            self.setText("无法打开该图片")
-            self.filepath = None
-            return
-        self.filepath = path
-        self.setPixmap(pix.scaled(320, 240, Qt.AspectRatioMode.KeepAspectRatio))
 
 
 class ConfigInitWindow(QWidget):
@@ -74,14 +31,14 @@ class ConfigInitWindow(QWidget):
         super().__init__()
         self.setWindowTitle("初始化 config.json")
 
-        ico_path = os.path.join(GUI_DIR, "gui.ico")
-        if os.path.isfile(ico_path):
+        # 尝试设置窗口图标
+        if os.path.isfile(GUI_ICO):
             try:
-                self.setWindowIcon(QIcon(ico_path))
+                self.setWindowIcon(QIcon(GUI_ICO))
             except Exception:
                 pass
 
-    # 坐标：单行输入 Blue Marble 格式
+        # 坐标：单行输入 Blue Marble 格式
         self.coords_edit = QLineEdit()
         self.coords_edit.setPlaceholderText("(Tl X: 12, Tl Y: 34, Px X: 56, Px Y: 78)")
 
@@ -89,7 +46,7 @@ class ConfigInitWindow(QWidget):
         coords_layout.addWidget(QLabel("模板坐标:"))
         coords_layout.addWidget(self.coords_edit)
 
-    # 用户列表与控件
+        # 用户列表与控件
         self.users_list = QListWidget()
         add_user_btn = QPushButton("新增用户")
         add_user_btn.clicked.connect(self.add_user)
@@ -105,36 +62,36 @@ class ConfigInitWindow(QWidget):
 
         self.users_list.currentRowChanged.connect(self.on_user_selected)
 
-    # file_id 输入（template.file_id）
+        # file_id 输入（template.file_id）
         self.file_id_edit = QLineEdit()
         self.file_id_edit.setPlaceholderText("template file_id (will save as data/templates/{file_id}.png)")
 
-    # Credentials
+        # 凭证
         self.token_edit = QTextEdit()
         self.token_edit.setPlaceholderText("token")
         self.cf_edit = QTextEdit()
         self.cf_edit.setPlaceholderText("cf_clearance")
 
-        # Browser choice
+        # 浏览器选择
         self.browser_cb = QComboBox()
         self.browser_cb.addItems(["chromium", "firefox", "webkit"])
 
-        # Image drop area (per-user preview)
+        # 图片拖放区（每用户预览）
         self.img_label = ImageDropLabel()
         upload_btn = QPushButton("选择图片...")
         upload_btn.clicked.connect(self.choose_image)
 
-        # Save button
+        # 保存按钮
         save_btn = QPushButton("保存 config.json")
         save_btn.clicked.connect(self.save_config)
 
-        # Layout
+        # 布局
         main = QVBoxLayout()
         main.addWidget(QLabel("用户列表"))
         main.addLayout(users_h)
         main.addWidget(QLabel("模板坐标 (coords)"))
         main.addLayout(coords_layout)
-        main.addWidget(self.coords_edit)  # keep coords above
+        main.addWidget(self.coords_edit)  # 保持 coords 在上方
         main.addWidget(QLabel("模板图片名字"))
         main.addWidget(self.file_id_edit)
         main.addWidget(QLabel("token: wplace Cookies 中的 j (token)"))
@@ -152,9 +109,12 @@ class ConfigInitWindow(QWidget):
 
         self.setLayout(main)
 
+        # 内部状态
         self.users = []
 
+        ensure_data_dirs()
         self.load_config()
+        # track last selected row for auto-save behavior
         self.last_selected_row = self.users_list.currentRow() if self.users_list.count() > 0 else -1
 
     def choose_image(self):
@@ -163,20 +123,9 @@ class ConfigInitWindow(QWidget):
             self.img_label.set_image(fp)
 
     def load_config(self):
-        try:
-            os.makedirs(DATA_DIR, exist_ok=True)
-        except Exception:
-            pass
+        cfg = read_config()
 
-        if not os.path.isfile(CONFIG_PATH):
-            return
-
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-        except Exception:
-            return
-
+        # 载入 users 列表（新格式）
         users = cfg.get("users")
         if isinstance(users, list):
             self.users = users
@@ -184,8 +133,10 @@ class ConfigInitWindow(QWidget):
             for u in self.users:
                 self.users_list.addItem(u.get("identifier", ""))
             if self.users_list.count() > 0:
+                # 选择第一个用户
                 self.users_list.setCurrentRow(0)
         else:
+            # 兼容旧的单用户格式
             tmpl = cfg.get("template")
             creds = cfg.get("credentials")
             identifier = cfg.get("identifier", "default")
@@ -196,6 +147,7 @@ class ConfigInitWindow(QWidget):
                 self.users_list.addItem(identifier)
                 self.users_list.setCurrentRow(0)
 
+        # 全局浏览器设置
         browser = cfg.get("browser")
         if browser:
             idx = self.browser_cb.findText(browser)
@@ -207,38 +159,41 @@ class ConfigInitWindow(QWidget):
         row = self.users_list.currentRow()
         if row < 0 or row >= len(self.users):
             QMessageBox.warning(self, "未选中用户", "请先在用户列表中选择或新增一个用户")
-            return
+            return False
 
-        # parse coords
+        # 解析坐标
         coords_text = self.coords_edit.text().strip()
         try:
             coords = WplacePixelCoords.parse(coords_text)
         except Exception:
             QMessageBox.warning(self, "坐标解析失败", "无法解析模板坐标，请使用类似 '(Tl X: 1719, Tl Y: 855, Px X: 320, Px Y: 24)' 的格式")
-            return
+            return False
 
         file_id = self.file_id_edit.text().strip()
         if not file_id:
             QMessageBox.warning(self, "缺少 file_id", "请填写 template.file_id（用于保存为 data/templates/{file_id}.png）")
-            return
+            return False
 
-        templates_dir = os.path.join(DATA_DIR, "templates")
+        # 确保 templates 目录存在
         try:
-            os.makedirs(templates_dir, exist_ok=True)
+            os.makedirs(TEMPLATES_DIR, exist_ok=True)
         except Exception:
             pass
 
-        fp = getattr(self.img_label, "filepath", None)
-        if isinstance(fp, str) and fp:
-            dest = os.path.join(templates_dir, f"{file_id}.png")
+        # 如果用户设置了图片则复制到 templates 目录（若目标已存在则跳过）
+        src = getattr(self.img_label, "filepath", None)
+        if src:
+            dest = os.path.join(TEMPLATES_DIR, f"{file_id}.png")
             if os.path.exists(dest):
+                # 目标已存在，跳过复制以避免文件被占用错误
                 pass
             else:
                 try:
-                    shutil.copy2(fp, dest)
+                    shutil.copy2(str(src), dest)
                 except Exception as e:
                     QMessageBox.warning(self, "保存图片失败", f"无法保存图片: {e}")
 
+        # 更新用户字典
         user = self.users[row]
         user.setdefault("template", {})
         user["template"]["file_id"] = file_id
@@ -253,31 +208,24 @@ class ConfigInitWindow(QWidget):
             "cf_clearance": self.cf_edit.toPlainText().strip(),
         }
 
+        # 将 users 和全局 browser 写回配置
         cfg = {"users": self.users, "browser": self.browser_cb.currentText()}
 
-        try:
-            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            QMessageBox.critical(self, "保存失败", f"写入配置失败: {e}")
+        if not write_config(cfg):
+            QMessageBox.critical(self, "保存失败", "写入配置失败")
             return False
 
-        QMessageBox.information(self, "保存成功", f"配置已保存到:\n{CONFIG_PATH}\n模板图片目录: {templates_dir}")
-        # 更新用户列表显示
-        user_name = self.users_list.item(row)
-        if user_name:
-            user_name.setText(user.get("identifier", ""))
+        QMessageBox.information(self, "保存成功", f"配置已保存到:\n{CONFIG_PATH}\n模板图片目录: {TEMPLATES_DIR}")
+
+        # refresh users list item text (identifier may have changed elsewhere)
+        item = self.users_list.item(row)
+        if item:
+            item.setText(user.get("identifier", ""))
         return True
 
     def write_config_to_disk(self) -> bool:
         cfg = {"users": self.users, "browser": self.browser_cb.currentText()}
-        try:
-            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=2)
-            return True
-        except Exception as e:
-            QMessageBox.critical(self, "写入失败", f"写入配置失败: {e}")
-            return False
+        return write_config(cfg)
 
     def add_user(self):
         text, ok = QInputDialog.getText(self, "新增用户", "identifier:")
@@ -286,14 +234,17 @@ class ConfigInitWindow(QWidget):
         identifier = text.strip()
         if not identifier:
             return
+        # 检查是否重复
         for u in self.users:
             if u.get("identifier") == identifier:
                 QMessageBox.warning(self, "已存在", "该用户已存在")
                 return
-        user = {"identifier": identifier, "template": {"file_id": "", "coords": {"tlx": 0, "tly": 0, "pxx": 0, "pxy": 0}}, "credentials": {"token": "", "cf_clearance": ""}}
+        user = create_user(identifier)
         self.users.append(user)
         self.users_list.addItem(identifier)
+        # 立即将新用户写入磁盘
         if not self.write_config_to_disk():
+            # on failure, remove added user
             self.users.pop()
             self.users_list.takeItem(self.users_list.count() - 1)
             return
@@ -307,6 +258,8 @@ class ConfigInitWindow(QWidget):
         ret = QMessageBox.question(self, "删除用户", f"确定删除 identifier='{identifier}' 的所有用户记录？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if ret != QMessageBox.StandardButton.Yes:
             return
+
+        # Load current config from disk and filter out any users with this identifier
         try:
             if os.path.isfile(CONFIG_PATH):
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -324,21 +277,18 @@ class ConfigInitWindow(QWidget):
             self.users = [u for u in self.users if u.get("identifier") != identifier]
         else:
             cfg["users"] = new_users
-            try:
-                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                    json.dump(cfg, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                QMessageBox.critical(self, "写入失败", f"写入配置失败: {e}")
+            if not write_config(cfg):
+                QMessageBox.critical(self, "写入失败", "写入配置失败")
                 return
-            # 更新内存用户列表
+            # update in-memory users from disk
             self.users = new_users
 
-        # 刷新用户列表
+        # refresh GUI list
         self.users_list.clear()
         for u in self.users:
             self.users_list.addItem(u.get("identifier", ""))
 
-        # 清空输入框
+        # clear fields
         self.coords_edit.clear()
         self.file_id_edit.clear()
         self.token_edit.clear()
@@ -349,9 +299,10 @@ class ConfigInitWindow(QWidget):
         QMessageBox.information(self, "删除完成", f"所有 identifier='{identifier}' 的记录已删除（若存在）")
 
     def on_user_selected(self, row: int):
-        # 处理用户选择
+        # 处理上一次选择的自动保存
         prev = getattr(self, "last_selected_row", -1)
         if prev != -1 and prev != row:
+            # 检查 GUI 是否与存储的用户数据不同
             if prev < len(self.users):
                 u_prev = self.users[prev]
                 tmpl = u_prev.get("template", {})
@@ -376,30 +327,38 @@ class ConfigInitWindow(QWidget):
                     msg.exec()
                     clicked = msg.clickedButton()
                     if clicked == save_btn:
+                        # select previous row to ensure save_config uses correct row
                         self.users_list.blockSignals(True)
                         self.users_list.setCurrentRow(prev)
                         self.users_list.blockSignals(False)
                         ok = self.save_config()
                         if not ok:
+                            # save failed, cancel switching
+                            # restore selection
                             self.users_list.blockSignals(True)
                             self.users_list.setCurrentRow(prev)
                             self.users_list.blockSignals(False)
                             return
                     elif clicked == cancel_btn:
+                        # cancel switching
+                        # restore selection
                         self.users_list.blockSignals(True)
                         self.users_list.setCurrentRow(prev)
                         self.users_list.blockSignals(False)
                         return
+
+        # 重新从磁盘读取 users 以反映外部更改
         try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
+            cfg = read_config()
             users = cfg.get("users")
             if isinstance(users, list):
                 self.users = users
         except Exception:
+            # if cannot read, fall back to in-memory list
             pass
 
         if row < 0 or row >= len(self.users):
+            # 无需加载
             self.last_selected_row = row
             return
 
@@ -421,17 +380,22 @@ class ConfigInitWindow(QWidget):
         self.token_edit.setPlainText(creds.get("token", ""))
         self.cf_edit.setPlainText(creds.get("cf_clearance", ""))
 
+        # 如果存在每用户模板图片则加载
         file_id = tmpl.get("file_id")
         if file_id:
-            path = os.path.join(DATA_DIR, "templates", f"{file_id}.png")
+            path = os.path.join(TEMPLATES_DIR, f"{file_id}.png")
             if os.path.isfile(path):
+                # display existing template image
                 self.img_label.set_image(path)
+                self.last_selected_row = row
                 return
 
+        # 否则清空预览
         self.img_label.setPixmap(QPixmap())
         self.img_label.setText("拖放图片到此处或点击上传")
         self.img_label.filepath = None
 
+        # 更新上次选中行
         self.last_selected_row = row
 
 
@@ -441,7 +405,3 @@ def main():
     w.resize(640, 700)
     w.show()
     sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
