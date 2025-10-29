@@ -12,7 +12,7 @@ from typing import Any, NamedTuple, Self, cast
 import anyio
 
 from .consts import ALL_COLORS, FLAG_MAP
-from .log import logger
+from .log import escape_tag, logger
 
 # 从多点校准中提取的常量参数
 SCALE_X = 325949.3234522017
@@ -212,7 +212,11 @@ def with_retry[**P, R](
                 try:
                     return await func(*args, **kwargs)
                 except exc_types as e:
-                    logger.debug(f"函数 {func.__name__} 第 {attempt + 1}/{retries} 次调用失败: {e!r}")
+                    logger.opt(colors=True).debug(
+                        f"函数 <g>{escape_tag(func.__name__)}</> "
+                        f"第 <y>{attempt + 1}</>/<y>{retries}</> 次调用失败: "
+                        f"<r>{escape_tag(repr(e))}</>"
+                    )
                     caught.append(e)
                     await anyio.sleep(delay)
 

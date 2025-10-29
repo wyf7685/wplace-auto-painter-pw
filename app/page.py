@@ -7,7 +7,6 @@ from enum import Enum
 from typing import Any, Self
 
 import anyio
-from playwright.async_api import Page
 
 from .assets import assets
 from .browser import get_browser
@@ -21,17 +20,6 @@ PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 )
-
-
-async def find_and_close_modal(page: Page) -> None:
-    if modal := await page.query_selector(".modal[open]"):
-        logger.info(f"Found modal dialog: {modal!r}")
-        for el in await modal.query_selector_all("button.btn"):
-            if await el.text_content() == "Close":
-                await el.click()
-                logger.info("Closed modal dialog")
-                return
-        logger.info("No Close button found in modal dialog")
 
 
 async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
@@ -110,11 +98,11 @@ class WplacePage:
     async def find_and_click_paint_btn(self) -> None:
         """Find and click the paint button on the page."""
         if paint_btn := await self.page.query_selector(PAINT_BTN_SELECTOR):
-            logger.info(f"Found paint button: {paint_btn!r}")
+            logger.debug(f"Found paint button: {paint_btn!r}")
             await paint_btn.click()
             logger.info("Clicked paint button")
         else:
-            logger.info("No paint button found on the page")
+            logger.warning("No paint button found on the page")
 
     async def submit_paint(self) -> None:
         selector = f"#{self._btn_id}"
@@ -123,11 +111,11 @@ class WplacePage:
             logger.warning("No submit button found on the page")
             return
 
-        logger.opt(colors=True).info(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
+        logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
         await btn.click()
         logger.info("Clicked submit button")
         while await self.page.query_selector(selector):
-            logger.info("Waiting for submit to complete...")
+            logger.debug("Waiting for submit to complete...")
             await anyio.sleep(1)
         logger.info("Submit completed")
 
