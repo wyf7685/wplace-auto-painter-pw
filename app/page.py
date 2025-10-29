@@ -9,8 +9,7 @@ from typing import Any, Self
 import anyio
 from playwright.async_api import Page
 
-from app.assets import ASSETS
-
+from .assets import ASSETS
 from .browser import get_browser
 from .config import WplaceCredentials
 from .consts import COLORS_ID

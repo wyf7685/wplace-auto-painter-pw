@@ -7,6 +7,7 @@ requires-python = ">=3.14"
 dependencies = [
     "anyio>=4.11.0",
     "bot7685-ext>=0.1.2",
+    "cloudscraper>=1.2.71",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
     "pillow>=12.0.0",
