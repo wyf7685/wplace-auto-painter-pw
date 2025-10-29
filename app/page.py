@@ -12,6 +12,7 @@ from .assets import assets
 from .browser import get_browser
 from .config import WplaceCredentials
 from .consts import COLORS_ID
+from .exception import FetchFailed, ShoudQuit
 from .log import escape_tag, logger
 from .schemas import WplaceUserInfo
 from .utils import WplacePixelCoords
@@ -39,7 +40,7 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
                 wait_until="networkidle",
             )
             if not resp:
-                raise RuntimeError("Failed to fetch user info")
+                raise FetchFailed("Failed to fetch user info")
             return WplaceUserInfo.model_validate_json(await resp.text())
 
 
@@ -108,8 +109,7 @@ class WplacePage:
         selector = f"#{self._btn_id}"
         btn = await self.page.query_selector(selector)
         if btn is None:
-            logger.warning("No submit button found on the page")
-            return
+            raise ShoudQuit("Submit button not found, is the injected script broken?")
 
         logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
         await btn.click()

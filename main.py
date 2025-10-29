@@ -60,10 +60,11 @@ async def main() -> None:
                 logger.opt(colors=True).info(f"Starting paint loop for user: <m>{escape_tag(user.identifier)}</>")
                 tg.start_soon(paint_loop, user)
     except* KeyboardInterrupt:
-        logger.info("Shutting down...")
+        logger.info("Received keyboard interrupt, shutting down...")
     except* Exception:
         logger.exception("Unexpected error occurred")
     finally:
+        logger.info("Shutting down Playwright...")
         await shutdown_playwright()
 
 

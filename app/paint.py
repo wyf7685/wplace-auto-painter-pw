@@ -4,20 +4,20 @@ import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any
 
 import anyio
 import anyio.to_thread
 import cloudscraper
 import httpx
 
-from app.schemas import WplaceUserInfo
-
 from .config import TemplateConfig, UserConfig
 from .consts import COLORS_ID
+from .exception import ShoudQuit
 from .highlight import Highlight
 from .log import escape_tag, logger
 from .page import WplacePage, ZoomLevel, fetch_user_info
+from .schemas import WplaceUserInfo
 from .template import calc_template_diff, group_adjacent
 from .utils import with_semaphore
 
@@ -59,7 +59,7 @@ class JsResolver:
                 obj_name = match.group(1)
                 break
         else:
-            raise ValueError("paint function object not found")
+            raise ShoudQuit("paint function object not found")
 
         pattern = (
             r"import\s*\{[^}]*?\b([a-zA-Z0-9_$]+)\s+as\s+"
@@ -68,7 +68,7 @@ class JsResolver:
         )
         match = re.search(pattern, file.read_text(encoding="utf-8"))
         if match is None:
-            raise ValueError("import source for paint function object not found")
+            raise ShoudQuit("import source for paint function object not found")
 
         source_name = match.group(1)
         chunk_name = (file.parent / match.group(2)).resolve().relative_to(self.tempdir.resolve()).as_posix()
@@ -84,7 +84,7 @@ class JsResolver:
                 func_name = match.group(1)
                 break
         else:
-            raise ValueError("service worker function not found")
+            raise ShoudQuit("service worker function not found")
 
         pattern = (
             r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\s*\{return "
@@ -93,13 +93,13 @@ class JsResolver:
         )
         match = re.search(pattern, content)
         if match is None:
-            raise ValueError("wrapper function not found")
+            raise ShoudQuit("wrapper function not found")
         wrapper_name = match.group(1)
 
         pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"\s+as\s+([a-zA-Z0-9_$]+)[^}]*?\};"
         match = re.search(pattern, content)
         if match is None:
-            raise ValueError("exported name for wrapper not found")
+            raise ShoudQuit("exported name for wrapper not found")
 
         chunk_name = file.resolve().relative_to(self.tempdir.resolve()).as_posix()
         chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
@@ -167,7 +167,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
         return wait_secs
 
 
-async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> NoReturn:
+async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> None:
     prefix = f"<m>{escape_tag(user.identifier)}</> |"
     while True:
         try:
@@ -188,5 +188,12 @@ async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> NoRe
             logger.info(f"{prefix} Sleeping for <y>{wait_secs / 60:.2f}</> minutes...")
             await anyio.sleep(wait_secs)
 
+        except ShoudQuit:
+            logger.opt(exception=True).warning(f"{prefix} Received shutdown signal, exiting paint loop.")
+            break
+
         except Exception:
             logger.exception(f"{prefix} An error occurred")
+            delay = random.uniform(1 * 60, 3 * 60)
+            logger.info(f"{prefix} Sleeping for <y>{delay / 60:.2f}</> minutes before retrying...")
+            await anyio.sleep(delay)
