@@ -77,7 +77,7 @@ class ConfigInitWindow(QWidget):
 
         # 浏览器选择
         self.browser_cb = QComboBox()
-        self.browser_cb.addItems(["chromium", "firefox", "webkit"])
+        self.browser_cb.addItems(["chromium", "chrome","msedge","firefox", "webkit"])
 
         # 图片拖放区（每用户预览）
         self.img_label = ImageDropLabel()
@@ -101,7 +101,7 @@ class ConfigInitWindow(QWidget):
         main.addWidget(self.token_edit)
         main.addWidget(QLabel("cf_clearance: wplace Cookies 中的 cf_clearance"))
         main.addWidget(self.cf_edit)
-        main.addWidget(QLabel("浏览器选择 (全局)"))
+        main.addWidget(QLabel("浏览器选择 (chromium,firefox,webkit需另外安装)"))
         main.addWidget(self.browser_cb)
         main.addWidget(QLabel("模板图片预览"))
         main.addWidget(self.img_label)
