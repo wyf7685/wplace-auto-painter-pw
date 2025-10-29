@@ -32,45 +32,82 @@ def pixels_to_paint_arg(template: TemplateConfig, color_id: int, pixels: list[tu
     return result
 
 
-async def resolve_paint_fn() -> tuple[str, str]:
-    with tempfile.TemporaryDirectory() as tempdir:
-        tempdir = Path(tempdir)
-        html = (await anyio.to_thread.run_sync(cloudscraper.create_scraper().get, "https://wplace.live/")).text
+class JsResolver:
+    PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(.+?)\.js")
+    PATTERN_PAINT_FN = re.compile(r"await\s+([a-zA-Z0-9_$]+)\.paint\s*\(")
 
+    async def prepare_chunks(self) -> None:
         async def download_js_chunk(chunk_name: str) -> None:
             url = f"https://wplace.live/_app/immutable/{chunk_name}"
             response = await client.get(url)
             js_code = response.raise_for_status().text
-            file = tempdir / chunk_name
+            file = self.tempdir / chunk_name
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_text(js_code, encoding="utf-8")
 
-        source_pattern = re.compile(r"_app/immutable/(.+?)\.js")
+        html = (await anyio.to_thread.run_sync(cloudscraper.create_scraper().get, "https://wplace.live/")).text
         async with httpx.AsyncClient() as client, anyio.create_task_group() as tg:
-            for match in source_pattern.finditer(html):
+            for match in self.PATTERN_CHUNK_NAME.finditer(html):
                 chunk_name = f"{match.group(1)}.js"
                 tg.start_soon(download_js_chunk, chunk_name)
 
-        pattern = re.compile(r"await\s+([a-zA-Z0-9_$]+)\.paint\s*\(")
-        obj_name_gen = (
-            (file, match.group(1))
-            for file in (tempdir / "nodes").glob("*.js")
-            for match in pattern.finditer(file.read_text(encoding="utf-8"))
-        )
-        if (obj := next(obj_name_gen, None)) is None:
+    def find_paint_fn(self) -> tuple[str, str]:
+        for file in (self.tempdir / "nodes").glob("*.js"):
+            if match := self.PATTERN_PAINT_FN.search(file.read_text(encoding="utf-8")):
+                obj_name = match.group(1)
+                break
+        else:
             raise ValueError("paint function object not found")
-        file, obj_name = obj
 
-        if match := re.search(
-            rf'import\s*\{{[^}}]*?\b([a-zA-Z0-9_$]+)\s+as\s+{re.escape(obj_name)}[^}}]*?\}}\s*from\s*["\']([^"\']+)["\'];',
-            file.read_text(encoding="utf-8"),
-        ):
-            source_name = match.group(1)
-            chunk_name = (file.parent / match.group(2)).resolve().relative_to(tempdir.resolve()).as_posix()
-            chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
-            return source_name, chunk_url
+        pattern = (
+            r"import\s*\{[^}]*?\b([a-zA-Z0-9_$]+)\s+as\s+"
+            + re.escape(obj_name)
+            + r"[^}]*?\}\s*from\s*[\"']([^\"']+)[\"'];"
+        )
+        match = re.search(pattern, file.read_text(encoding="utf-8"))
+        if match is None:
+            raise ValueError("import source for paint function object not found")
 
-        raise ValueError("import source for paint function object not found")
+        source_name = match.group(1)
+        chunk_name = (file.parent / match.group(2)).resolve().relative_to(self.tempdir.resolve()).as_posix()
+        chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
+        return source_name, chunk_url
+
+    def find_worker_fn(self) -> tuple[str, str]:
+        for file in self.tempdir.glob("*/*.js"):
+            content = file.read_text("utf-8")
+            if ("navigator.serviceWorker.controller" in content) and (
+                match := re.search(r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)", content)
+            ):
+                func_name = match.group(1)
+                break
+        else:
+            raise ValueError("service worker function not found")
+
+        pattern = (
+            r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\s*\{return "
+            + re.escape(func_name)
+            + r"\(\{type:\s*['\"]paintPixels['\"],data:\s*q\}\)\}"
+        )
+        match = re.search(pattern, content)
+        if match is None:
+            raise ValueError("wrapper function not found")
+        wrapper_name = match.group(1)
+
+        pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"\s+as\s+([a-zA-Z0-9_$]+)[^}]*?\};"
+        match = re.search(pattern, content)
+        if match is None:
+            raise ValueError("exported name for wrapper not found")
+
+        chunk_name = file.resolve().relative_to(self.tempdir.resolve()).as_posix()
+        chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
+        return (match.group(1), chunk_url)
+
+    async def resolve(self) -> list[str]:
+        with tempfile.TemporaryDirectory() as tempdir:
+            self.tempdir = Path(tempdir)
+            await self.prepare_chunks()
+            return [*self.find_paint_fn(), *self.find_worker_fn()]
 
 
 @with_semaphore(1)
@@ -99,15 +136,13 @@ async def paint_pixels(user: UserConfig, zoom: ZoomLevel) -> float | None:
         return None
     logger.info(f"Preparing to paint <y>{pixels_to_paint}</> pixels...")
 
-    paint_obj_name, paint_module_url = await resolve_paint_fn()
-    logger.info(f"Resolved paint function: <c>{paint_obj_name}</> from <y><u>{escape_tag(paint_module_url)}</></>")
+    resolved = await JsResolver().resolve()
+    logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved))}</>")
     script_data = {
-        "user_id": str(user_info.id),
-        "btn_id": f"paint-button-{int(time.time())}",
-        "paint_args": pixels_to_paint_arg(user.template, COLORS_ID[entry.name], coords[:pixels_to_paint]),
-        "fp": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
-        "module_url": paint_module_url,
-        "obj_name": paint_obj_name,
+        "btn": f"paint-button-{int(time.time())}",
+        "a": pixels_to_paint_arg(user.template, COLORS_ID[entry.name], coords[:pixels_to_paint]),
+        "f": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
+        "r": resolved,
     }
 
     coord = user.template.coords.offset(*coords[0])

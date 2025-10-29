@@ -13,7 +13,7 @@ from .assets import assets
 from .browser import get_browser
 from .config import WplaceCredentials
 from .consts import COLORS_ID
-from .log import logger
+from .log import escape_tag, logger
 from .schemas import WplaceUserInfo
 from .utils import WplacePixelCoords
 
@@ -92,7 +92,7 @@ class WplacePage:
             for script in scripts:
                 await context.add_init_script(script)
             await context.add_cookies(self.credentials.to_cookies())
-            self._btn_id = script_data.get("btn_id", "paint-button-7685")
+            self._btn_id = script_data.get("btn", "paint-button-7685")
 
             async with await context.new_page() as page:
                 url = self.coord.to_share_url(zoom=self.zoom.value)
@@ -107,10 +107,6 @@ class WplacePage:
                 finally:
                     del self.context, self.page
 
-    async def is_painting(self) -> bool:
-        el = await self.page.query_selector("div.absolute.w-full")
-        return el is not None
-
     async def find_and_click_paint_btn(self) -> None:
         """Find and click the paint button on the page."""
         if paint_btn := await self.page.query_selector(PAINT_BTN_SELECTOR):
@@ -121,12 +117,19 @@ class WplacePage:
             logger.info("No paint button found on the page")
 
     async def submit_paint(self) -> None:
-        if btn := await self.page.query_selector(f"#{self._btn_id}"):
-            logger.info(f"Found submit button: {btn!r}")
-            await btn.click()
-            logger.info("Clicked submit button")
-            await anyio.sleep(3)
-            logger.info("Submitted paint")
+        selector = f"#{self._btn_id}"
+        btn = await self.page.query_selector(selector)
+        if btn is None:
+            logger.warning("No submit button found on the page")
+            return
+
+        logger.opt(colors=True).info(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
+        await btn.click()
+        logger.info("Clicked submit button")
+        while await self.page.query_selector(selector):
+            logger.info("Waiting for submit to complete...")
+            await anyio.sleep(1)
+        logger.info("Submit completed")
 
     @property
     def current_coord(self) -> WplacePixelCoords:
