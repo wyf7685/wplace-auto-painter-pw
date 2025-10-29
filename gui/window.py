@@ -1,42 +1,40 @@
 import json
-import os
 import shutil
 import sys
+from pathlib import Path
 
-from PyQt6.QtGui import QPixmap, QIcon
+from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
-    QWidget,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
-    QTextEdit,
-    QComboBox,
-    QPushButton,
     QListWidget,
-    QInputDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFileDialog,
     QMessageBox,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .image import ImageDropLabel
-from .config import CONFIG_PATH, TEMPLATES_DIR, GUI_ICO, read_config, write_config, ensure_data_dirs
-from .user import create_user
 from app.utils import WplacePixelCoords
+
+from .config import CONFIG_PATH, GUI_ICO, TEMPLATES_DIR, ensure_data_dirs, read_config, write_config
+from .image import ImageDropLabel
+from .user import create_user
 
 
 class ConfigInitWindow(QWidget):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("初始化 config.json")
 
         # 尝试设置窗口图标
-        if os.path.isfile(GUI_ICO):
-            try:
-                self.setWindowIcon(QIcon(GUI_ICO))
-            except Exception:
-                pass
+        if Path(GUI_ICO).is_file():
+            self.setWindowIcon(QIcon(GUI_ICO))
 
         # 坐标：单行输入 Blue Marble 格式
         self.coords_edit = QLineEdit()
@@ -117,12 +115,12 @@ class ConfigInitWindow(QWidget):
         # track last selected row for auto-save behavior
         self.last_selected_row = self.users_list.currentRow() if self.users_list.count() > 0 else -1
 
-    def choose_image(self):
+    def choose_image(self) -> None:
         fp, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "Images (*.png *.jpg *.jpeg *.bmp)")
         if fp:
             self.img_label.set_image(fp)
 
-    def load_config(self):
+    def load_config(self) -> None:
         cfg = read_config()
 
         # 载入 users 列表（新格式）
@@ -154,7 +152,7 @@ class ConfigInitWindow(QWidget):
             if idx != -1:
                 self.browser_cb.setCurrentIndex(idx)
 
-    def save_config(self):
+    def save_config(self) -> bool:
         # 保存当前选中用户的数据到 self.users 并写回 config.json
         row = self.users_list.currentRow()
         if row < 0 or row >= len(self.users):
@@ -166,26 +164,38 @@ class ConfigInitWindow(QWidget):
         try:
             coords = WplacePixelCoords.parse(coords_text)
         except Exception:
-            QMessageBox.warning(self, "坐标解析失败", "无法解析模板坐标，请使用类似 '(Tl X: 1719, Tl Y: 855, Px X: 320, Px Y: 24)' 的格式")
+            text = "无法解析模板坐标，请使用类似 '(Tl X: 1719, Tl Y: 855, Px X: 320, Px Y: 24)' 的格式"
+            QMessageBox.warning(parent=self, title="坐标解析失败", text=text)
+            return False
+        src = getattr(self.img_label, "filepath", None)
+        token = self.token_edit.toPlainText().strip()
+        if not token:
+            QMessageBox.warning(self, "缺少 token", "请填写 token（wplace Cookies 中的 j）")
+            return False
+
+        if not src:
+            QMessageBox.warning(self, "缺少图片", "请上传或拖放模板图片到预览区")
             return False
 
         file_id = self.file_id_edit.text().strip()
         if not file_id:
-            QMessageBox.warning(self, "缺少 file_id", "请填写 template.file_id（用于保存为 data/templates/{file_id}.png）")
-            return False
+            try:
+                file_id = Path(str(src)).stem
+                self.file_id_edit.setText(file_id)
+            except Exception:
+                text = "请填写 template.file_id（用于保存为 data/templates/{file_id}.png）"
+                QMessageBox.warning(parent=self, title="缺少 file_id", text=text)
+                return False
 
         # 确保 templates 目录存在
-        try:
-            os.makedirs(TEMPLATES_DIR, exist_ok=True)
-        except Exception:
-            pass
+        if not TEMPLATES_DIR.exists():
+            TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
         # 如果用户设置了图片则复制到 templates 目录（若目标已存在则跳过）
         src = getattr(self.img_label, "filepath", None)
         if src:
-            dest = os.path.join(TEMPLATES_DIR, f"{file_id}.png")
-            if os.path.exists(dest):
-                # 目标已存在，跳过复制以避免文件被占用错误
+            dest = Path(TEMPLATES_DIR) / f"{file_id}.png"
+            if dest.exists():
                 pass
             else:
                 try:
@@ -217,7 +227,6 @@ class ConfigInitWindow(QWidget):
 
         QMessageBox.information(self, "保存成功", f"配置已保存到:\n{CONFIG_PATH}\n模板图片目录: {TEMPLATES_DIR}")
 
-        # refresh users list item text (identifier may have changed elsewhere)
         item = self.users_list.item(row)
         if item:
             item.setText(user.get("identifier", ""))
@@ -227,7 +236,7 @@ class ConfigInitWindow(QWidget):
         cfg = {"users": self.users, "browser": self.browser_cb.currentText()}
         return write_config(cfg)
 
-    def add_user(self):
+    def add_user(self) -> None:
         text, ok = QInputDialog.getText(self, "新增用户", "identifier:")
         if not ok:
             return
@@ -244,25 +253,28 @@ class ConfigInitWindow(QWidget):
         self.users_list.addItem(identifier)
         # 立即将新用户写入磁盘
         if not self.write_config_to_disk():
-            # on failure, remove added user
             self.users.pop()
             self.users_list.takeItem(self.users_list.count() - 1)
             return
         self.users_list.setCurrentRow(self.users_list.count() - 1)
 
-    def remove_user(self):
+    def remove_user(self) -> None:
         row = self.users_list.currentRow()
         if row < 0 or row >= len(self.users):
             return
         identifier = self.users[row].get("identifier", "")
-        ret = QMessageBox.question(self, "删除用户", f"确定删除 identifier='{identifier}' 的所有用户记录？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        ret = QMessageBox.question(
+            self,
+            "删除用户",
+            f"确定删除 identifier='{identifier}' 的所有用户记录？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
         if ret != QMessageBox.StandardButton.Yes:
             return
 
-        # Load current config from disk and filter out any users with this identifier
         try:
-            if os.path.isfile(CONFIG_PATH):
-                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            if CONFIG_PATH.exists():
+                with Path.open(CONFIG_PATH, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
             else:
                 cfg = {"users": self.users}
@@ -280,15 +292,12 @@ class ConfigInitWindow(QWidget):
             if not write_config(cfg):
                 QMessageBox.critical(self, "写入失败", "写入配置失败")
                 return
-            # update in-memory users from disk
             self.users = new_users
 
-        # refresh GUI list
         self.users_list.clear()
         for u in self.users:
             self.users_list.addItem(u.get("identifier", ""))
 
-        # clear fields
         self.coords_edit.clear()
         self.file_id_edit.clear()
         self.token_edit.clear()
@@ -298,12 +307,10 @@ class ConfigInitWindow(QWidget):
 
         QMessageBox.information(self, "删除完成", f"所有 identifier='{identifier}' 的记录已删除（若存在）")
 
-    def on_user_selected(self, row: int):
+    def on_user_selected(self, row: int) -> None:
         # 处理上一次选择的自动保存
         prev = getattr(self, "last_selected_row", -1)
-        if prev != -1 and prev != row:
-            # 检查 GUI 是否与存储的用户数据不同
-            if prev < len(self.users):
+        if prev != -1 and prev != row and prev < len(self.users):
                 u_prev = self.users[prev]
                 tmpl = u_prev.get("template", {})
                 coords = tmpl.get("coords", {})
@@ -311,7 +318,11 @@ class ConfigInitWindow(QWidget):
                 tly = coords.get("tly")
                 pxx = coords.get("pxx")
                 pxy = coords.get("pxy")
-                stored_coords = f"(Tl X: {tlx}, Tl Y: {tly}, Px X: {pxx}, Px Y: {pxy})" if all(isinstance(v, int) for v in (tlx, tly, pxx, pxy)) else ""
+                stored_coords = (
+                    f"(Tl X: {tlx}, Tl Y: {tly}, Px X: {pxx}, Px Y: {pxy})"
+                    if all(isinstance(v, int) for v in (tlx, tly, pxx, pxy))
+                    else ""
+                )
                 changed = (
                     self.coords_edit.text().strip() != stored_coords
                     or self.file_id_edit.text().strip() != (tmpl.get("file_id", ""))
@@ -327,35 +338,26 @@ class ConfigInitWindow(QWidget):
                     msg.exec()
                     clicked = msg.clickedButton()
                     if clicked == save_btn:
-                        # select previous row to ensure save_config uses correct row
                         self.users_list.blockSignals(True)
                         self.users_list.setCurrentRow(prev)
                         self.users_list.blockSignals(False)
                         ok = self.save_config()
                         if not ok:
-                            # save failed, cancel switching
-                            # restore selection
                             self.users_list.blockSignals(True)
                             self.users_list.setCurrentRow(prev)
                             self.users_list.blockSignals(False)
                             return
                     elif clicked == cancel_btn:
-                        # cancel switching
-                        # restore selection
                         self.users_list.blockSignals(True)
                         self.users_list.setCurrentRow(prev)
                         self.users_list.blockSignals(False)
                         return
+        # 重新从磁盘读取 users 以反映外部更
+        cfg = read_config()
+        users = cfg.get("users")
+        if isinstance(users, list):
+            self.users = users
 
-        # 重新从磁盘读取 users 以反映外部更改
-        try:
-            cfg = read_config()
-            users = cfg.get("users")
-            if isinstance(users, list):
-                self.users = users
-        except Exception:
-            # if cannot read, fall back to in-memory list
-            pass
 
         if row < 0 or row >= len(self.users):
             # 无需加载
@@ -383,9 +385,8 @@ class ConfigInitWindow(QWidget):
         # 如果存在每用户模板图片则加载
         file_id = tmpl.get("file_id")
         if file_id:
-            path = os.path.join(TEMPLATES_DIR, f"{file_id}.png")
-            if os.path.isfile(path):
-                # display existing template image
+            path = TEMPLATES_DIR/f"{file_id}.png"
+            if path.is_file():
                 self.img_label.set_image(path)
                 self.last_selected_row = row
                 return
@@ -399,7 +400,7 @@ class ConfigInitWindow(QWidget):
         self.last_selected_row = row
 
 
-def main():
+def main() -> shutil.NoReturn:
     app = QApplication(sys.argv)
     w = ConfigInitWindow()
     w.resize(640, 700)

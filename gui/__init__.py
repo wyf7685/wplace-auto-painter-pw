@@ -1,4 +1,4 @@
-"""GUI 包入口。"""
+"""GUI 入口。"""
 
 from .window import main
 
