@@ -1,4 +1,7 @@
 import contextlib
+import json
+import sys
+from pathlib import Path
 
 import anyio
 
@@ -11,7 +14,55 @@ from app.template import get_color_location, group_adjacent
 from app.utils import normalize_color_name
 
 
-async def test_zoom(user: UserConfig) -> None:
+async def ensure_config_gui(project_root: Path | None = None) -> None:
+    """检查 data/config.json 与 data/templates 中的模板图片；
+    若缺失或内容不合法，则启动 GUI 启动器并等待用户完成配置。
+    """
+    if project_root is None:
+        project_root = Path(__file__).resolve().parent
+    data_dir = project_root / "data"
+    config_path = data_dir / "config.json"
+    templates_dir = data_dir / "templates"
+
+    need_gui = False
+    # 检查 config.json 是否存在且可解析
+    if not config_path.is_file():
+        logger.info(f"检测到{config_path}不存在或错误，启动config生成窗口")
+        need_gui = True
+    else:
+        try:
+            with Path.open(config_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            users = cfg.get("users")
+            if not isinstance(users, list) or len(users) == 0:
+                logger.info(f"检测到{config_path}内容不包含 users，启动config生成窗口")
+                need_gui = True
+            else:
+                for user in users:
+                    file_id = user.get("template", {}).get("file_id")
+                    if not file_id:
+                        msg = f"检测到用户 {user.get('identifier','?')} 的 template.file_id 缺失，启动config生成窗口"
+                        logger.info(msg)
+                        need_gui = True
+                        break
+                    img_path = templates_dir / f"{file_id}.png"
+                    if not img_path.is_file() or img_path.stat().st_size == 0:
+                        logger.info(f"检测到{img_path}不存在或错误，启动config生成窗口")
+                        need_gui = True
+                        break
+        except Exception:
+            logger.info(f"检测到{config_path}不存在或错误，启动config生成窗口")
+            need_gui = True
+
+    if need_gui:
+        cfg_script = project_root / "config_init_gui.py"
+        try:
+            await anyio.run_process([sys.executable, cfg_script], check=True)
+        except Exception as e:
+            logger.exception(f"启动 config GUI 失败: {e}")
+
+
+async def test_zoom(user: UserConfig, page: WplacePage) -> None:
     color_name = normalize_color_name("black")
     assert color_name is not None, "Color not found"
     coords = await get_color_location(user.template, color_name)
@@ -37,6 +88,9 @@ async def test_zoom(user: UserConfig) -> None:
 
 
 async def main() -> None:
+    # 确保配置与模板存在，否则弹出 GUI 让用户初始化
+    await ensure_config_gui()
+
     # await test_zoom(Config.load().users[0])
     # return
 

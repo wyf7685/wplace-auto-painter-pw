@@ -10,9 +10,11 @@ dependencies = [
     "cloudscraper>=1.2.71",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
+    "pathlib>=1.0.1",
     "pillow>=12.0.0",
     "playwright==1.55.0",
     "pydantic>=2.12.3",
+    "pyqt6>=6.10.0",
     "tarina>=0.7.3",
 ]
 
