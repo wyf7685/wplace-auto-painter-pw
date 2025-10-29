@@ -48,7 +48,6 @@ def ensure_config_gui() -> None:
 
 
 async def main() -> None:
-    # 确保配置与模板存在，否则弹出 GUI 让用户初始化
     if "config" in sys.argv[1:]:
         launch_config_gui()
         return
@@ -62,8 +61,10 @@ async def main() -> None:
                 tg.start_soon(paint_loop, user)
     except* KeyboardInterrupt:
         logger.info("Shutting down...")
-
-    await shutdown_playwright()
+    except* Exception:
+        logger.exception("Unexpected error occurred")
+    finally:
+        await shutdown_playwright()
 
 
 if __name__ == "__main__":

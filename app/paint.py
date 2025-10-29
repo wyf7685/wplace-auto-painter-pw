@@ -79,6 +79,9 @@ async def paint_pixels(user: UserConfig, zoom: ZoomLevel) -> float | None:
     logger.info(f"Logged in as: {Highlight.apply(user_info)}")
     logger.info(f"Current charge: <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>")
     logger.info(f"Remaining: <y>{user_info.charges.remaining_secs():.2f}</>s")
+    if user_info.charges.count < 10:
+        logger.warning("Not enough charges to paint pixels.")
+        return None
 
     diff = await calc_template_diff(user.template, include_pixels=True)
     for entry in sorted(diff, key=lambda e: e.count, reverse=True):

@@ -4,8 +4,6 @@ from app.config import Config
 from app.log import logger
 
 _PLAYWRIGHT: Playwright | None = None
-_BROWSER: Browser | None = None
-_BROWSER_HEADLESS: Browser | None = None
 
 
 async def get_playwright() -> Playwright:
@@ -34,7 +32,7 @@ async def get_browser(*, headless: bool = False) -> Browser:
 
 
 async def shutdown_playwright() -> None:
-    global _BROWSER, _BROWSER_HEADLESS, _PLAYWRIGHT
+    global _PLAYWRIGHT
     if _PLAYWRIGHT is not None:
         await _PLAYWRIGHT.stop()
         _PLAYWRIGHT = None
