@@ -7,6 +7,7 @@ requires-python = ">=3.14"
 dependencies = [
     "anyio>=4.11.0",
     "bot7685-ext>=0.1.2",
+    "cloudscraper>=1.2.71",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
     "pathlib>=1.0.1",
@@ -17,6 +18,12 @@ dependencies = [
     "tarina>=0.7.3",
 ]
 
+[tool.pyright]
+pythonVersion = "3.14"
+pythonPlatform = "All"
+typeCheckingMode = "standard"
+ignore = [".venv", "data", "**/build", "**/scripts"]
+disableBytesTypePromotions = true
 
 [tool.ruff]
 line-length = 120

@@ -7,7 +7,7 @@ import anyio
 
 from app.browser import shutdown_playwright
 from app.config import Config, UserConfig
-from app.log import logger
+from app.log import escape_tag, logger
 from app.page import WplacePage, ZoomLevel
 from app.paint import paint_loop
 from app.template import get_color_location, group_adjacent
@@ -75,26 +75,33 @@ async def test_zoom(user: UserConfig, page: WplacePage) -> None:
 
     coord = user.template.coords.offset(*coords[0])
     page = WplacePage(user.credentials, color_name, coord, ZoomLevel.Z_15)
-    async with page.begin() as page:
+    async with page.begin({"user_id": "111", "btn_id": "paint-button-7685", "reqs": []}) as page:
+        logger.info(f"Current viewport: {page.current_page_viewport}")
         await anyio.sleep(0.5)
         await page.find_and_click_paint_btn()
         await page.click_current_pixel()
-        for idx in range(20):
-            await page._move_by_pixel(1, 1)  # noqa: SLF001
+        for idx in range(70):
+            await page.move_by_pixel(2, 2)
             await page.click_current_pixel()
             logger.info(f"Clicked pixel #{idx + 1} at {page.current_coord.human_repr()}")
-
-    input()
+        input()
 
 
 async def main() -> None:
     # 确保配置与模板存在，否则弹出 GUI 让用户初始化
     await ensure_config_gui()
 
+    # await test_zoom(Config.load().users[0])
+    # return
+
     try:
-        await paint_loop(Config.load().users[0], ZoomLevel.Z_16)
-    except KeyboardInterrupt:
+        async with anyio.create_task_group() as tg:
+            for user in Config.load().users:
+                logger.opt(colors=True).info(f"Starting paint loop for user: <m>{escape_tag(user.identifier)}</>")
+                tg.start_soon(paint_loop, user, ZoomLevel.Z_15)
+    except* KeyboardInterrupt:
         logger.info("Shutting down...")
+
     await shutdown_playwright()
 
 
