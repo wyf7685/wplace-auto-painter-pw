@@ -1,4 +1,5 @@
-from anyio import Path
+from pathlib import Path
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 from PyQt6.QtWidgets import QLabel, QWidget
@@ -13,13 +14,13 @@ class ImageDropLabel(QLabel):
         self.setAcceptDrops(True)
         self.filepath = None
 
-    def drag_enter_event(self,a0: QDragEnterEvent | None) -> None:
+    def drag_enterevent(self,a0: QDragEnterEvent | None) -> None:
         if a0 is None:
             return
         md = a0.mimeData()
         if md is not None and md.hasUrls():
             a0.acceptProposedAction()
-    def drop_event(self, a0: QDropEvent | None) -> None:
+    def dropevent(self, a0: QDropEvent | None) -> None:
         if a0 is None:
             return
         md = a0.mimeData()
@@ -29,7 +30,7 @@ class ImageDropLabel(QLabel):
         if not urls:
             return
         path = urls[0].toLocalFile()
-        if Path.isfile(path):
+        if Path(path).is_file():
             self.set_image(path)
     def set_image(self, path: str) -> None:
         pix = QPixmap(path)

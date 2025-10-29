@@ -14,7 +14,7 @@ from app.template import get_color_location, group_adjacent
 from app.utils import normalize_color_name
 
 
-async def ensure_config_gui(project_root: str | None = None) -> None:
+async def ensure_config_gui(project_root: Path | None = None) -> None:
     """检查 data/config.json 与 data/templates 中的模板图片；
     若缺失或内容不合法，则启动 GUI 启动器并等待用户完成配置。
     """

@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT_DIR / "data"
+GUI_DIR = ROOT_DIR / "gui"
 CONFIG_PATH = DATA_DIR / "config.json"
 TEMPLATES_DIR = DATA_DIR / "templates"
-GUI_ICO = Path(__file__).resolve().parent / "gui.ico"
+GUI_ICO = GUI_DIR / "gui.ico"
 
 
 def ensure_data_dirs() -> None:

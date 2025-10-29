@@ -1,4 +1,5 @@
 import json
+import logging
 import shutil
 import sys
 from pathlib import Path
@@ -32,9 +33,13 @@ class ConfigInitWindow(QWidget):
         super().__init__()
         self.setWindowTitle("初始化 config.json")
 
-        # 尝试设置窗口图标
-        if Path(GUI_ICO).is_file():
-            self.setWindowIcon(QIcon(GUI_ICO))
+        # 尝试设置窗口图标（确保传入字符串路径）
+        try:
+            if GUI_ICO.is_file():
+                icon_path = str(GUI_ICO) if isinstance(GUI_ICO, Path) else GUI_ICO
+                self.setWindowIcon(QIcon(icon_path))
+        except Exception as exc:
+            logging.debug(f"无法设置窗口图标: {exc}")
 
         # 坐标：单行输入 Blue Marble 格式
         self.coords_edit = QLineEdit()
@@ -165,45 +170,44 @@ class ConfigInitWindow(QWidget):
             coords = WplacePixelCoords.parse(coords_text)
         except Exception:
             text = "无法解析模板坐标，请使用类似 '(Tl X: 1719, Tl Y: 855, Px X: 320, Px Y: 24)' 的格式"
-            QMessageBox.warning(parent=self, title="坐标解析失败", text=text)
+            QMessageBox.warning(self, "坐标解析失败", text)
             return False
+
+        # 先获取图片路径和 token
         src = getattr(self.img_label, "filepath", None)
         token = self.token_edit.toPlainText().strip()
+
         if not token:
             QMessageBox.warning(self, "缺少 token", "请填写 token（wplace Cookies 中的 j）")
             return False
 
-        if not src:
-            QMessageBox.warning(self, "缺少图片", "请上传或拖放模板图片到预览区")
-            return False
+
 
         file_id = self.file_id_edit.text().strip()
+
         if not file_id:
             try:
                 file_id = Path(str(src)).stem
                 self.file_id_edit.setText(file_id)
             except Exception:
                 text = "请填写 template.file_id（用于保存为 data/templates/{file_id}.png）"
-                QMessageBox.warning(parent=self, title="缺少 file_id", text=text)
+                QMessageBox.warning(self, "缺少 file_id", text)
                 return False
 
-        # 确保 templates 目录存在
         if not TEMPLATES_DIR.exists():
             TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-
-        # 如果用户设置了图片则复制到 templates 目录（若目标已存在则跳过）
-        src = getattr(self.img_label, "filepath", None)
+        dest = Path(TEMPLATES_DIR) / f"{file_id}.png"
         if src:
-            dest = Path(TEMPLATES_DIR) / f"{file_id}.png"
-            if dest.exists():
-                pass
-            else:
+            if not dest.exists():
                 try:
                     shutil.copy2(str(src), dest)
                 except Exception as e:
                     QMessageBox.warning(self, "保存图片失败", f"无法保存图片: {e}")
-
-        # 更新用户字典
+                    return False
+        else:
+            if not dest.exists():
+                QMessageBox.warning(self, "缺少图片", "请上传或拖放模板图片到预览区")
+                return False
         user = self.users[row]
         user.setdefault("template", {})
         user["template"]["file_id"] = file_id
@@ -243,7 +247,6 @@ class ConfigInitWindow(QWidget):
         identifier = text.strip()
         if not identifier:
             return
-        # 检查是否重复
         for u in self.users:
             if u.get("identifier") == identifier:
                 QMessageBox.warning(self, "已存在", "该用户已存在")
@@ -274,7 +277,7 @@ class ConfigInitWindow(QWidget):
 
         try:
             if CONFIG_PATH.exists():
-                with Path.open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                with CONFIG_PATH.open("r", encoding="utf-8") as f:
                     cfg = json.load(f)
             else:
                 cfg = {"users": self.users}
@@ -305,7 +308,7 @@ class ConfigInitWindow(QWidget):
         self.img_label.setText("拖放图片到此处或点击上传")
         self.img_label.filepath = None
 
-        QMessageBox.information(self, "删除完成", f"所有 identifier='{identifier}' 的记录已删除（若存在）")
+        QMessageBox.information(self, "删除完成", f"所有 identifier='{identifier}' 的记录已删除")
 
     def on_user_selected(self, row: int) -> None:
         # 处理上一次选择的自动保存
@@ -387,7 +390,7 @@ class ConfigInitWindow(QWidget):
         if file_id:
             path = TEMPLATES_DIR/f"{file_id}.png"
             if path.is_file():
-                self.img_label.set_image(path)
+                self.img_label.set_image(str(path))
                 self.last_selected_row = row
                 return
 
@@ -399,8 +402,7 @@ class ConfigInitWindow(QWidget):
         # 更新上次选中行
         self.last_selected_row = row
 
-
-def main() -> shutil.NoReturn:
+def main() -> None:
     app = QApplication(sys.argv)
     w = ConfigInitWindow()
     w.resize(640, 700)
