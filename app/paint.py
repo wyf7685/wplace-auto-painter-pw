@@ -32,7 +32,7 @@ def pixels_to_paint_arg(template: TemplateConfig, color_id: int, pixels: list[tu
 
 
 async def get_user_info(user: UserConfig) -> WplaceUserInfo:
-    prefix = f"<m>{escape_tag(user.identifier)}</> |"
+    prefix = f"<lm>{escape_tag(user.identifier)}</> |"
     user_info = await fetch_user_info(user.credentials)
     logger.debug(f"{prefix} Fetched user info: {Highlight.apply(user_info)}")
     logger.info(f"{prefix} Current droplets: 💧 <y>{user_info.droplets}</>")
@@ -118,7 +118,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
 
 
 async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> None:
-    prefix = f"<m>{escape_tag(user.identifier)}</> |"
+    prefix = f"<lm>{escape_tag(user.identifier)}</> |"
     while True:
         try:
             logger.info(f"{prefix} Starting painting cycle...")

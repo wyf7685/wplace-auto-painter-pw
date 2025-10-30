@@ -69,7 +69,7 @@ async def main() -> None:
     try:
         async with anyio.create_task_group() as tg:
             for user in Config.load().users:
-                logger.opt(colors=True).info(f"Starting paint loop for user: <m>{escape_tag(user.identifier)}</>")
+                logger.opt(colors=True).info(f"Starting paint loop for user: <lm>{escape_tag(user.identifier)}</>")
                 tg.start_soon(paint_loop, user)
     except* KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
