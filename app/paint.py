@@ -1,15 +1,9 @@
 import hashlib
 import random
-import re
-import tempfile
 import time
-from pathlib import Path
 from typing import Any
 
 import anyio
-import anyio.to_thread
-import cloudscraper
-import httpx
 
 from .config import TemplateConfig, UserConfig
 from .consts import COLORS_ID
@@ -17,6 +11,7 @@ from .exception import ShoudQuit
 from .highlight import Highlight
 from .log import escape_tag, logger
 from .page import WplacePage, ZoomLevel, fetch_user_info
+from .resolver import JsResolver
 from .schemas import WplaceUserInfo
 from .template import calc_template_diff, group_adjacent
 from .utils import with_semaphore
@@ -32,84 +27,6 @@ def pixels_to_paint_arg(template: TemplateConfig, color_id: int, pixels: list[tu
         item = {"tile": [coord.tlx, coord.tly], "season": 0, "colorIdx": color_id, "pixel": [coord.pxx, coord.pxy]}
         result.append(item)
     return result
-
-
-class JsResolver:
-    PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(.+?)\.js")
-    PATTERN_PAINT_FN = re.compile(r"await\s+([a-zA-Z0-9_$]+)\.paint\s*\(")
-
-    async def prepare_chunks(self) -> None:
-        async def download_js_chunk(chunk_name: str) -> None:
-            url = f"https://wplace.live/_app/immutable/{chunk_name}"
-            response = await client.get(url)
-            js_code = response.raise_for_status().text
-            file = self.tempdir / chunk_name
-            file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_text(js_code, encoding="utf-8")
-
-        html = (await anyio.to_thread.run_sync(cloudscraper.create_scraper().get, "https://wplace.live/")).text
-        async with httpx.AsyncClient() as client, anyio.create_task_group() as tg:
-            for match in self.PATTERN_CHUNK_NAME.finditer(html):
-                chunk_name = f"{match.group(1)}.js"
-                tg.start_soon(download_js_chunk, chunk_name)
-
-    def find_paint_fn(self) -> tuple[str, str]:
-        for file in (self.tempdir / "nodes").glob("*.js"):
-            if match := self.PATTERN_PAINT_FN.search(file.read_text(encoding="utf-8")):
-                obj_name = match.group(1)
-                break
-        else:
-            raise ShoudQuit("paint function object not found")
-
-        pattern = (
-            r"import\s*\{[^}]*?\b([a-zA-Z0-9_$]+)\s+as\s+"
-            + re.escape(obj_name)
-            + r"[^}]*?\}\s*from\s*[\"']([^\"']+)[\"'];"
-        )
-        match = re.search(pattern, file.read_text(encoding="utf-8"))
-        if match is None:
-            raise ShoudQuit("import source for paint function object not found")
-
-        source_name = match.group(1)
-        chunk_name = (file.parent / match.group(2)).resolve().relative_to(self.tempdir.resolve()).as_posix()
-        chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
-        return source_name, chunk_url
-
-    def find_worker_fn(self) -> tuple[str, str]:
-        for file in self.tempdir.glob("*/*.js"):
-            content = file.read_text("utf-8")
-            if ("navigator.serviceWorker.controller" in content) and (
-                match := re.search(r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)", content)
-            ):
-                func_name = match.group(1)
-                break
-        else:
-            raise ShoudQuit("service worker function not found")
-
-        pattern = (
-            r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\s*\{return "
-            + re.escape(func_name)
-            + r"\(\{type:\s*['\"]paintPixels['\"],data:\s*q\}\)\}"
-        )
-        match = re.search(pattern, content)
-        if match is None:
-            raise ShoudQuit("wrapper function not found")
-        wrapper_name = match.group(1)
-
-        pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"\s+as\s+([a-zA-Z0-9_$]+)[^}]*?\};"
-        match = re.search(pattern, content)
-        if match is None:
-            raise ShoudQuit("exported name for wrapper not found")
-
-        chunk_name = file.resolve().relative_to(self.tempdir.resolve()).as_posix()
-        chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
-        return (match.group(1), chunk_url)
-
-    async def resolve(self) -> list[str]:
-        with tempfile.TemporaryDirectory() as tempdir:
-            self.tempdir = Path(tempdir)
-            await self.prepare_chunks()
-            return [*self.find_paint_fn(), *self.find_worker_fn()]
 
 
 @with_semaphore(1)

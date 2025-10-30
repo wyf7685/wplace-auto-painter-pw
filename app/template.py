@@ -92,39 +92,3 @@ def group_adjacent(points: list[tuple[int, int]]) -> list[list[tuple[int, int]]]
             bfs(p)
 
     return sorted(groups, key=len, reverse=True)
-
-
-def select_outline_from_group(points: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    point_set = set(points)
-    outline: list[tuple[int, int]] = []
-
-    # 8 邻域方向
-    directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-
-    for x, y in points:
-        # 检查是否有邻居不在点集中
-        if any((x + dx, y + dy) not in point_set for dx, dy in directions):
-            outline.append((x, y))
-
-    return outline
-
-
-async def render_template_overlay(
-    cfg: TemplateConfig,
-    overlay_alpha: int | None = None,
-) -> bytes:
-    template_img, (coord1, coord2) = cfg.load()
-    with io.BytesIO() as buffer:
-        template_img.save(buffer, format="PNG")
-        template_bytes = buffer.getvalue()
-    actual_bytes = await download_preview(coord1, coord2)
-
-    with PerfLog.for_action("rendering template overlay") as perf:
-        overlaid_bytes = await bot7685_ext.wplace.overlay(
-            template_bytes,
-            actual_bytes,
-            overlay_alpha if overlay_alpha is not None else 96,
-        )
-    logger.info(f"Rendered template overlay in <y>{perf.elapsed:.3f}</>s")
-
-    return overlaid_bytes

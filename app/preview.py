@@ -16,7 +16,7 @@ from .utils import (
 
 logger = logger.opt(colors=True)
 
-TILE_URL = "https://backend.wplace.live/files/s0/tiles/{x}/{y}.png"
+TILE_URL = "https://backend.wplace.live/files/s0/tiles/{}/{}.png"
 
 
 async def download_preview(
@@ -34,7 +34,7 @@ async def download_preview(
         delay=1,
     )
     async def fetch_tile(x: int, y: int) -> None:
-        resp = await client.get(TILE_URL.format(x=x, y=y))
+        resp = await client.get(TILE_URL.format(x, y))
         tile_imgs[(x, y)] = resp.raise_for_status().read()
 
     async with (
