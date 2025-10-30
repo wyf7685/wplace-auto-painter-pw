@@ -93,15 +93,6 @@ class WplacePage:
                 finally:
                     del self.context, self.page
 
-    async def find_and_click_paint_btn(self) -> None:
-        """Find and click the paint button on the page."""
-        if paint_btn := await self.page.query_selector(PAINT_BTN_SELECTOR):
-            logger.debug(f"Found paint button: {paint_btn!r}")
-            await paint_btn.click()
-            logger.info("Clicked paint button")
-        else:
-            logger.warning("No paint button found on the page")
-
     async def submit_paint(self) -> None:
         selector = f"#{self._btn_id}"
         btn = await self.page.query_selector(selector)
@@ -115,6 +106,47 @@ class WplacePage:
             logger.debug("Waiting for submit to complete...")
             await anyio.sleep(1)
         logger.info("Submit completed")
+
+    @contextlib.asynccontextmanager
+    async def open_paint_panel(self) -> AsyncGenerator[None]:
+        paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)
+        if paint_btn is None:
+            raise ShoudQuit("No paint button found on the page")
+
+        logger.debug(f"Found paint button: {paint_btn!r}")
+        await paint_btn.click()
+        logger.info("Clicked paint button")
+
+        yield
+
+        btns = await self.page.query_selector_all(".w-full .items-center > .btn.btn-circle.btn-sm")
+        if not btns:
+            logger.warning("No close button found on the paint panel")
+            return
+        close_btn = btns[-1]
+        logger.debug(f"Found close button: {close_btn!r}")
+        await close_btn.click()
+        logger.info("Closed paint panel")
+
+    @contextlib.asynccontextmanager
+    async def open_store_panel(self) -> AsyncGenerator[None]:
+        store_btn = await self.page.query_selector('.btn[title="Store"]')
+        if store_btn is None:
+            raise ShoudQuit("Store button not found on the page")
+
+        logger.debug(f"Found store button: {store_btn!r}")
+        await store_btn.click()
+        logger.info("Opened store panel")
+
+        yield
+
+        close_btn = await self.page.query_selector(".modal[open] .btn.btn-sm.btn-circle.btn-ghost")
+        if close_btn is None:
+            logger.warning("No close button found on the store panel")
+            return
+        logger.debug(f"Found close button: {close_btn!r}")
+        await close_btn.click()
+        logger.info("Closed store panel")
 
     @property
     def current_coord(self) -> WplacePixelCoords:

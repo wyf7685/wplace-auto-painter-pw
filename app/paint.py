@@ -92,21 +92,21 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
             delay = random.uniform(3, 10)
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
             await anyio.sleep(delay)
-            await page.find_and_click_paint_btn()
 
-            prev_x, prev_y = coords[0]
-            for idx in range(pixels_to_paint):
-                curr_x, curr_y = coords[idx]
-                await page.move_by_pixel(curr_x - prev_x, curr_y - prev_y)
-                await page.click_current_pixel()
-                logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")
-                prev_x, prev_y = curr_x, curr_y
+            async with page.open_paint_panel():
+                prev_x, prev_y = coords[0]
+                for idx in range(pixels_to_paint):
+                    curr_x, curr_y = coords[idx]
+                    await page.move_by_pixel(curr_x - prev_x, curr_y - prev_y)
+                    await page.click_current_pixel()
+                    logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")
+                    prev_x, prev_y = curr_x, curr_y
 
-            delay = random.uniform(3, 10)
-            logger.info(f"Waiting for <y>{delay:.2f}</> seconds before submitting...")
-            await anyio.sleep(delay)
-            await page.submit_paint()
-            release_color()
+                delay = random.uniform(3, 10)
+                logger.info(f"Waiting for <y>{delay:.2f}</> seconds before submitting...")
+                await anyio.sleep(delay)
+                await page.submit_paint()
+                release_color()
 
             user_info = await get_user_info(user)
             wait_secs = user_info.charges.remaining_secs() - random.uniform(10, 20) * 60
