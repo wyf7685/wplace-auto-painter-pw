@@ -1,5 +1,4 @@
 import json
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
@@ -11,20 +10,12 @@ if TYPE_CHECKING:
     from PIL import Image
     from playwright._impl._api_structures import SetCookieParam
 
-
 DATA_DIR = Path.cwd().resolve().joinpath("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR = DATA_DIR / "templates"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = DATA_DIR / "config.json"
 CONFIG_SCHEMA_FILE = DATA_DIR / ".config.schema.json"
-
-ASSETS_DIR = (
-    Path(sys._MEIPASS)  # noqa: SLF001  # pyright: ignore[reportAttributeAccessIssue]
-    if getattr(sys, "frozen", False)
-    else Path(__file__).parent
-) / "assets"
-ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:

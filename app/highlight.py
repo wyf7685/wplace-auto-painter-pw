@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
+from tarina import LRU
 
 from .log import escape_tag
 
@@ -24,13 +25,12 @@ class _Style:
         tags = tag.split("_")
         prefix = "".join(f"<{tag}>" for tag in reversed(tags))
         suffix = "</>" * len(tags)
-
-        @functools.lru_cache(64)
-        def cached(text: str) -> str:
-            return f"{prefix}{text}{suffix}"
+        lru: LRU[str, str] = LRU(64)
 
         def fn(obj: object) -> str:
-            return cached(str(obj))
+            if (text := str(obj)) not in lru:
+                lru[text] = f"{prefix}{text}{suffix}"
+            return lru[text]
 
         setattr(self, tag, fn)
         return fn

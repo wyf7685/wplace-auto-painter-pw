@@ -2,12 +2,16 @@
 
 from PyInstaller.building.api import EXE, PYZ
 from PyInstaller.building.build_main import Analysis
+from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis(
     ["main.py"],
     pathex=[],
     binaries=[],
-    datas=[("app/assets", "assets")],
+    datas=[
+        ("app/assets", "assets"),
+        *collect_data_files("tarina"),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

@@ -1,7 +1,13 @@
 import base64
 import json
+import sys
+from pathlib import Path
 
-from .config import ASSETS_DIR
+ASSETS_DIR = (
+    Path(sys._MEIPASS)  # noqa: SLF001  # pyright: ignore[reportAttributeAccessIssue]
+    if getattr(sys, "frozen", False)
+    else Path(__file__).parent
+) / "assets"
 
 
 class Assets:
