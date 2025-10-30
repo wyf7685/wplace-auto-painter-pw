@@ -2,10 +2,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.config import CONFIG_FILE, DATA_DIR, TEMPLATES_DIR
+from app.config import CONFIG_FILE, CONFIG_SCHEMA_FILE, DATA_DIR, TEMPLATES_DIR, export_config_schema
 from app.log import logger
 
 GUI_ICO = Path(__file__).resolve().parent / "gui.ico"
+schema_path = "../" + CONFIG_SCHEMA_FILE.resolve().relative_to(Path.cwd().resolve()).as_posix()
 
 
 def ensure_data_dirs() -> None:
@@ -27,6 +28,8 @@ def read_config() -> dict[str, Any]:
 
 
 def write_config(cfg: dict[str, Any]) -> bool:
+    export_config_schema()
+    cfg = {"$schema": schema_path} | cfg
     try:
         ensure_data_dirs()
         with Path.open(CONFIG_FILE, "w", encoding="utf-8") as f:

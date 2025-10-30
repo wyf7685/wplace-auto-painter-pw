@@ -5,7 +5,7 @@ import sys
 import anyio
 
 from app.browser import shutdown_playwright
-from app.config import CONFIG_FILE, Config
+from app.config import CONFIG_FILE, Config, export_config_schema
 from app.log import escape_tag, logger
 from app.paint import paint_loop
 
@@ -48,6 +48,8 @@ def ensure_config_gui() -> None:
 
 
 async def main() -> None:
+    export_config_schema()
+
     if "config" in sys.argv[1:]:
         launch_config_gui()
         return

@@ -1,7 +1,8 @@
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .utils import WplacePixelCoords
 
@@ -15,6 +16,9 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR = DATA_DIR / "templates"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = DATA_DIR / "config.json"
+ASSETS_DIR = Path(__file__).parent / "assets"
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_SCHEMA_FILE = ASSETS_DIR / ".config.schema.json"
 
 
 def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:
@@ -30,8 +34,10 @@ def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:
 
 
 class WplaceCredentials(BaseModel):
-    token: str
-    cf_clearance: str | None = None
+    token: str = Field(description="Playwright cookie 'j' value")
+    cf_clearance: str | None = Field(
+        default=None, description="Playwright cookie 'cf_clearance' value, could be null if not needed"
+    )
 
     def to_cookies(self) -> list[SetCookieParam]:
         cookies: list[SetCookieParam] = [_construct_pw_cookie("j", self.token)]
@@ -41,8 +47,8 @@ class WplaceCredentials(BaseModel):
 
 
 class TemplateConfig(BaseModel):
-    file_id: str
-    coords: WplacePixelCoords
+    file_id: str = Field(description="Template image file name without extension")
+    coords: WplacePixelCoords = Field(description="Top-left pixel coordinates of the template on the canvas")
 
     @property
     def file(self) -> Path:
@@ -57,20 +63,28 @@ class TemplateConfig(BaseModel):
 
 
 class UserConfig(BaseModel):
-    identifier: str
-    credentials: WplaceCredentials
-    template: TemplateConfig
+    identifier: str = Field(description="User identifier, for logging purposes")
+    credentials: WplaceCredentials = Field(description="Wplace authentication credentials")
+    template: TemplateConfig = Field(description="Template configuration")
 
 
 class Config(BaseModel):
     _cache: ClassVar[Self | None] = None
 
-    users: list[UserConfig]
-    browser: Literal["chromium", "firefox", "webkit", "chrome", "msedge"]
-    proxy: str | None = None
+    users: list[UserConfig] = Field(description="List of user configurations")
+    browser: Literal["chromium", "firefox", "webkit", "chrome", "msedge"] = Field(
+        description="Playwright browser type to use"
+    )
 
     @classmethod
     def load(cls) -> Self:
         if cls._cache is None:
             cls._cache = cls.model_validate_json(CONFIG_FILE.read_text("utf-8"))
         return cls._cache
+
+
+def export_config_schema() -> None:
+    CONFIG_SCHEMA_FILE.write_text(
+        json.dumps(Config.model_json_schema(), indent=2),
+        encoding="utf-8",
+    )

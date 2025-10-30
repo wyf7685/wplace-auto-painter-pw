@@ -1,6 +1,4 @@
-from pathlib import Path
-
-_ASSETS_DIR = Path(__file__).parent / "assets"
+from .config import ASSETS_DIR
 
 
 class _AssetsItem:
@@ -8,7 +6,7 @@ class _AssetsItem:
         self.__name = name
 
     def __get__(self, instance: object, owner: type) -> str:
-        return _ASSETS_DIR.joinpath(f"{self.__name}.js").read_text("utf-8")
+        return ASSETS_DIR.joinpath(f"{self.__name}.js").read_text("utf-8")
 
 
 class Assets:
