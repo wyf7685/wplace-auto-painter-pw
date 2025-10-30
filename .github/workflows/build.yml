@@ -30,11 +30,8 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Build config-gui
-        run: uv run pyinstaller config-gui.spec
-
-      - name: Build wplace-auto-painter
-        run: uv run pyinstaller wplace-auto-painter.spec
+      - name: Build
+        run: uv run pyinstaller build.spec
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
