@@ -28,6 +28,7 @@ def save_chunk_etags(etags: dict[str, str]) -> None:
 class JsResolver:
     PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(.+?)\.js")
     PATTERN_PAINT_FN = re.compile(r"await\s+([a-zA-Z0-9_$]+)\.paint\s*\(")
+    PATTERN_WORKER = re.compile(r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)")
 
     @with_semaphore(1)
     async def prepare_chunks(self) -> None:
@@ -89,9 +90,7 @@ class JsResolver:
     def find_worker_fn(self) -> tuple[str, str]:
         for file in self.chunks_dir.glob("*/*.js"):
             content = file.read_text("utf-8")
-            if ("navigator.serviceWorker.controller" in content) and (
-                match := re.search(r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)", content)
-            ):
+            if ("navigator.serviceWorker.controller" in content) and (match := self.PATTERN_WORKER.search(content)):
                 func_name = match.group(1)
                 break
         else:
