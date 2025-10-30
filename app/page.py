@@ -1,6 +1,4 @@
-import base64
 import contextlib
-import json
 import random
 from collections.abc import AsyncGenerator
 from enum import Enum
@@ -32,13 +30,10 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
             java_script_enabled=True,
         ) as context,
     ):
-        await context.add_init_script(assets.page_init.replace("{{color_id}}", "1"))
+        await context.add_init_script(assets.page_init())
         await context.add_cookies(credentials.to_cookies())
         async with await context.new_page() as page:
-            resp = await page.goto(
-                "https://backend.wplace.live/me",
-                wait_until="networkidle",
-            )
+            resp = await page.goto("https://backend.wplace.live/me", wait_until="networkidle")
             if not resp:
                 raise FetchFailed("Failed to fetch user info")
             return WplaceUserInfo.model_validate_json(await resp.text())
@@ -69,23 +64,25 @@ class WplacePage:
         self.zoom = zoom
 
     @contextlib.asynccontextmanager
-    async def begin(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
-        scripts = [
-            assets.page_init.replace("{{color_id}}", str(COLORS_ID[self.color_name])),
-            assets.paint_btn.replace("{{script_data}}", base64.b64encode(json.dumps(script_data).encode()).decode()),
-        ]
+    async def begin(self, script_data: dict[str, Any], show_all_colors: bool = False) -> AsyncGenerator[Self]:
         async with (
             await get_browser(headless=False) as browser,
             await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
         ):
-            for script in scripts:
-                await context.add_init_script(script)
+            await context.add_init_script(assets.page_init(COLORS_ID[self.color_name], show_all_colors))
+            await context.add_init_script(assets.paint_btn(script_data))
             await context.add_cookies(self.credentials.to_cookies())
             self._btn_id = script_data.get("btn", "paint-button-7685")
 
             async with await context.new_page() as page:
                 url = self.coord.to_share_url(zoom=self.zoom.value)
-                await page.goto(url, wait_until="networkidle")
+                await page.goto(url, wait_until="domcontentloaded")
+
+                try:
+                    await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10000, state="visible")
+                    await page.wait_for_selector(f"#{self._btn_id}", timeout=5000, state="attached")
+                except Exception as e:
+                    raise ShoudQuit("Required buttons not found on the page, is the injected script broken?") from e
 
                 self.context = context
                 self.page = page

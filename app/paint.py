@@ -8,7 +8,7 @@ from typing import Any
 import anyio
 
 from .config import TemplateConfig, UserConfig
-from .consts import COLORS_ID
+from .consts import COLORS_ID, PAID_COLORS
 from .exception import ShoudQuit
 from .highlight import Highlight
 from .log import escape_tag, logger
@@ -35,8 +35,8 @@ async def get_user_info(user: UserConfig) -> WplaceUserInfo:
     prefix = f"<m>{escape_tag(user.identifier)}</> |"
     user_info = await fetch_user_info(user.credentials)
     logger.debug(f"{prefix} Fetched user info: {Highlight.apply(user_info)}")
-    logger.info(f"{prefix} Current droplets: 💧<y>{user_info.droplets}</>")
-    logger.info(f"{prefix} Current charge: 🎨<y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>")
+    logger.info(f"{prefix} Current droplets: 💧 <y>{user_info.droplets}</>")
+    logger.info(f"{prefix} Current charge: 🎨 <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>")
     logger.info(f"{prefix} Remaining: <y>{user_info.charges.remaining_secs():.2f}</>s")
     return user_info
 
@@ -87,8 +87,9 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
         }
 
         coord = user.template.coords.offset(*coords[0])
-        async with WplacePage(user.credentials, entry.name, coord, zoom).begin(script_data) as page:
-            delay = random.uniform(1, 10)
+        page = WplacePage(user.credentials, entry.name, coord, zoom)
+        async with page.begin(script_data, entry.name in PAID_COLORS) as page:
+            delay = random.uniform(3, 10)
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
             await anyio.sleep(delay)
             await page.find_and_click_paint_btn()
@@ -101,7 +102,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
                 logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")
                 prev_x, prev_y = curr_x, curr_y
 
-            delay = random.uniform(1, 10)
+            delay = random.uniform(3, 10)
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before submitting...")
             await anyio.sleep(delay)
             await page.submit_paint()
