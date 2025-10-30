@@ -66,7 +66,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
     logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
 
     diff = await calc_template_diff(user.template, include_pixels=True)
-    for entry in sorted(diff, key=lambda e: e.count, reverse=True):
+    for entry in sorted(diff, key=lambda e: (e.is_paid, e.name in user_info.own_colors, e.count), reverse=True):
         if entry.count > 0 and entry.name in user_info.own_colors and entry.name not in color_in_use:
             logger.info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
             break
