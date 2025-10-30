@@ -19,7 +19,7 @@ jobs:
             runner: windows-2022
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
@@ -30,14 +30,14 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Build config-gui with PyInstaller
+      - name: Build config-gui
         run: uv run pyinstaller config-gui.spec
 
-      - name: Build wplace-auto-painter with PyInstaller
+      - name: Build wplace-auto-painter
         run: uv run pyinstaller wplace-auto-painter.spec
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ matrix.platform.os }}
           path: |
