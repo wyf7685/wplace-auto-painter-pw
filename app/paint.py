@@ -38,6 +38,9 @@ async def get_user_info(user: UserConfig) -> WplaceUserInfo:
     logger.info(f"{prefix} Current droplets: 💧 <y>{user_info.droplets}</>")
     logger.info(f"{prefix} Current charge: 🎨 <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>")
     logger.info(f"{prefix} Remaining: <y>{user_info.charges.remaining_secs():.2f}</>s")
+    if user_info.banned:
+        logger.warning(f"{prefix} User is banned from painting!")
+        raise ShoudQuit("User is banned from painting")
     return user_info
 
 
