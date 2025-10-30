@@ -1,11 +1,16 @@
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 from app.config import CONFIG_FILE, CONFIG_SCHEMA_FILE, DATA_DIR, TEMPLATES_DIR, export_config_schema
 from app.log import logger
 
-GUI_ICO = Path(__file__).resolve().parent / "gui.ico"
+GUI_ICO = (
+    Path(sys._MEIPASS)  # noqa: SLF001  # pyright: ignore[reportAttributeAccessIssue]
+    if getattr(sys, "frozen", False)
+    else Path(__file__).parent
+) / "gui.ico"
 schema_path = "../" + CONFIG_SCHEMA_FILE.resolve().relative_to(Path.cwd().resolve()).as_posix()
 
 

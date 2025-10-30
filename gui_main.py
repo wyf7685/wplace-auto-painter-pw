@@ -1,4 +1,4 @@
-from .window import gui_main
+from gui.window import gui_main
 
 if __name__ == "__main__":
     gui_main()

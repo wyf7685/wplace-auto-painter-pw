@@ -43,14 +43,16 @@ class LoguruHandler(logging.Handler):  # pragma: no cover
 
 log_format = "<g>{time:HH:mm:ss}</g> [<lvl>{level}</lvl>] <c><u>{name}</u></c> | {message}"
 logger.remove()
-logger_id_console = logger.add(
-    sys.stdout,
-    level="DEBUG",
-    diagnose=False,
-    enqueue=True,
-    format=log_format,
-)
-logger_id_file = logger.add(
+
+if sys.stdout:
+    logger.add(
+        sys.stdout,
+        level="DEBUG",
+        diagnose=False,
+        enqueue=True,
+        format=log_format,
+    )
+logger.add(
     "./logs/{time:YYYY-MM-DD}.log",
     rotation="00:00",
     level="DEBUG",

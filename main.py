@@ -1,17 +1,24 @@
 import contextlib
 import subprocess
 import sys
+from pathlib import Path
 
 import anyio
 
-from app.browser import shutdown_playwright
 from app.config import CONFIG_FILE, Config, export_config_schema
 from app.log import escape_tag, logger
-from app.paint import paint_loop
 
 
 def launch_config_gui() -> None:
-    args = [sys.executable, "-m", "gui"]
+    if getattr(sys, "frozen", False):
+        gui_executable = Path(sys.executable).parent / ("config-gui" + (".exe" if sys.platform == "win32" else ""))
+        if not gui_executable.is_file():
+            logger.error(f"找不到配置 GUI 可执行文件: {gui_executable}")
+            return
+        args = [str(gui_executable)]
+    else:
+        args = [sys.executable, "-m", "gui"]
+
     try:
         subprocess.check_call(args)  # noqa: S603
     except Exception:
@@ -55,6 +62,9 @@ async def main() -> None:
         return
 
     ensure_config_gui()
+
+    from app.browser import shutdown_playwright
+    from app.paint import paint_loop
 
     try:
         async with anyio.create_task_group() as tg:
