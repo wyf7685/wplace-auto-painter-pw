@@ -6,6 +6,7 @@ from collections.abc import Callable, Generator
 from typing import Any
 
 import anyio
+from bot7685_ext.wplace import ColorEntry
 
 from .config import TemplateConfig, UserConfig
 from .consts import COLORS_ID, PAID_COLORS
@@ -65,8 +66,20 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
     resolved_js = await JsResolver().resolve()
     logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
 
+    def sort_key(entry: ColorEntry) -> tuple[int, ...]:
+        return (
+            -(
+                user.preferred_colors.index(entry.name)
+                if entry.name in user.preferred_colors
+                else len(user.preferred_colors) + 1
+            ),
+            entry.is_paid,
+            entry.name in user_info.own_colors,
+            entry.count,
+        )
+
     diff = await calc_template_diff(user.template, include_pixels=True)
-    for entry in sorted(diff, key=lambda e: (e.is_paid, e.name in user_info.own_colors, e.count), reverse=True):
+    for entry in sorted(diff, key=sort_key, reverse=True):
         if entry.count > 0 and entry.name in user_info.own_colors and entry.name not in color_in_use:
             logger.info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
             break

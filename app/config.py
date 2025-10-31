@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
 from pydantic import BaseModel, Field
 
+from .consts import ColorNames
 from .utils import WplacePixelCoords
 
 if TYPE_CHECKING:
@@ -63,6 +64,10 @@ class UserConfig(BaseModel):
     identifier: str = Field(description="User identifier, for logging purposes")
     credentials: WplaceCredentials = Field(description="Wplace authentication credentials")
     template: TemplateConfig = Field(description="Template configuration")
+    preferred_colors: list[ColorNames] = Field(
+        default_factory=list,
+        description="List of preferred color names to use when painting, in order of preference",
+    )
 
 
 class Config(BaseModel):
