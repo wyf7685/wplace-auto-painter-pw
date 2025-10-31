@@ -39,6 +39,7 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
             return WplaceUserInfo.model_validate_json(await resp.text())
 
 
+
 class ZoomLevel(int, Enum):
     Z_16 = 16.0
     Z_15 = 15.0
@@ -107,8 +108,19 @@ class WplacePage:
             await anyio.sleep(1)
         logger.info("Submit completed")
 
+    async def find_and_close_modal(self) -> None:
+        if modal := await self.page.query_selector(".modal[open]"):
+            logger.info(f"Found modal dialog: {modal!r}")
+            for el in await modal.query_selector_all("button.btn"):
+                if await el.text_content() == "Close":
+                    await el.click()
+                    logger.info("Closed modal dialog")
+                    return
+            logger.info("No Close button found in modal dialog")
+
     @contextlib.asynccontextmanager
     async def open_paint_panel(self) -> AsyncGenerator[None]:
+        await self.find_and_close_modal()
         paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)
         if paint_btn is None:
             raise ShoudQuit("No paint button found on the page")
