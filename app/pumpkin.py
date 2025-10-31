@@ -55,7 +55,11 @@ async def claim_pumpkins(user: UserConfig) -> int:
         await context.add_cookies(user.credentials.to_cookies())
 
         async with await context.new_page() as page:
-            for pid in await fetch_claimed_pumpkins():
+            claimed = await fetch_claimed_pumpkins()
+            if len(claimed) >= 100:
+                return 100
+
+            for pid in claimed:
                 links.pop(pid, None)
 
             logger.info(f"{prefix} Found <y>{len(links)}</> pumpkins to claim")
@@ -91,13 +95,13 @@ async def pumpkin_claim_loop(user: UserConfig) -> None:
                 await anyio.sleep(60 * 5)
                 continue
 
-            if total_claimed == 100:
+            if total_claimed >= 100:
                 logger.success(f"{prefix} Already claimed all pumpkins.")
                 return
 
             logger.info(f"{prefix} Claimed <y>{total_claimed}</> pumpkins so far.")
             logger.info(f"{prefix} Waiting for the next claim attempt...")
-            await anyio.sleep(60 * 10)
+            await anyio.sleep(60 * random.uniform(10, 15))
 
 
 async def setup_pumpkin_event() -> None:
