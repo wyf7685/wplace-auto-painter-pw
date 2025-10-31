@@ -118,7 +118,7 @@ async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> None
             logger.info(f"{prefix} Starting painting cycle...")
 
             user_info = await get_user_info(user)
-            if user_info.charges.count < 10:
+            if user_info.charges.count < 30:
                 logger.warning(f"{prefix} Not enough charges to paint pixels.")
                 wait_secs = max(600, user_info.charges.remaining_secs() - random.uniform(10, 20) * 60)
             else:

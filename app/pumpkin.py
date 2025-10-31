@@ -20,21 +20,8 @@ SCRIPT = r"""
 logger = logger.opt(colors=True)
 
 
-async def resolve_pumpkin_links() -> dict[int, str]:
-    async with await get_browser(headless=True) as browser, await browser.new_page() as page:
-        await page.goto("https://wplace.samuelscheit.com/#pumpkins=1")
-        await page.wait_for_selector("#pumpkins-modal")
-        await page.wait_for_selector("#pumpkins-modal a")
-        links: list[str] = await page.evaluate(SCRIPT)
-        h = datetime.now().hour
-        result = {int(pid): url for pid, hour, minute, url in links if int(hour) == h and int(minute) >= 10}
-        logger.info(f"Resolved <y>{len(result)}</> pumpkin links")
-        return result
-
-
 async def claim_pumpkins(user: UserConfig) -> int:
     prefix = f"<lm>{user.identifier}</> |"
-    links = await resolve_pumpkin_links()
 
     async def fetch_claimed_pumpkins() -> set[int]:
         resp = await page.goto(
@@ -46,6 +33,22 @@ async def claim_pumpkins(user: UserConfig) -> int:
         if not resp.ok:
             raise RuntimeError(f"Failed to load claimed pumpkins: {resp.status}")
         return set((await resp.json())["claimed"])
+
+    async with (
+        await get_browser(headless=True) as browser,
+        await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
+        await context.new_page() as page,
+    ):
+        await page.goto("https://wplace.samuelscheit.com/#pumpkins=1")
+        await page.wait_for_selector("#pumpkins-modal")
+        await page.wait_for_selector("#pumpkins-modal a")
+        current_hour = datetime.now().hour
+        links = {
+            int(pid): url
+            for pid, hour, minute, url in await page.evaluate(SCRIPT)
+            if int(hour) == current_hour and int(minute) >= 10
+        }
+        logger.info(f"Resolved <y>{len(links)}</> pumpkin links")
 
     async with (
         await get_browser() as browser,
@@ -62,7 +65,9 @@ async def claim_pumpkins(user: UserConfig) -> int:
             for pid in claimed:
                 links.pop(pid, None)
 
-            logger.info(f"{prefix} Found <y>{len(links)}</> pumpkins to claim")
+            if not links:
+                logger.info(f"{prefix} No unclaimed pumpkins available at this time.")
+                return len(claimed)
 
             for pid, link in links.items():
                 await page.goto(link, wait_until="networkidle")
