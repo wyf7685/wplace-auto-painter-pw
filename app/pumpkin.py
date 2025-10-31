@@ -1,13 +1,15 @@
 import random
-from datetime import datetime
+from datetime import UTC, datetime
 
 import anyio
 
 from app.assets import assets
 from app.browser import get_browser
-from app.config import UserConfig
-from app.log import logger
+from app.config import Config, UserConfig
+from app.log import escape_tag, logger
 
+# Event ends at Monday, Nov 3 00:00 AM (UTC)
+EVENT_END = datetime(2025, 11, 3, tzinfo=UTC)
 SCRIPT = r"""
 () => [...document.querySelector('#pumpkins-modal').querySelectorAll('a')].map(e => {
     const text = e.parentElement.children[0].textContent;
@@ -56,7 +58,7 @@ async def claim_pumpkins(user: UserConfig) -> int:
             for pid in await fetch_claimed_pumpkins():
                 links.pop(pid, None)
 
-            logger.info(f"{prefix} Found {len(links)} pumpkins to claim")
+            logger.info(f"{prefix} Found <y>{len(links)}</> pumpkins to claim")
 
             for pid, link in links.items():
                 await page.goto(link, wait_until="networkidle")
@@ -96,3 +98,20 @@ async def pumpkin_claim_loop(user: UserConfig) -> None:
             logger.info(f"{prefix} Claimed <y>{total_claimed}</> pumpkins so far.")
             logger.info(f"{prefix} Waiting for the next claim attempt...")
             await anyio.sleep(60 * 10)
+
+
+async def setup_pumpkin_event() -> None:
+    now = datetime.now(UTC)
+    if now >= EVENT_END:
+        logger.info("Pumpkin event has ended.")
+        return
+
+    delay = random.uniform(60, 180)
+    logger.info(f"Pumpkin event is active. Starting in {delay / 60:.2f} minutes...")
+    await anyio.sleep(delay)
+
+    async with anyio.create_task_group() as tg:
+        for user in Config.load().users:
+            logger.opt(colors=True).info(f"Starting pumpkin claim loop for user: <lm>{escape_tag(user.identifier)}</>")
+            tg.start_soon(pumpkin_claim_loop, user)
+            await anyio.sleep(30)
