@@ -7,7 +7,6 @@ import anyio
 
 from app.config import CONFIG_FILE, Config, export_config_schema
 from app.log import escape_tag, logger
-from app.pumpkin import setup_pumpkin_event
 
 
 def launch_config_gui() -> None:
@@ -72,8 +71,6 @@ async def main() -> None:
             for user in Config.load().users:
                 logger.opt(colors=True).info(f"Starting paint loop for user: <lm>{escape_tag(user.identifier)}</>")
                 tg.start_soon(paint_loop, user)
-
-            tg.start_soon(setup_pumpkin_event)
 
     except* KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
