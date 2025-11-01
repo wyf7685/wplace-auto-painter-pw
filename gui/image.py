@@ -8,7 +8,6 @@ from PyQt6.QtGui import (
     QColor,
     QDragEnterEvent,
     QDropEvent,
-    QImage,
     QMouseEvent,
     QPainter,
     QPaintEvent,
@@ -347,53 +346,16 @@ class ImageDropLabel(QLabel):
             painter.end()
 
 
-    def create_masked_template(self, file_id_base: str, dest_dir: Path) -> Path | None:
-        """生成一个与原始图片同尺寸的 PNG，只有选区内的内容保留，其他区域全透明。
+    def create_masked_template(self) -> tuple[int, int, int, int] | None:
+        """返回选区在原始图片坐标系下的 (x, y, w, h)。
 
-        返回生成的目标路径（Path），失败时返回 None。
-        文件名格式: {file_id_base}(x:{startx},y:{starty},w:{width},h:{height}).png
+        不再创建或保存新图片，仅返回选区的原始坐标和尺寸。若无选区或无法获取原图则返回 None。
         """
         if self.filepath is None:
             return None
         if self._orig_pixmap is None:
             return None
-        sel = self.getSelectionOriginalRect()
-        if sel is None:
+        rect = self.getSelectionOriginalRect()
+        if rect is None:
             return None
-
-        try:
-            orig_img = QImage(self.filepath)
-            if orig_img.isNull():
-                return None
-
-            w = orig_img.width()
-            h = orig_img.height()
-
-            # 创建透明背景的大图
-            result = QImage(w, h, QImage.Format.Format_ARGB32)
-            result.fill(Qt.GlobalColor.transparent)
-
-            # 复制选区到对应位置
-            painter = QPainter(result)
-            src_rect = sel
-            # 绘制选区内容
-            painter.drawImage(src_rect.topLeft(), orig_img.copy(src_rect))
-            painter.end()
-
-            startx = sel.x()
-            starty = sel.y()
-            width = sel.width()
-            height = sel.height()
-            new_name = f"{file_id_base}_({startx},{starty},{width},{height}).png"
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            dest = dest_dir / new_name
-            ok = result.save(str(dest), "PNG")
-            if not ok:
-                return None
-
-            # 更新内部 filepath 以指向新生成的文件
-            self.set_image(str(dest))
-        except Exception:
-            return None
-        else:
-            return dest
+        return (rect.x(), rect.y(), rect.width(), rect.height())

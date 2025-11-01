@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtGui import QIcon, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -196,28 +196,43 @@ class ConfigInitWindow(QWidget):
         if not TEMPLATES_DIR.exists():
             TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
         dest = TEMPLATES_DIR / f"{file_id}.png"
+        selected_area_val = None
         if src:
-            # getattr取得has_selection 函数,后调用has_selection
-            if getattr(self.img_label, "has_selection", lambda: False)():
-                new_path = self.img_label.create_masked_template(file_id, TEMPLATES_DIR)
-                if new_path is None:
-                    QMessageBox.warning(self, "生成模板失败", "无法生成选区模板图片")
+            # 确保模板文件存在：若目标不存在则复制上传的源文件过去
+            if not dest.exists():
+                try:
+                    shutil.copy2(str(src), dest)
+                except Exception as e:
+                    QMessageBox.warning(self, "保存图片失败", f"无法保存图片: {e}")
                     return False
-                # 使用生成的文件名作为 file_id
-                file_id = new_path.stem
-                self.file_id_edit.setText(file_id)
-                dest = new_path
-            else:
-                if not dest.exists():
-                    try:
-                        shutil.copy2(str(src), dest)
-                    except Exception as e:
-                        QMessageBox.warning(self, "保存图片失败", f"无法保存图片: {e}")
-                        return False
+
+            # 获取选区（原始图片坐标）
+            sel = None
+            create_sel = getattr(self.img_label, "create_masked_template", None)
+            img = QImage(str(dest))
+            if callable(create_sel):
+                try:
+                    sel = create_sel()
+                except Exception:
+                    sel = None
+
+            # 如果没有选区，默认使用整张图片尺寸
+            if sel is None :
+                try:
+                    if not img.isNull():
+                        sel = (0, 0, img.width(), img.height())
+                        if int(sel[2])>=img.width() or int(sel[3])>=img.height():
+                            sel = (0,0, img.width(), img.height())
+                except Exception:
+                    sel = None
+            # 保存到本地变量，后面会赋值到 users 列表中的 user
+            selected_area_val = (int(sel[0]), int(sel[1]), int(sel[2]), int(sel[3])) if sel is not None else None # type: ignore
         else:
+            # 没有上传新图片，且目标模板不存在 -> 提示错误
             if not dest.exists():
                 QMessageBox.warning(self, "缺少图片", "请上传或拖放模板图片到预览区")
                 return False
+
         user = self.users[row]
         user.setdefault("template", {})
         user["template"]["file_id"] = file_id
@@ -231,6 +246,9 @@ class ConfigInitWindow(QWidget):
             "token": self.token_edit.toPlainText().strip(),
             "cf_clearance": self.cf_edit.toPlainText().strip(),
         }
+
+        # 写入选区信息（如果有）到 user.selected_area
+        user["selected_area"] = selected_area_val
 
         # 将 users 和全局 browser 写回配置
         cfg = {"users": self.users, "browser": self.browser_cb.currentText()}
