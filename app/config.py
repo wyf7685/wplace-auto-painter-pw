@@ -59,6 +59,25 @@ class TemplateConfig(BaseModel):
         w, h = im.size
         return im, (self.coords, self.coords.offset(w - 1, h - 1))
 
+    def crop(self, selected: tuple[int, int, int, int]) -> CroppedTemplateConfig:
+        return CroppedTemplateConfig(
+            file_id=self.file_id,
+            coords=self.coords,
+            selected=selected,
+        )
+
+
+class CroppedTemplateConfig(TemplateConfig):
+    selected: tuple[int, int, int, int]
+
+    def load(self) -> tuple[Image.Image, tuple[WplacePixelCoords, WplacePixelCoords]]:
+        im, _ = super().load()
+        im = im.crop(self.selected)
+        x, y, w, h = self.selected
+        st = self.coords.offset(x, y)
+        ed = st.offset(w - 1, h - 1)
+        return im, (st, ed)
+
 
 class UserConfig(BaseModel):
     identifier: str = Field(description="User identifier, for logging purposes")
@@ -67,6 +86,10 @@ class UserConfig(BaseModel):
     preferred_colors: list[ColorName] = Field(
         default_factory=list,
         description="List of preferred color names to use when painting, in order of preference",
+    )
+    selected_area: tuple[int, int, int, int] | None = Field(
+        default=None,
+        description="Optional selected area on the template image as (x, y, w, h)",
     )
 
 

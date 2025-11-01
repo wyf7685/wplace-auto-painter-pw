@@ -52,15 +52,10 @@ async def calc_template_diff(
     return diff
 
 
-async def get_color_location(cfg: TemplateConfig, color: str) -> list[tuple[int, int]]:
-    diff = await calc_template_diff(cfg, include_pixels=True)
-    for entry in diff:
-        if entry.name == color:
-            return entry.pixels
-    return []
-
-
-def group_adjacent(points: list[tuple[int, int]]) -> list[list[tuple[int, int]]]:
+def group_adjacent(
+    points: list[tuple[int, int]],
+    min_group_size: int = 100,
+) -> list[list[tuple[int, int]]]:
     # 将点放入集合以便 O(1) 查找
     point_set: set[tuple[int, int]] = set(points)
     visited: set[tuple[int, int]] = set()
@@ -91,4 +86,13 @@ def group_adjacent(points: list[tuple[int, int]]) -> list[list[tuple[int, int]]]
         if p not in visited:
             bfs(p)
 
-    return sorted(groups, key=len, reverse=True)
+    # 合并小分组
+    small_groups = sorted((g for g in groups if len(g) < min_group_size), key=len, reverse=True)
+    large_groups = [g for g in groups if len(g) >= min_group_size]
+    while small_groups:
+        group = small_groups.pop()
+        while len(group) < min_group_size and small_groups:
+            group.extend(small_groups.pop())
+        large_groups.append(group)
+
+    return sorted(large_groups, key=len, reverse=True)
