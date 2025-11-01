@@ -26,7 +26,7 @@ async def download_template_preview(
     background: str | None = None,
     border_pixels: int = 0,
 ) -> bytes:
-    _, (coord1, coord2) = cfg.load()
+    coord1, coord2 = cfg.get_coords()
     if border_pixels > 0:
         coord1 = coord1.offset(-border_pixels, -border_pixels)
         coord2 = coord2.offset(border_pixels, border_pixels)
@@ -38,7 +38,8 @@ async def calc_template_diff(
     *,
     include_pixels: bool = False,
 ) -> list[ColorEntry]:
-    template_img, coords = cfg.load()
+    template_img = cfg.load_im()
+    coords = cfg.get_coords()
     with io.BytesIO() as buffer:
         template_img.save(buffer, format="PNG")
         template_bytes = buffer.getvalue()

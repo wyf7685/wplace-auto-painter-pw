@@ -19,11 +19,11 @@ from .schemas import WplaceUserInfo
 from .template import calc_template_diff, group_adjacent
 
 logger = logger.opt(colors=True)
-color_in_use: set[str] = set()
+COLOR_IN_USE: set[str] = set()
 
 
 def pixels_to_paint_arg(template: TemplateConfig, color_id: int, pixels: list[tuple[int, int]]) -> list[dict[str, Any]]:
-    base = template.coords
+    base, _ = template.get_coords()
     result = []
     for x, y in pixels:
         coord = base.offset(x, y)
@@ -47,13 +47,13 @@ async def get_user_info(user: UserConfig) -> WplaceUserInfo:
 
 @contextlib.contextmanager
 def claim_painting_color(name: str) -> Generator[Callable[[], None]]:
-    color_in_use.add(name)
+    COLOR_IN_USE.add(name)
     released = False
 
     def release() -> None:
         nonlocal released
         if not released:
-            color_in_use.discard(name)
+            COLOR_IN_USE.discard(name)
             released = True
 
     try:
@@ -62,10 +62,7 @@ def claim_painting_color(name: str) -> Generator[Callable[[], None]]:
         release()
 
 
-async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLevel) -> None:
-    resolved_js = await JsResolver().resolve()
-    logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
-
+async def select_paint_color(user: UserConfig, user_info: WplaceUserInfo) -> tuple[TemplateConfig, ColorEntry] | None:
     def sort_key(entry: ColorEntry) -> tuple[int, ...]:
         return (
             -(
@@ -78,14 +75,36 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
             entry.count,
         )
 
-    diff = await calc_template_diff(user.template, include_pixels=True)
-    for entry in sorted(diff, key=sort_key, reverse=True):
-        if entry.count > 0 and entry.name in user_info.own_colors and entry.name not in color_in_use:
-            logger.info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
-            break
-    else:
-        logger.warning("No available colors to paint the template.")
+    async def select(template: TemplateConfig) -> ColorEntry | None:
+        diff = await calc_template_diff(template, include_pixels=True)
+        for entry in sorted(diff, key=sort_key, reverse=True):
+            if entry.count > 0 and entry.name in user_info.own_colors and entry.name not in COLOR_IN_USE:
+                logger.info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
+                return entry
+        return None
+
+    if user.selected_area is not None:
+        logger.info(f"Using selected area for painting: <g>{user.selected_area}</>")
+        template = user.template.crop(user.selected_area)
+        if entry := await select(template):
+            return template, entry
+
+        logger.warning("No available colors to paint in the selected area, falling back to full template.")
+
+    if entry := await select(user.template):
+        return user.template, entry
+
+    logger.warning("No available colors to paint the template.")
+    return None
+
+
+async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLevel) -> None:
+    resolved_js = await JsResolver().resolve()
+    logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
+
+    if (selected := await select_paint_color(user, user_info)) is None:
         return
+    template, entry = selected
 
     with claim_painting_color(entry.name):
         coords = group_adjacent(entry.pixels)[0]
@@ -97,12 +116,12 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
 
         script_data = {
             "btn": f"paint-button-{int(time.time())}",
-            "a": pixels_to_paint_arg(user.template, COLORS_ID[entry.name], coords[:pixels_to_paint]),
+            "a": pixels_to_paint_arg(template, COLORS_ID[entry.name], coords[:pixels_to_paint]),
             "f": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
             "r": resolved_js,
         }
 
-        coord = user.template.coords.offset(*coords[0])
+        coord = template.get_coords()[0].offset(*coords[0])
         page = WplacePage(user.credentials, entry.name, coord, zoom)
         async with page.begin(script_data, entry.name in PAID_COLORS) as page:
             delay = random.uniform(3, 10)

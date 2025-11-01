@@ -52,12 +52,14 @@ class TemplateConfig(BaseModel):
     def file(self) -> Path:
         return TEMPLATES_DIR / f"{self.file_id}.png"
 
-    def load(self) -> tuple[Image.Image, tuple[WplacePixelCoords, WplacePixelCoords]]:
+    def load_im(self) -> Image.Image:
         from PIL import Image
 
-        im = Image.open(self.file)
-        w, h = im.size
-        return im, (self.coords, self.coords.offset(w - 1, h - 1))
+        return Image.open(self.file)
+
+    def get_coords(self) -> tuple[WplacePixelCoords, WplacePixelCoords]:
+        w, h = self.load_im().size
+        return self.coords, self.coords.offset(w - 1, h - 1)
 
     def crop(self, selected: tuple[int, int, int, int]) -> CroppedTemplateConfig:
         return CroppedTemplateConfig(
@@ -70,13 +72,15 @@ class TemplateConfig(BaseModel):
 class CroppedTemplateConfig(TemplateConfig):
     selected: tuple[int, int, int, int]
 
-    def load(self) -> tuple[Image.Image, tuple[WplacePixelCoords, WplacePixelCoords]]:
-        im, _ = super().load()
-        im = im.crop(self.selected)
+    def load_im(self) -> Image.Image:
+        return super().load_im().crop(self.selected)
+
+    def get_coords(self) -> tuple[WplacePixelCoords, WplacePixelCoords]:
         x, y, w, h = self.selected
-        st = self.coords.offset(x, y)
+        st, _ = super().get_coords()
+        st = st.offset(x, y)
         ed = st.offset(w - 1, h - 1)
-        return im, (st, ed)
+        return st, ed
 
 
 class UserConfig(BaseModel):
