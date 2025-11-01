@@ -30,7 +30,7 @@ uv sync
 Execute the following command to open the config GUI:
 
 ```bash
-uv run main.py config
+uv run gui_main.py
 ```
 
 This will create `data/config.json` and `data/templates/` to store your credentials and templates.
