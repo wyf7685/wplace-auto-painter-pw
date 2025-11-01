@@ -3,6 +3,7 @@ import logging
 import shutil
 import sys
 from pathlib import Path
+from typing import Any
 
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (
@@ -23,7 +24,7 @@ from PyQt6.QtWidgets import (
 
 from app.utils import WplacePixelCoords
 
-from .config import CONFIG_PATH, GUI_ICO, TEMPLATES_DIR, ensure_data_dirs, read_config, write_config
+from .config import CONFIG_FILE, GUI_ICO, TEMPLATES_DIR, ensure_data_dirs, read_config, write_config
 from .image import ImageDropLabel
 from .user import create_user
 
@@ -77,7 +78,7 @@ class ConfigInitWindow(QWidget):
 
         # 浏览器选择
         self.browser_cb = QComboBox()
-        self.browser_cb.addItems(["chromium", "chrome","msedge","firefox", "webkit"])
+        self.browser_cb.addItems(["chromium", "chrome", "msedge", "firefox", "webkit"])
 
         # 图片拖放区（每用户预览）
         self.img_label = ImageDropLabel()
@@ -181,8 +182,6 @@ class ConfigInitWindow(QWidget):
             QMessageBox.warning(self, "缺少 token", "请填写 token（wplace Cookies 中的 j）")
             return False
 
-
-
         file_id = self.file_id_edit.text().strip()
 
         if not file_id:
@@ -196,7 +195,7 @@ class ConfigInitWindow(QWidget):
 
         if not TEMPLATES_DIR.exists():
             TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-        dest = Path(TEMPLATES_DIR) / f"{file_id}.png"
+        dest = TEMPLATES_DIR / f"{file_id}.png"
         if src:
             if not dest.exists():
                 try:
@@ -229,7 +228,7 @@ class ConfigInitWindow(QWidget):
             QMessageBox.critical(self, "保存失败", "写入配置失败")
             return False
 
-        QMessageBox.information(self, "保存成功", f"配置已保存到:\n{CONFIG_PATH}\n模板图片目录: {TEMPLATES_DIR}")
+        QMessageBox.information(self, "保存成功", f"配置已保存到:\n{CONFIG_FILE}\n模板图片目录: {TEMPLATES_DIR}")
 
         item = self.users_list.item(row)
         if item:
@@ -276,8 +275,8 @@ class ConfigInitWindow(QWidget):
             return
 
         try:
-            if CONFIG_PATH.exists():
-                with CONFIG_PATH.open("r", encoding="utf-8") as f:
+            if CONFIG_FILE.exists():
+                with CONFIG_FILE.open("r", encoding="utf-8") as f:
                     cfg = json.load(f)
             else:
                 cfg = {"users": self.users}
@@ -314,53 +313,53 @@ class ConfigInitWindow(QWidget):
         # 处理上一次选择的自动保存
         prev = getattr(self, "last_selected_row", -1)
         if prev != -1 and prev != row and prev < len(self.users):
-                u_prev = self.users[prev]
-                tmpl = u_prev.get("template", {})
-                coords = tmpl.get("coords", {})
-                tlx = coords.get("tlx")
-                tly = coords.get("tly")
-                pxx = coords.get("pxx")
-                pxy = coords.get("pxy")
-                stored_coords = (
-                    f"(Tl X: {tlx}, Tl Y: {tly}, Px X: {pxx}, Px Y: {pxy})"
-                    if all(isinstance(v, int) for v in (tlx, tly, pxx, pxy))
-                    else ""
-                )
-                changed = (
-                    self.coords_edit.text().strip() != stored_coords
-                    or self.file_id_edit.text().strip() != (tmpl.get("file_id", ""))
-                    or self.token_edit.toPlainText().strip() != (u_prev.get("credentials", {}).get("token", ""))
-                    or self.cf_edit.toPlainText().strip() != (u_prev.get("credentials", {}).get("cf_clearance", ""))
-                )
-                if changed:
-                    msg = QMessageBox(self)
-                    msg.setWindowTitle("未保存更改")
-                    msg.setText("当前用户存在未保存的更改，是否保存？")
-                    save_btn = msg.addButton("保存", QMessageBox.ButtonRole.AcceptRole)
-                    cancel_btn = msg.addButton("取消", QMessageBox.ButtonRole.RejectRole)
-                    msg.exec()
-                    clicked = msg.clickedButton()
-                    if clicked == save_btn:
-                        self.users_list.blockSignals(True)
-                        self.users_list.setCurrentRow(prev)
-                        self.users_list.blockSignals(False)
-                        ok = self.save_config()
-                        if not ok:
-                            self.users_list.blockSignals(True)
-                            self.users_list.setCurrentRow(prev)
-                            self.users_list.blockSignals(False)
-                            return
-                    elif clicked == cancel_btn:
+            u_prev = self.users[prev]
+            tmpl = u_prev.get("template", {})
+            coords = tmpl.get("coords", {})
+            tlx = coords.get("tlx")
+            tly = coords.get("tly")
+            pxx = coords.get("pxx")
+            pxy = coords.get("pxy")
+            stored_coords = (
+                f"(Tl X: {tlx}, Tl Y: {tly}, Px X: {pxx}, Px Y: {pxy})"
+                if all(isinstance(v, int) for v in (tlx, tly, pxx, pxy))
+                else ""
+            )
+            changed = (
+                self.coords_edit.text().strip() != stored_coords
+                or self.file_id_edit.text().strip() != (tmpl.get("file_id", ""))
+                or self.token_edit.toPlainText().strip() != (u_prev.get("credentials", {}).get("token", ""))
+                or self.cf_edit.toPlainText().strip() != (u_prev.get("credentials", {}).get("cf_clearance", ""))
+            )
+            if changed:
+                msg = QMessageBox(self)
+                msg.setWindowTitle("未保存更改")
+                msg.setText("当前用户存在未保存的更改，是否保存？")
+                save_btn = msg.addButton("保存", QMessageBox.ButtonRole.AcceptRole)
+                cancel_btn = msg.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+                msg.exec()
+                clicked = msg.clickedButton()
+                if clicked == save_btn:
+                    self.users_list.blockSignals(True)
+                    self.users_list.setCurrentRow(prev)
+                    self.users_list.blockSignals(False)
+                    ok = self.save_config()
+                    if not ok:
                         self.users_list.blockSignals(True)
                         self.users_list.setCurrentRow(prev)
                         self.users_list.blockSignals(False)
                         return
+                elif clicked == cancel_btn:
+                    self.users_list.blockSignals(True)
+                    self.users_list.setCurrentRow(prev)
+                    self.users_list.blockSignals(False)
+                    return
+
         # 重新从磁盘读取 users 以反映外部更
         cfg = read_config()
-        users = cfg.get("users")
+        users: list[dict[str, Any]] = cfg.get("users", [])
         if isinstance(users, list):
             self.users = users
-
 
         if row < 0 or row >= len(self.users):
             # 无需加载
@@ -368,9 +367,9 @@ class ConfigInitWindow(QWidget):
             return
 
         u = self.users[row]
-        tmpl = u.get("template", {})
-        creds = u.get("credentials", {})
-        coords = tmpl.get("coords", {})
+        tmpl: dict[str, Any] = u.get("template", {})
+        creds: dict[str, Any] = u.get("credentials", {})
+        coords: dict[str, int] = tmpl.get("coords", {})
         tlx = coords.get("tlx")
         tly = coords.get("tly")
         pxx = coords.get("pxx")
@@ -386,9 +385,8 @@ class ConfigInitWindow(QWidget):
         self.cf_edit.setPlainText(creds.get("cf_clearance", ""))
 
         # 如果存在每用户模板图片则加载
-        file_id = tmpl.get("file_id")
-        if file_id:
-            path = TEMPLATES_DIR/f"{file_id}.png"
+        if file_id := tmpl.get("file_id"):
+            path = TEMPLATES_DIR / f"{file_id}.png"
             if path.is_file():
                 self.img_label.set_image(str(path))
                 self.last_selected_row = row
@@ -402,7 +400,8 @@ class ConfigInitWindow(QWidget):
         # 更新上次选中行
         self.last_selected_row = row
 
-def main() -> None:
+
+def gui_main() -> None:
     app = QApplication(sys.argv)
     w = ConfigInitWindow()
     w.resize(640, 700)

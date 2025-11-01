@@ -25,46 +25,22 @@ cd wplace-auto-painter-pw
 uv sync
 ```
 
-3. Install browser for playwright:
+## Configuration
+
+Execute the following command to open the config GUI:
 
 ```bash
-# install chromium for playwright
-uv run playwright install chromium
-
-# or install firefox
-# uv run playwright install firefox
-
-# or install webkit
-# uv run playwright install webkit
+uv run main.py config
 ```
 
-4. Configure your credentials and template in `./data/config.json`.
+This will create `data/config.json` and `data/templates/` to store your credentials and templates.
 
-```jsonc
-{
-  "template": {
-    // Top-left corner pixel coordinates of the template image on wplace
-    "coords": {
-      "tlx": 12,
-      "tly": 34,
-      "pxx": 56,
-      "pxy": 78
-    }
-  },
-  "credentials": {
-    "token": "YOUR_TOKEN",
-    "cf_clearance": "YOUR_CF_CLEARANCE" // Use "" if not exists
-  },
-  // Available: "chromium", "firefox", "webkit", defaults to "chromium"
-  // Should match the installed browser
-  "browser": "chromium"
-}
-```
+## Usage
 
-5. Place your template image in `./data/template.png`.
-
-6. Execute the program:
+Simply run:
 
 ```bash
 uv run main.py
 ```
+
+Note that if your configuration is not set up or broken, it will open the config GUI first.

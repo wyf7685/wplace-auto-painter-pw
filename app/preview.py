@@ -5,7 +5,6 @@ import anyio.to_thread
 import httpx
 from PIL import Image
 
-from .config import Config
 from .log import logger
 from .utils import (
     PerfLog,
@@ -15,7 +14,9 @@ from .utils import (
     with_semaphore,
 )
 
-TILE_URL = "https://backend.wplace.live/files/s0/tiles/{x}/{y}.png"
+logger = logger.opt(colors=True)
+
+TILE_URL = "https://backend.wplace.live/files/s0/tiles/{}/{}.png"
 
 
 async def download_preview(
@@ -25,7 +26,7 @@ async def download_preview(
 ) -> bytes:
     coord1, coord2 = coord1.fix_with(coord2)
     tile_imgs: dict[tuple[int, int], bytes] = {}
-    logger.opt(colors=True).info(f"Downloading preview from <y>{coord1.human_repr()}</> to <y>{coord2.human_repr()}</>")
+    logger.info(f"Downloading preview from <y>{coord1.human_repr()}</> to <y>{coord2.human_repr()}</>")
 
     @with_semaphore(4)
     @with_retry(
@@ -33,17 +34,17 @@ async def download_preview(
         delay=1,
     )
     async def fetch_tile(x: int, y: int) -> None:
-        resp = await client.get(TILE_URL.format(x=x, y=y))
+        resp = await client.get(TILE_URL.format(x, y))
         tile_imgs[(x, y)] = resp.raise_for_status().read()
 
     async with (
         PerfLog.for_action("downloading tiles") as perf,
-        httpx.AsyncClient(proxy=Config.load().proxy) as client,
+        httpx.AsyncClient() as client,
         anyio.create_task_group() as tg,
     ):
         for x, y in coord1.all_tile_coords(coord2):
             tg.start_soon(fetch_tile, x, y)
-    logger.opt(colors=True).info(f"Downloaded <g>{len(tile_imgs)}</> tiles (<y>{perf.elapsed:.2f}</>s)")
+    logger.info(f"Downloaded <g>{len(tile_imgs)}</> tiles (<y>{perf.elapsed:.2f}</>s)")
 
     def create_image() -> bytes:
         bg_color = (0, 0, 0, 0)
@@ -72,5 +73,5 @@ async def download_preview(
 
     with PerfLog.for_action("creating image") as perf:
         image = await anyio.to_thread.run_sync(create_image)
-    logger.opt(colors=True).info(f"Created image in <y>{perf.elapsed:.2f}</>s")
+    logger.info(f"Created image in <y>{perf.elapsed:.2f}</>s")
     return image

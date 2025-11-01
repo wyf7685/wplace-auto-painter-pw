@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QLabel, QWidget
 
 class ImageDropLabel(QLabel):
     """接受图片拖放并显示预览的 QLabel。"""
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setText("拖放图片到此处或点击上传")
@@ -14,12 +15,13 @@ class ImageDropLabel(QLabel):
         self.setAcceptDrops(True)
         self.filepath = None
 
-    def drag_enterevent(self,a0: QDragEnterEvent | None) -> None:
+    def drag_enterevent(self, a0: QDragEnterEvent | None) -> None:
         if a0 is None:
             return
         md = a0.mimeData()
         if md is not None and md.hasUrls():
             a0.acceptProposedAction()
+
     def dropevent(self, a0: QDropEvent | None) -> None:
         if a0 is None:
             return
@@ -32,6 +34,7 @@ class ImageDropLabel(QLabel):
         path = urls[0].toLocalFile()
         if Path(path).is_file():
             self.set_image(path)
+
     def set_image(self, path: str) -> None:
         pix = QPixmap(path)
         if pix.isNull():
