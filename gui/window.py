@@ -104,7 +104,7 @@ class ConfigInitWindow(QWidget):
         main.addWidget(self.cf_edit)
         main.addWidget(QLabel("浏览器选择 (chromium,firefox,webkit需另外安装)"))
         main.addWidget(self.browser_cb)
-        main.addWidget(QLabel("模板图片预览"))
+        main.addWidget(QLabel("模板图片预览(按住左键框选区域，按住右键移动图片，鼠标滚轮缩放图片)"))
         main.addWidget(self.img_label)
         h2 = QHBoxLayout()
         h2.addWidget(upload_btn)
@@ -197,12 +197,23 @@ class ConfigInitWindow(QWidget):
             TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
         dest = TEMPLATES_DIR / f"{file_id}.png"
         if src:
-            if not dest.exists():
-                try:
-                    shutil.copy2(str(src), dest)
-                except Exception as e:
-                    QMessageBox.warning(self, "保存图片失败", f"无法保存图片: {e}")
+            # getattr取得has_selection 函数,后调用has_selection
+            if getattr(self.img_label, "has_selection", lambda: False)():
+                new_path = self.img_label.create_masked_template(file_id, TEMPLATES_DIR)
+                if new_path is None:
+                    QMessageBox.warning(self, "生成模板失败", "无法生成选区模板图片")
                     return False
+                # 使用生成的文件名作为 file_id
+                file_id = new_path.stem
+                self.file_id_edit.setText(file_id)
+                dest = new_path
+            else:
+                if not dest.exists():
+                    try:
+                        shutil.copy2(str(src), dest)
+                    except Exception as e:
+                        QMessageBox.warning(self, "保存图片失败", f"无法保存图片: {e}")
+                        return False
         else:
             if not dest.exists():
                 QMessageBox.warning(self, "缺少图片", "请上传或拖放模板图片到预览区")
