@@ -23,7 +23,7 @@ async def fetch_pumpkin_links() -> dict[int, str]:
         data: dict = resp.raise_for_status().json()
 
     result: dict[int, str] = {}
-    current_hour = datetime.now().hour
+    current_hour = datetime.now(UTC).hour
     for pid, info in data.items():
         found = datetime.fromisoformat(info["foundAt"])
         if found.hour == current_hour:
