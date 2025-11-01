@@ -122,6 +122,7 @@ async def pumpkin_claim_loop(user: UserConfig) -> None:
         logger.info(f"{prefix} Claimed <y>{len(claimed)}</> pumpkins so far.")
         logger.debug(f"{prefix} Claimed pumpkin IDs: {', '.join(f'<g>{i}</>' for i in sorted(claimed))}")
         logger.info(f"{prefix} Waiting for the next claim attempt...")
+        await anyio.sleep((61 - datetime.now().minute) * 60)
 
 
 async def setup_pumpkin_event() -> None:
