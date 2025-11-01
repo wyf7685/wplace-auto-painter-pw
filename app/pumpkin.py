@@ -2,6 +2,8 @@ import random
 from datetime import UTC, datetime
 
 import anyio
+import anyio.to_thread
+import cloudscraper
 
 from app.assets import assets
 from app.browser import get_browser
@@ -20,20 +22,25 @@ SCRIPT = r"""
 logger = logger.opt(colors=True)
 
 
-async def claim_pumpkins(user: UserConfig, previous_claimed: set[int] | None) -> set[int] | None:
-    prefix = f"<lm>{user.identifier}</> |"
-    previous_claimed = previous_claimed or set()
+def fetch_claimed_pumpkins(user: UserConfig) -> set[int]:
+    url = "https://backend.wplace.live/event/hallowen/pumpkins/claimed"
+    cookies = {"j": user.credentials.token}
+    if user.credentials.cf_clearance:
+        cookies["cf_clearance"] = user.credentials.cf_clearance
 
-    async def fetch_claimed_pumpkins() -> set[int]:
-        resp = await page.goto(
-            "https://backend.wplace.live/event/hallowen/pumpkins/claimed",
-            wait_until="networkidle",
-        )
-        if resp is None:
-            raise RuntimeError("Failed to load claimed pumpkins: No response")
-        if not resp.ok:
-            raise RuntimeError(f"Failed to load claimed pumpkins: {resp.status}")
-        return set((await resp.json())["claimed"])
+    try:
+        resp = cloudscraper.create_scraper().get(url, cookies=cookies)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        raise RuntimeError(f"Failed to load claimed pumpkins: {e}") from e
+
+    return set(data["claimed"] or [])
+
+
+async def claim_pumpkins(user: UserConfig, previous_claimed: set[int] | None) -> set[int] | None:
+    prefix = f"<lm>{user.identifier}</> | <ly>Pumpkin</> |"
+    previous_claimed = previous_claimed or set()
 
     async with (
         await get_browser(headless=True) as browser,
@@ -54,6 +61,15 @@ async def claim_pumpkins(user: UserConfig, previous_claimed: set[int] | None) ->
             logger.info(f"{prefix} No pumpkins available at this time.")
             return None
 
+    claimed = await anyio.to_thread.run_sync(fetch_claimed_pumpkins, user)
+    if len(claimed) >= 100:
+        return claimed
+    for pid in claimed:
+        links.pop(pid, None)
+    if not links:
+        logger.info(f"{prefix} No unclaimed pumpkins available at this time.")
+        return claimed
+
     async with (
         await get_browser() as browser,
         await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
@@ -62,17 +78,6 @@ async def claim_pumpkins(user: UserConfig, previous_claimed: set[int] | None) ->
         await context.add_cookies(user.credentials.to_cookies())
 
         async with await context.new_page() as page:
-            claimed = await fetch_claimed_pumpkins()
-            if len(claimed) >= 100:
-                return claimed
-
-            for pid in claimed:
-                links.pop(pid, None)
-
-            if not links:
-                logger.info(f"{prefix} No unclaimed pumpkins available at this time.")
-                return claimed
-
             for pid, link in links.items():
                 await page.goto(link, wait_until="networkidle")
                 if (viewport := page.viewport_size) is None:
@@ -85,40 +90,42 @@ async def claim_pumpkins(user: UserConfig, previous_claimed: set[int] | None) ->
                             logger.info(f"{prefix} Claimed pumpkin #<g>{pid}</>")
                 except Exception:
                     logger.warning(f"{prefix} Failed to claim pumpkin #<g>{pid}</>")
-                await anyio.sleep(2)
+                await anyio.sleep(random.uniform(3, 6))
 
-            return await fetch_claimed_pumpkins()
+    return await anyio.to_thread.run_sync(fetch_claimed_pumpkins, user)
 
 
 async def pumpkin_claim_loop(user: UserConfig) -> None:
-    prefix = f"<lm>{user.identifier}</> |"
+    prefix = f"<lm>{user.identifier}</> | <ly>Pumpkin</> |"
     claimed: set[int] | None = None
 
     while True:
-        await anyio.sleep(max(0, random.uniform(12, 18) - datetime.now().minute) * 60)
-        current_hour = datetime.now().hour
-        while datetime.now().hour == current_hour:
-            try:
-                current_claimed = await claim_pumpkins(user, claimed)
-            except Exception:
-                logger.opt(colors=True, exception=True).warning(f"{prefix} Failed to claim pumpkins")
-                logger.info(f"{prefix} Waiting for 5 minutes before retrying...")
-                await anyio.sleep(60 * 5)
-                continue
+        # Wait until around xx:50 to start claiming pumpkins
+        delay = max(0, random.uniform(45, 55) - datetime.now().minute)
+        logger.info(f"{prefix} Waiting for <y>{delay:.1f}</> minutes until next claim attempt...")
+        await anyio.sleep(delay * 60)
 
-            if current_claimed is None:
-                logger.info(f"{prefix} Waiting for the next claim attempt...")
-                await anyio.sleep(60 * random.uniform(10, 15))
-                continue
+        try:
+            current_claimed = await claim_pumpkins(user, claimed)
+        except Exception:
+            logger.opt(colors=True, exception=True).warning(f"{prefix} Failed to claim pumpkins")
+            delay = random.uniform(5, 10)
+            logger.info(f"{prefix} Waiting for <y>{delay:.1f}</> minutes before retrying...")
+            await anyio.sleep(60 * delay)
+            continue
 
-            if len(current_claimed) >= 100:
-                logger.success(f"{prefix} Already claimed all pumpkins.")
-                return
-
-            logger.info(f"{prefix} Claimed <y>{len(current_claimed)}</> pumpkins so far.")
+        if current_claimed is None:
             logger.info(f"{prefix} Waiting for the next claim attempt...")
-            claimed = current_claimed
             await anyio.sleep(60 * random.uniform(10, 15))
+            continue
+
+        if len(current_claimed) >= 100:
+            logger.success(f"{prefix} Already claimed all pumpkins.")
+            return
+
+        logger.info(f"{prefix} Claimed <y>{len(current_claimed)}</> pumpkins so far.")
+        logger.info(f"{prefix} Waiting for the next claim attempt...")
+        claimed = current_claimed
 
 
 async def setup_pumpkin_event() -> None:
@@ -127,10 +134,7 @@ async def setup_pumpkin_event() -> None:
         logger.info("Pumpkin event has ended.")
         return
 
-    delay = random.uniform(60, 180)
-    logger.info(f"Pumpkin event is active. Starting in {delay / 60:.2f} minutes...")
-    await anyio.sleep(delay)
-
+    logger.info("Pumpkin event is active.")
     async with anyio.create_task_group() as tg:
         for user in Config.load().users:
             logger.opt(colors=True).info(f"Starting pumpkin claim loop for user: <lm>{escape_tag(user.identifier)}</>")
