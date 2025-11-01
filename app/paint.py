@@ -8,7 +8,7 @@ from typing import Any
 import anyio
 from bot7685_ext.wplace import ColorEntry
 
-from .config import TemplateConfig, UserConfig
+from .config import Config, TemplateConfig, UserConfig
 from .consts import COLORS_ID, PAID_COLORS
 from .exception import ShoudQuit
 from .highlight import Highlight
@@ -154,3 +154,11 @@ async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> None
             delay = random.uniform(1 * 60, 3 * 60)
             logger.info(f"{prefix} Sleeping for <y>{delay / 60:.2f}</> minutes before retrying...")
             await anyio.sleep(delay)
+
+
+async def setup_paint() -> None:
+    async with anyio.create_task_group() as tg:
+        for user in Config.load().users:
+            logger.info(f"Starting paint loop for user: <lm>{escape_tag(user.identifier)}</>")
+            tg.start_soon(paint_loop, user)
+            await anyio.sleep(30)

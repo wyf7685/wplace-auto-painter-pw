@@ -6,8 +6,7 @@ from pathlib import Path
 import anyio
 
 from app.config import CONFIG_FILE, Config, export_config_schema
-from app.log import escape_tag, logger
-from app.pumpkin import setup_pumpkin_event
+from app.log import logger
 
 
 def launch_config_gui() -> None:
@@ -65,14 +64,12 @@ async def main() -> None:
     ensure_config_gui()
 
     from app.browser import shutdown_playwright
-    from app.paint import paint_loop
+    from app.paint import setup_paint
+    from app.pumpkin import setup_pumpkin_event
 
     try:
         async with anyio.create_task_group() as tg:
-            for user in Config.load().users:
-                logger.opt(colors=True).info(f"Starting paint loop for user: <lm>{escape_tag(user.identifier)}</>")
-                tg.start_soon(paint_loop, user)
-
+            tg.start_soon(setup_paint)
             tg.start_soon(setup_pumpkin_event)
 
     except* KeyboardInterrupt:
