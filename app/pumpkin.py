@@ -47,7 +47,7 @@ async def claim_pumpkins(user: UserConfig, previous_claimed: set[int] | None) ->
         links = {
             int(pid): url
             for pid, hour, minute, url in await page.evaluate(SCRIPT)
-            if int(hour) == current_hour and int(minute) >= 10 and int(pid) not in previous_claimed
+            if int(hour) == current_hour and int(minute) >= 5 and int(pid) not in previous_claimed
         }
         logger.info(f"Resolved <y>{len(links)}</> pumpkin links")
         if not links:
@@ -115,7 +115,7 @@ async def pumpkin_claim_loop(user: UserConfig) -> None:
                 logger.success(f"{prefix} Already claimed all pumpkins.")
                 return
 
-            logger.info(f"{prefix} Claimed <y>{current_claimed}</> pumpkins so far.")
+            logger.info(f"{prefix} Claimed <y>{len(current_claimed)}</> pumpkins so far.")
             logger.info(f"{prefix} Waiting for the next claim attempt...")
             claimed = current_claimed
             await anyio.sleep(60 * random.uniform(10, 15))
