@@ -4,7 +4,7 @@
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 ![works on my machine](https://img.shields.io/badge/works%20on-my%20machine-green)
 
-Paints on wplace with playwright
+Paint on wplace with playwright
 
 ## Setup
 
@@ -44,3 +44,14 @@ uv run main.py
 ```
 
 Note that if your configuration is not set up or broken, it will open the config GUI first.
+
+> [!note]
+>
+> Prebuilt binaries are available on [GitHub Actions](https://github.com/wyf7685/wplace-auto-painter-pw/actions) for Windows and Linux.
+>
+> Note that prebuilt versions have limited support. Running from source is recommended for better compatibility.
+
+## See Also
+
+- [samuelscheit/wplace-archive](https://github.com/samuelscheit/wplace-archive): Awesome archive of wplace
+- [aihaisi/wplace-auto-painter](https://github.com/aihaisi/wplace-auto-painter): Paint on wplace with opencv. Inspired this project.
