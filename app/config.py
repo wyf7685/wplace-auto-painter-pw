@@ -62,7 +62,7 @@ class Config(BaseModel):
     _cache: ClassVar[Self | None] = None
 
     users: list[UserConfig]
-    browser: Literal["chromium", "firefox", "webkit"] = "chromium"
+    browser: Literal["chromium", "firefox", "webkit", "chrome", "msedge"]
     proxy: str | None = None
 
     @classmethod

@@ -1,7 +1,7 @@
 from playwright.async_api import Browser, BrowserType, Playwright, async_playwright
 
-from .config import Config
-from .log import logger
+from app.config import Config
+from app.log import logger
 
 _PLAYWRIGHT: Playwright | None = None
 _BROWSER: Browser | None = None
@@ -16,37 +16,25 @@ async def get_playwright() -> Playwright:
     return _PLAYWRIGHT
 
 
-async def _browser_type() -> tuple[str, BrowserType]:
+async def _browser_type() -> tuple[BrowserType, str, str | None]:
     pw = await get_playwright()
     name = Config.load().browser
-    return name, getattr(pw, name)
+    channel = None
+    if name in ("chrome", "msedge"):
+        channel = name
+        name = "chromium"
+
+    return getattr(pw, name), name if channel is None else f"{name} ({channel})", channel
 
 
 async def get_browser(*, headless: bool = False) -> Browser:
-    global _BROWSER, _BROWSER_HEADLESS
-    if not headless:
-        if _BROWSER is None:
-            name, browser_type = await _browser_type()
-            logger.opt(colors=True).debug(f"Launching browser: <g>{name}</>")
-            _BROWSER = await browser_type.launch(headless=False)
-        return _BROWSER
-
-    if _BROWSER_HEADLESS is None:
-        name, browser_type = await _browser_type()
-        logger.opt(colors=True).debug(f"Launching headless browser: <g>{name}</>")
-        _BROWSER_HEADLESS = await browser_type.launch(headless=True)
-
-    return _BROWSER_HEADLESS
+    browser_type, name, channel = await _browser_type()
+    logger.opt(colors=True).debug(f"Launching {'headless ' if headless else ''}browser: <g>{name}</>")
+    return await browser_type.launch(channel=channel, headless=headless)
 
 
 async def shutdown_playwright() -> None:
     global _BROWSER, _BROWSER_HEADLESS, _PLAYWRIGHT
-    if _BROWSER is not None:
-        await _BROWSER.close()
-        _BROWSER = None
-    if _BROWSER_HEADLESS is not None:
-        await _BROWSER_HEADLESS.close()
-        _BROWSER_HEADLESS = None
     if _PLAYWRIGHT is not None:
         await _PLAYWRIGHT.stop()
         _PLAYWRIGHT = None

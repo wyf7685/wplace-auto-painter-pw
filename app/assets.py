@@ -15,4 +15,5 @@ class Assets:
     page_init = _AssetsItem()
     paint_btn = _AssetsItem()
 
-ASSETS = Assets()
+
+assets = Assets()
