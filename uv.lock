@@ -35,13 +35,13 @@ wheels = [
 
 [[package]]
 name = "bot7685-ext"
-version = "0.1.3"
+version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/94/b7/3bd5964b27b3892d075a221e8a3fe4baaf7651ddf682be363dfbf694cb83/bot7685_ext-0.1.3.tar.gz", hash = "sha256:d8430f7f96e77aebae9990d3b09b4831914a87f18cef38c97ec4a6db8fd63e8b", size = 16220, upload-time = "2025-10-29T12:04:41.15Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/64/61db783f39791225f77f62764f49aec74453ab4260d5f2d884b7b99a8871/bot7685_ext-0.1.4.tar.gz", hash = "sha256:0a53f926d63e5e1b2cee8a3b6a158e0333f3c07ac10a7337b20f6f8aba81c2fd", size = 16193, upload-time = "2025-11-01T07:26:30.422Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/10/12/bf1c0e850124c6175ea63bb9e5b8edefeea5bbd35718ac7d2d02eb8d3d29/bot7685_ext-0.1.3-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b7606ac9026c4c2cc908415fde9a81bd7543c9b0b3c9b0d75c508bd3567fe031", size = 445751, upload-time = "2025-10-29T12:04:34.223Z" },
-    { url = "https://files.pythonhosted.org/packages/48/84/05edd1486623d5b843ff004528eae689c3977c6faf6e9ea64c4dbecd62be/bot7685_ext-0.1.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b084f933f4977e69ca4fdce888a98404e966eacdf4e459eba25d6c6f2b4bfc62", size = 483919, upload-time = "2025-10-29T12:04:35.561Z" },
-    { url = "https://files.pythonhosted.org/packages/ca/5d/32d6a8cba1861870b2d5d25e2e2257ffc3721a73ad720c7599a66bc73381/bot7685_ext-0.1.3-cp310-abi3-win_amd64.whl", hash = "sha256:7231d3a4716d52cce93deac20076942076761108c4f74aefa53b1ed2a5586b68", size = 276172, upload-time = "2025-10-29T12:04:40.124Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/96/60598c1a871b12321555a3f4c32d788688381797f0f9aa365b13d0443c54/bot7685_ext-0.1.4-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1f387fd195c868823c26faab8fe43d0bb9c08c2b8860274e6b530f785a7f488f", size = 450802, upload-time = "2025-11-01T07:26:27.63Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/39/3fa564663bb2f4229f162dad7a16f19e1a1a764f3304ff515f0349cb0263/bot7685_ext-0.1.4-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c29ee27c4f5a8bf8ad9f0099e268dff859a22fe1882ada1f8a5aea66ecaa56a6", size = 487877, upload-time = "2025-11-01T07:26:28.672Z" },
+    { url = "https://files.pythonhosted.org/packages/39/e4/a7b309f7d778cca90f4a6cd5cee6536acb3cbc59874cbc02d6060157f027/bot7685_ext-0.1.4-cp310-abi3-win_amd64.whl", hash = "sha256:71ec5aff9552ae9c2c41dae4b0ca36617519de86e463d988f5a743e56d2ddc7a", size = 279557, upload-time = "2025-11-01T07:26:29.52Z" },
 ]
 
 [[package]]
@@ -556,7 +556,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.11.0" },
-    { name = "bot7685-ext", specifier = ">=0.1.3" },
+    { name = "bot7685-ext", specifier = "==0.1.4" },
     { name = "cloudscraper", specifier = ">=1.2.71" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "loguru", specifier = ">=0.7.3" },

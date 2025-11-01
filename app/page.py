@@ -5,11 +5,11 @@ from enum import Enum
 from typing import Any, Self
 
 import anyio
+from bot7685_ext.wplace.consts import COLORS_ID, ColorName
 
 from .assets import assets
 from .browser import get_browser
 from .config import WplaceCredentials
-from .consts import COLORS_ID
 from .exception import FetchFailed, ShoudQuit
 from .log import escape_tag, logger
 from .schemas import WplaceUserInfo
@@ -55,12 +55,12 @@ class WplacePage:
     def __init__(
         self,
         credentials: WplaceCredentials,
-        color_name: str,
+        color_name: ColorName,
         coord: WplacePixelCoords,
         zoom: ZoomLevel,
     ) -> None:
         self.credentials = credentials
-        self.color_name = color_name
+        self.color_name: ColorName = color_name
         self.coord = coord
         self.zoom = zoom
 

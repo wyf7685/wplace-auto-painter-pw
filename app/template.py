@@ -2,7 +2,7 @@ import io
 from collections import deque
 from typing import Protocol
 
-import bot7685_ext
+import bot7685_ext.wplace
 from bot7685_ext.wplace import ColorEntry
 
 from .config import TemplateConfig

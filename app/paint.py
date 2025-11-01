@@ -7,9 +7,9 @@ from typing import Any
 
 import anyio
 from bot7685_ext.wplace import ColorEntry
+from bot7685_ext.wplace.consts import COLORS_ID, PAID_COLORS
 
 from .config import Config, TemplateConfig, UserConfig
-from .consts import COLORS_ID, PAID_COLORS
 from .exception import ShoudQuit
 from .highlight import Highlight
 from .log import escape_tag, logger

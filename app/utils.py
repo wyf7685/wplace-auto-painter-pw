@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from typing import Any, NamedTuple, Self, cast
 
 import anyio
+from bot7685_ext.wplace.consts import ALL_COLORS
 
-from .consts import ALL_COLORS, FLAG_MAP
 from .log import escape_tag, logger
 
 # 从多点校准中提取的常量参数
@@ -117,10 +117,6 @@ class WplacePixelCoords:
         coord1, coord2 = self.fix_with(other)
         (x1, y1), (x2, y2) = coord1.to_abs(), coord2.to_abs()
         return x2 - x1 + 1, y2 - y1 + 1
-
-
-def get_flag_emoji(id: int) -> str:
-    return FLAG_MAP.get(id, "")
 
 
 def find_color_name(rgba: tuple[int, int, int, int]) -> str:
