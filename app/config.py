@@ -73,7 +73,8 @@ class CroppedTemplateConfig(TemplateConfig):
     selected: tuple[int, int, int, int]
 
     def load_im(self) -> Image.Image:
-        return super().load_im().crop(self.selected)
+        x, y, w, h = self.selected
+        return super().load_im().crop((x, y, x + w, y + h))
 
     def get_coords(self) -> tuple[WplacePixelCoords, WplacePixelCoords]:
         x, y, w, h = self.selected

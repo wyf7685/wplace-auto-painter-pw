@@ -17,7 +17,8 @@ def launch_config_gui() -> None:
             return
         args = [str(gui_executable)]
     else:
-        args = [sys.executable, "-m", "gui"]
+        gui_entry = Path(__file__).parent / "gui_main.py"
+        args = [sys.executable, str(gui_entry)]
 
     try:
         subprocess.check_call(args)  # noqa: S603
