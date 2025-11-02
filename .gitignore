@@ -10,3 +10,5 @@ wheels/
 .venv
 /data
 /logs
+
+.git_commit_hash

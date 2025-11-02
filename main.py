@@ -7,6 +7,7 @@ import anyio
 
 from app.config import CONFIG_FILE, Config, export_config_schema
 from app.log import logger
+from app.update import check_update
 
 
 def launch_config_gui() -> None:
@@ -57,6 +58,7 @@ def ensure_config_gui() -> None:
 
 async def main() -> None:
     export_config_schema()
+    check_update()
 
     if "config" in sys.argv[1:]:
         launch_config_gui()
