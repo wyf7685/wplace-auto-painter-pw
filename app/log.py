@@ -55,7 +55,10 @@ def _filter() -> Callable[[Record], bool]:
         return logger.level(Config.load().log_level).no
 
     def filter_func(record: Record) -> bool:
-        return record["level"].no >= _level()
+        try:
+            return record["level"].no >= _level()
+        except Exception:
+            return True
 
     return filter_func
 
