@@ -1,3 +1,4 @@
+import functools
 import json
 import re
 
@@ -6,9 +7,9 @@ import anyio.to_thread
 import cloudscraper
 import httpx
 
-from .config import DATA_DIR
+from .config import DATA_DIR, Config
 from .exception import ShoudQuit
-from .utils import with_semaphore
+from .utils import requests_proxies, with_semaphore
 
 CHUNKS_DIR = DATA_DIR / "js_chunks"
 CHUNK_ETAG_FILE = CHUNKS_DIR / "etag.json"
@@ -32,7 +33,15 @@ class JsResolver:
 
     @with_semaphore(1)
     async def prepare_chunks(self) -> None:
-        html = (await anyio.to_thread.run_sync(cloudscraper.create_scraper().get, "https://wplace.live/")).text
+        resp = await anyio.to_thread.run_sync(
+            functools.partial(
+                cloudscraper.create_scraper().get,
+                url="https://wplace.live/",
+                proxies=requests_proxies(),
+            )
+        )
+        resp.raise_for_status()
+        html = resp.text
         chunks = {f"{match.group(1)}.js" for match in self.PATTERN_CHUNK_NAME.finditer(html)}
         etags = load_chunk_etags()
         for chunk_name in set(etags.keys()) - chunks:
@@ -59,7 +68,7 @@ class JsResolver:
                 etags[chunk_name] = etag
             file.write_text(response.text, encoding="utf-8")
 
-        async with httpx.AsyncClient() as client, anyio.create_task_group() as tg:
+        async with httpx.AsyncClient(proxy=Config.load().proxy) as client, anyio.create_task_group() as tg:
             for chunk_name in chunks:
                 tg.start_soon(download_js_chunk, chunk_name)
 

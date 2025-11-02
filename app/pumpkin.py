@@ -10,16 +10,16 @@ from app.assets import assets
 from app.browser import get_browser
 from app.config import Config, UserConfig
 from app.log import escape_tag, logger
+from app.utils import requests_proxies
 
 # Event ends at Monday, Nov 3 00:00 AM (UTC)
 EVENT_END = datetime(2025, 11, 3, tzinfo=UTC)
-PUMPKINS_JSON_URL = "https://wplace.samuelscheit.com/tiles/pumpkin.json"
 logger = logger.opt(colors=True)
 
 
 async def fetch_pumpkin_links() -> dict[int, str]:
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(PUMPKINS_JSON_URL)
+    async with httpx.AsyncClient(proxy=Config.load().proxy) as client:
+        resp = await client.get("https://wplace.samuelscheit.com/tiles/pumpkin.json")
         data: dict = resp.raise_for_status().json()
 
     result: dict[int, str] = {}
@@ -34,13 +34,12 @@ async def fetch_pumpkin_links() -> dict[int, str]:
 
 
 def fetch_claimed_pumpkins(user: UserConfig) -> set[int]:
-    url = "https://backend.wplace.live/event/hallowen/pumpkins/claimed"
-    cookies = {"j": user.credentials.token}
-    if user.credentials.cf_clearance:
-        cookies["cf_clearance"] = user.credentials.cf_clearance
-
     try:
-        resp = cloudscraper.create_scraper().get(url, cookies=cookies)
+        resp = cloudscraper.create_scraper().get(
+            "https://backend.wplace.live/event/hallowen/pumpkins/claimed",
+            cookies=user.credentials.to_requests_cookies(),
+            proxies=requests_proxies(),
+        )
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
@@ -68,11 +67,11 @@ async def claim_pumpkins(user: UserConfig) -> set[int] | None:
         return claimed
 
     async with (
-        await get_browser() as browser,
+        get_browser() as browser,
         await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
     ):
         await context.add_init_script(assets.page_init())
-        await context.add_cookies(user.credentials.to_cookies())
+        await context.add_cookies(user.credentials.to_pw_cookies())
 
         async with await context.new_page() as page:
             for pid, link in links.items():

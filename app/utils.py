@@ -303,3 +303,10 @@ def with_semaphore[T: Callable](initial_value: int) -> Callable[[T], T]:
         return cast("T", functools.update_wrapper(wrapper, func))
 
     return decorator
+
+
+def requests_proxies() -> dict[str, str] | None:
+    from .config import Config
+
+    proxy = Config.load().proxy
+    return {"http": proxy, "https": proxy} if proxy else None

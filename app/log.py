@@ -1,13 +1,15 @@
+import functools
 import inspect
 import logging
 import re
 import sys
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import loguru
 
 if TYPE_CHECKING:
-    from loguru import Logger
+    from loguru import Logger, Record
 
 logger: Logger = loguru.logger
 
@@ -44,6 +46,20 @@ class LoguruHandler(logging.Handler):  # pragma: no cover
 log_format = "<g>{time:HH:mm:ss}</g> [<lvl>{level}</lvl>] <c><u>{name}</u></c> | {message}"
 logger.remove()
 
+
+def _filter() -> Callable[[Record], bool]:
+    @functools.cache
+    def _level() -> int:
+        from .config import Config
+
+        return logger.level(Config.load().log_level).no
+
+    def filter_func(record: Record) -> bool:
+        return record["level"].no >= _level()
+
+    return filter_func
+
+
 if sys.stdout:
     logger.add(
         sys.stdout,
@@ -51,6 +67,7 @@ if sys.stdout:
         diagnose=False,
         enqueue=True,
         format=log_format,
+        filter=_filter(),
     )
 logger.add(
     "./logs/{time:YYYY-MM-DD}.log",

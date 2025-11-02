@@ -23,7 +23,7 @@ USER_AGENT = (
 
 async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
     async with (
-        await get_browser(headless=True) as browser,
+        get_browser(headless=True) as browser,
         await browser.new_context(
             user_agent=USER_AGENT,
             viewport={"width": 1920, "height": 1080},
@@ -31,13 +31,12 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
         ) as context,
     ):
         await context.add_init_script(assets.page_init())
-        await context.add_cookies(credentials.to_cookies())
+        await context.add_cookies(credentials.to_pw_cookies())
         async with await context.new_page() as page:
             resp = await page.goto("https://backend.wplace.live/me", wait_until="networkidle")
             if not resp:
                 raise FetchFailed("Failed to fetch user info")
             return WplaceUserInfo.model_validate_json(await resp.text())
-
 
 
 class ZoomLevel(int, Enum):
@@ -67,12 +66,12 @@ class WplacePage:
     @contextlib.asynccontextmanager
     async def begin(self, script_data: dict[str, Any], show_all_colors: bool = False) -> AsyncGenerator[Self]:
         async with (
-            await get_browser(headless=False) as browser,
+            get_browser(headless=False) as browser,
             await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
         ):
             await context.add_init_script(assets.page_init(COLORS_ID[self.color_name], show_all_colors))
             await context.add_init_script(assets.paint_btn(script_data))
-            await context.add_cookies(self.credentials.to_cookies())
+            await context.add_cookies(self.credentials.to_pw_cookies())
             self._btn_id = script_data.get("btn", "paint-button-7685")
 
             async with await context.new_page() as page:

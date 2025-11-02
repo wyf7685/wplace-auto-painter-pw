@@ -32,15 +32,21 @@ def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:
 
 
 class WplaceCredentials(BaseModel):
-    token: str = Field(description="Playwright cookie 'j' value")
+    token: str = Field(description="WPlace cookie 'j' value")
     cf_clearance: str | None = Field(
-        default=None, description="Playwright cookie 'cf_clearance' value, could be null if not needed"
+        default=None, description="WPlace cookie 'cf_clearance' value, could be null if not needed"
     )
 
-    def to_cookies(self) -> list[SetCookieParam]:
+    def to_pw_cookies(self) -> list[SetCookieParam]:
         cookies: list[SetCookieParam] = [_construct_pw_cookie("j", self.token)]
         if self.cf_clearance:
             cookies.append(_construct_pw_cookie("cf_clearance", self.cf_clearance))
+        return cookies
+
+    def to_requests_cookies(self) -> dict[str, str]:
+        cookies: dict[str, str] = {"j": self.token}
+        if self.cf_clearance:
+            cookies["cf_clearance"] = self.cf_clearance
         return cookies
 
 
@@ -104,6 +110,10 @@ class Config(BaseModel):
     users: list[UserConfig] = Field(description="List of user configurations")
     browser: Literal["chromium", "firefox", "webkit", "chrome", "msedge"] = Field(
         description="Playwright browser type to use"
+    )
+    proxy: str | None = Field(default=None, description="Optional proxy server URL to access wplace")
+    log_level: Literal["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="DEBUG", description="Logging level for console"
     )
 
     @classmethod
