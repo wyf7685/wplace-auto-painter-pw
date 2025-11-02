@@ -35,8 +35,7 @@ class ImageDropLabel(QLabel):
 
         self.setMouseTracking(True)
 
-        self.setFixedHeight(240)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.filepath: str | None = None
 
         self._orig_pixmap: QPixmap | None = None
@@ -96,7 +95,6 @@ class ImageDropLabel(QLabel):
         display_h = self._display_pixmap.height()
         self._offset_x = (label_w - display_w) // 2 if display_w <= label_w else 0
         self._offset_y = (label_h - display_h) // 2 if display_h <= label_h else 0
-
 
         self.setPixmap(QPixmap())
         self.update()
@@ -170,6 +168,7 @@ class ImageDropLabel(QLabel):
             self._select_end = ev.pos()
             self._is_drawing = True
             self.update()
+
     def mouseMoveEvent(self, ev: QMouseEvent) -> None:
         if self._is_drawing:
             self._select_end = ev.pos()
@@ -344,7 +343,6 @@ class ImageDropLabel(QLabel):
                     painter.setBrush(brush_color)
                     painter.drawRect(rect)
             painter.end()
-
 
     def create_masked_template(self) -> tuple[int, int, int, int] | None:
         """返回选区在原始图片坐标系下的 (x, y, w, h)。

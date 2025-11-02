@@ -1,5 +1,5 @@
+import dataclasses
 import json
-import logging
 import shutil
 import sys
 from pathlib import Path
@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -17,11 +18,13 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
+from app.log import logger
 from app.utils import WplacePixelCoords
 
 from .config import CONFIG_FILE, GUI_ICO, TEMPLATES_DIR, ensure_data_dirs, read_config, write_config
@@ -37,32 +40,23 @@ class ConfigInitWindow(QWidget):
         # 尝试设置窗口图标（确保传入字符串路径）
         try:
             if GUI_ICO.is_file():
-                icon_path = str(GUI_ICO) if isinstance(GUI_ICO, Path) else GUI_ICO
-                self.setWindowIcon(QIcon(icon_path))
+                self.setWindowIcon(QIcon(str(GUI_ICO)))
         except Exception as exc:
-            logging.debug(f"无法设置窗口图标: {exc}")
+            logger.debug(f"无法设置窗口图标: {exc}")
 
         # 坐标：单行输入 Blue Marble 格式
         self.coords_edit = QLineEdit()
         self.coords_edit.setPlaceholderText("(Tl X: 12, Tl Y: 34, Px X: 56, Px Y: 78)")
 
-        coords_layout = QHBoxLayout()
-        coords_layout.addWidget(QLabel("模板坐标:"))
-        coords_layout.addWidget(self.coords_edit)
-
         # 用户列表与控件
         self.users_list = QListWidget()
+        # self.users_list.setMaximumHeight(70)
         add_user_btn = QPushButton("新增用户")
+        add_user_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         add_user_btn.clicked.connect(self.add_user)
         remove_user_btn = QPushButton("删除用户")
+        remove_user_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         remove_user_btn.clicked.connect(self.remove_user)
-
-        users_h = QHBoxLayout()
-        users_h.addWidget(self.users_list)
-        users_ctrl_v = QVBoxLayout()
-        users_ctrl_v.addWidget(add_user_btn)
-        users_ctrl_v.addWidget(remove_user_btn)
-        users_h.addLayout(users_ctrl_v)
 
         self.users_list.currentRowChanged.connect(self.on_user_selected)
 
@@ -70,7 +64,7 @@ class ConfigInitWindow(QWidget):
         self.file_id_edit = QLineEdit()
         self.file_id_edit.setPlaceholderText("template file_id (will save as data/templates/{file_id}.png)")
 
-        # 凭证
+        # 凭证输入框
         self.token_edit = QTextEdit()
         self.token_edit.setPlaceholderText("token")
         self.cf_edit = QTextEdit()
@@ -80,6 +74,15 @@ class ConfigInitWindow(QWidget):
         self.browser_cb = QComboBox()
         self.browser_cb.addItems(["chromium", "chrome", "msedge", "firefox", "webkit"])
 
+        # 控制台日志等级选择
+        self.log_level_cb = QComboBox()
+        self.log_level_cb.addItems(["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+        self.log_level_cb.setCurrentText("INFO")
+
+        # 代理地址
+        self.proxy_edit = QLineEdit()
+        self.proxy_edit.setPlaceholderText("Proxy Server URL (e.g., http://127.0.0.1:7890)")
+
         # 图片拖放区（每用户预览）
         self.img_label = ImageDropLabel()
         upload_btn = QPushButton("选择图片...")
@@ -87,29 +90,89 @@ class ConfigInitWindow(QWidget):
 
         # 保存按钮
         save_btn = QPushButton("保存 config.json")
+        save_btn.setFixedWidth(125)
+        save_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         save_btn.clicked.connect(self.save_config)
+
+        # 用户列表布局
+        users_layout = QVBoxLayout()
+        users_layout.addWidget(QLabel("用户列表"))
+        users_h = QHBoxLayout()
+        users_h.addWidget(self.users_list)
+        users_ctrl_v = QVBoxLayout()
+        users_ctrl_v.addWidget(add_user_btn)
+        users_ctrl_v.addWidget(remove_user_btn)
+        users_h.addLayout(users_ctrl_v)
+        users_layout.addLayout(users_h)
+
+        # 系统配置布局
+        system_box = QGroupBox()
+        system_box.setTitle("系统配置")
+        system_box_layout = QVBoxLayout()
+        system_box_h1 = QHBoxLayout()
+        system_browser_v = QVBoxLayout()
+        system_browser_v.addWidget(QLabel("浏览器选择 (chromium,firefox,webkit需另外安装)"))
+        system_browser_v.addWidget(self.browser_cb)
+        system_box_h1.addLayout(system_browser_v)
+        system_log_level_v = QVBoxLayout()
+        system_log_level_v.addWidget(QLabel("控制台日志等级"))
+        system_log_level_v.addWidget(self.log_level_cb)
+        system_box_h1.addLayout(system_log_level_v)
+        system_box_layout.addLayout(system_box_h1)
+        system_proxy_v = QVBoxLayout()
+        system_proxy_v.addWidget(QLabel("网络请求代理地址 (可选)"))
+        system_proxy_v.addWidget(self.proxy_edit)
+        system_box_layout.addLayout(system_proxy_v)
+        system_box.setLayout(system_box_layout)
+        system_layout = QHBoxLayout()
+        system_layout.addWidget(system_box)
+        system_layout.addWidget(save_btn)
+
+        # 凭证布局
+        cred_box = QGroupBox()
+        cred_box.setTitle("登录凭证 (credentials)")
+        cred_layout = QVBoxLayout()
+        cred_layout.addWidget(QLabel("token ( wplace Cookies 中的 j )"))
+        cred_layout.addWidget(self.token_edit)
+        cred_layout.addWidget(QLabel("cf_clearance ( wplace Cookies 中的 cf_clearance )"))
+        cred_layout.addWidget(self.cf_edit)
+        cred_box.setLayout(cred_layout)
+
+        # 模板坐标布局
+        coords_layout = QVBoxLayout()
+        coords_layout.addWidget(QLabel("模板坐标 (coords)"))
+        coords_layout.addWidget(self.coords_edit)
+
+        # 模板布局
+        template_box = QGroupBox()
+        template_box.setTitle("模板图片 (template)")
+        template_layout = QVBoxLayout()
+        template_layout.addLayout(coords_layout)
+        template_layout.addWidget(QLabel("模板图片名字"))
+        template_layout.addWidget(self.file_id_edit)
+        template_image_header = QHBoxLayout()
+        template_image_header.addWidget(QLabel("模板图片预览(按住左键框选区域，按住右键移动图片，鼠标滚轮缩放图片)"))
+        template_image_header.addStretch()
+        template_image_header.addWidget(upload_btn)
+        template_layout.addLayout(template_image_header)
+        template_layout.addWidget(self.img_label)
+        template_box.setLayout(template_layout)
+
+        # 用户配置布局
+        user_config_layout = QHBoxLayout()
+        user_config_left = QVBoxLayout()
+        user_config_left.addLayout(users_layout)
+        user_config_left.addSpacing(10)
+        user_config_left.addWidget(cred_box)
+        user_config_layout.addLayout(user_config_left)
+        user_config_layout.addSpacing(10)
+        user_config_layout.addWidget(template_box)
 
         # 布局
         main = QVBoxLayout()
-        main.addWidget(QLabel("用户列表"))
-        main.addLayout(users_h)
-        main.addWidget(QLabel("模板坐标 (coords)"))
-        main.addLayout(coords_layout)
-        main.addWidget(self.coords_edit)  # 保持 coords 在上方
-        main.addWidget(QLabel("模板图片名字"))
-        main.addWidget(self.file_id_edit)
-        main.addWidget(QLabel("token: wplace Cookies 中的 j (token)"))
-        main.addWidget(self.token_edit)
-        main.addWidget(QLabel("cf_clearance: wplace Cookies 中的 cf_clearance"))
-        main.addWidget(self.cf_edit)
-        main.addWidget(QLabel("浏览器选择 (chromium,firefox,webkit需另外安装)"))
-        main.addWidget(self.browser_cb)
-        main.addWidget(QLabel("模板图片预览(按住左键框选区域，按住右键移动图片，鼠标滚轮缩放图片)"))
-        main.addWidget(self.img_label)
-        h2 = QHBoxLayout()
-        h2.addWidget(upload_btn)
-        h2.addWidget(save_btn)
-        main.addLayout(h2)
+        main.addLayout(system_layout)
+        main.addSpacing(15)
+        main.addLayout(user_config_layout)
 
         self.setLayout(main)
 
@@ -152,11 +215,16 @@ class ConfigInitWindow(QWidget):
                 self.users_list.setCurrentRow(0)
 
         # 全局浏览器设置
-        browser = cfg.get("browser")
-        if browser:
-            idx = self.browser_cb.findText(browser)
-            if idx != -1:
-                self.browser_cb.setCurrentIndex(idx)
+        if (browser := cfg.get("browser")) and (idx := self.browser_cb.findText(browser)) != -1:
+            self.browser_cb.setCurrentIndex(idx)
+
+        # 全局日志等级设置
+        if (log_level := cfg.get("log_level")) and (idx := self.log_level_cb.findText(log_level)) != -1:
+            self.log_level_cb.setCurrentIndex(idx)
+
+        # 全局代理设置
+        if proxy := cfg.get("proxy"):
+            self.proxy_edit.setText(proxy)
 
     def save_config(self) -> bool:
         # 保存当前选中用户的数据到 self.users 并写回 config.json
@@ -207,26 +275,20 @@ class ConfigInitWindow(QWidget):
                     return False
 
             # 获取选区（原始图片坐标）
-            sel = None
-            create_sel = getattr(self.img_label, "create_masked_template", None)
             img = QImage(str(dest))
-            if callable(create_sel):
-                try:
-                    sel = create_sel()
-                except Exception:
-                    sel = None
+            sel = self.img_label.create_masked_template()
 
             # 如果没有选区，默认使用整张图片尺寸
-            if sel is None :
+            if sel is None:
                 try:
                     if not img.isNull():
                         sel = (0, 0, img.width(), img.height())
-                        if int(sel[2])>=img.width() or int(sel[3])>=img.height():
-                            sel = (0,0, img.width(), img.height())
+                        if int(sel[2]) >= img.width() or int(sel[3]) >= img.height():
+                            sel = (0, 0, img.width(), img.height())
                 except Exception:
                     sel = None
             # 保存到本地变量，后面会赋值到 users 列表中的 user
-            selected_area_val = (int(sel[0]), int(sel[1]), int(sel[2]), int(sel[3])) if sel is not None else None # type: ignore
+            selected_area_val = sel
         else:
             # 没有上传新图片，且目标模板不存在 -> 提示错误
             if not dest.exists():
@@ -234,14 +296,9 @@ class ConfigInitWindow(QWidget):
                 return False
 
         user = self.users[row]
-        user.setdefault("template", {})
-        user["template"]["file_id"] = file_id
-        user["template"]["coords"] = {
-            "tlx": int(coords.tlx),
-            "tly": int(coords.tly),
-            "pxx": int(coords.pxx),
-            "pxy": int(coords.pxy),
-        }
+        tp: dict = user.setdefault("template", {})
+        tp["file_id"] = file_id
+        tp["coords"] = dataclasses.asdict(coords)
         user["credentials"] = {
             "token": self.token_edit.toPlainText().strip(),
             "cf_clearance": self.cf_edit.toPlainText().strip(),
@@ -250,8 +307,13 @@ class ConfigInitWindow(QWidget):
         # 写入选区信息（如果有）到 user.selected_area
         user["selected_area"] = selected_area_val
 
-        # 将 users 和全局 browser 写回配置
-        cfg = {"users": self.users, "browser": self.browser_cb.currentText()}
+        # 将 users 和系统配置项写回配置
+        cfg = {
+            "users": self.users,
+            "browser": self.browser_cb.currentText(),
+            "log_level": self.log_level_cb.currentText(),
+            "proxy": self.proxy_edit.text().strip() or None,
+        }
 
         if not write_config(cfg):
             QMessageBox.critical(self, "保存失败", "写入配置失败")
@@ -265,7 +327,12 @@ class ConfigInitWindow(QWidget):
         return True
 
     def write_config_to_disk(self) -> bool:
-        cfg = {"users": self.users, "browser": self.browser_cb.currentText()}
+        cfg = {
+            "users": self.users,
+            "browser": self.browser_cb.currentText(),
+            "log_level": self.log_level_cb.currentText(),
+            "proxy": self.proxy_edit.text().strip() or None,
+        }
         return write_config(cfg)
 
     def add_user(self) -> None:
@@ -304,11 +371,7 @@ class ConfigInitWindow(QWidget):
             return
 
         try:
-            if CONFIG_FILE.exists():
-                with CONFIG_FILE.open("r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-            else:
-                cfg = {"users": self.users}
+            cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8")) if CONFIG_FILE.exists() else {"users": self.users}
         except Exception as e:
             QMessageBox.critical(self, "读取失败", f"读取配置文件失败: {e}")
             return
@@ -433,6 +496,6 @@ class ConfigInitWindow(QWidget):
 def gui_main() -> None:
     app = QApplication(sys.argv)
     w = ConfigInitWindow()
-    w.resize(640, 700)
+    w.resize(900, 700)
     w.show()
     sys.exit(app.exec())
