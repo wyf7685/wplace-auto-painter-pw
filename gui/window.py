@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from bot7685_ext.wplace.consts import ALL_COLORS
+from PyQt6.QtCore import QRect
 from PyQt6.QtGui import QIcon, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -83,7 +84,7 @@ class ConfigInitWindow(QWidget):
         # 颜色偏好配置
         self.colors_list = QListWidget()
         self.colors_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        self.colors_list.setMinimumHeight(150)
+        self.colors_list.setMinimumHeight(120)
 
         # 导入颜色名称列表
         self.all_colors = list(ALL_COLORS.keys())
@@ -109,17 +110,6 @@ class ConfigInitWindow(QWidget):
         upload_btn = QPushButton("选择图片...")
         upload_btn.clicked.connect(self.choose_image)
 
-        # 用户列表布局
-        users_layout = QVBoxLayout()
-        users_layout.addWidget(QLabel("用户列表"))
-        users_h = QHBoxLayout()
-        users_h.addWidget(self.users_list)
-        users_ctrl_v = QVBoxLayout()
-        users_ctrl_v.addWidget(add_user_btn)
-        users_ctrl_v.addWidget(remove_user_btn)
-        users_h.addLayout(users_ctrl_v)
-        users_layout.addLayout(users_h)
-
         # 系统配置布局
         system_box = QGroupBox()
         system_box.setTitle("系统配置")
@@ -142,6 +132,17 @@ class ConfigInitWindow(QWidget):
         system_layout = QHBoxLayout()
         system_layout.addWidget(system_box)
         system_layout.addWidget(save_btn)
+
+        # 用户列表布局
+        users_layout = QVBoxLayout()
+        users_layout.addWidget(QLabel("用户列表 (users list)"))
+        users_h = QHBoxLayout()
+        users_h.addWidget(self.users_list)
+        users_ctrl_v = QVBoxLayout()
+        users_ctrl_v.addWidget(add_user_btn)
+        users_ctrl_v.addWidget(remove_user_btn)
+        users_h.addLayout(users_ctrl_v)
+        users_layout.addLayout(users_h)
 
         # 凭证布局
         cred_box = QGroupBox()
@@ -167,16 +168,12 @@ class ConfigInitWindow(QWidget):
         colors_layout.addLayout(colors_btn_layout)
         colors_box.setLayout(colors_layout)
 
-        # 模板坐标布局
-        coords_layout = QVBoxLayout()
-        coords_layout.addWidget(QLabel("模板坐标 (coords)"))
-        coords_layout.addWidget(self.coords_edit)
-
         # 模板布局
         template_box = QGroupBox()
         template_box.setTitle("模板图片 (template)")
         template_layout = QVBoxLayout()
-        template_layout.addLayout(coords_layout)
+        template_layout.addWidget(QLabel("模板坐标 (coords)"))
+        template_layout.addWidget(self.coords_edit)
         template_layout.addWidget(QLabel("模板图片名字"))
         template_layout.addWidget(self.file_id_edit)
         template_image_header = QHBoxLayout()
@@ -188,6 +185,8 @@ class ConfigInitWindow(QWidget):
         template_box.setLayout(template_layout)
 
         # 用户配置布局
+        user_config_box = QGroupBox()
+        user_config_box.setTitle("用户配置")
         user_config_layout = QHBoxLayout()
         user_config_left = QVBoxLayout()
         user_config_left.addLayout(users_layout)
@@ -198,12 +197,15 @@ class ConfigInitWindow(QWidget):
         user_config_layout.addLayout(user_config_left)
         user_config_layout.addSpacing(10)
         user_config_layout.addWidget(template_box)
+        user_config_widget = QWidget()
+        user_config_widget.setLayout(user_config_layout)
+        QVBoxLayout(user_config_box).addWidget(user_config_widget)
 
-        # 布局
+        # 主布局
         main = QVBoxLayout()
         main.addLayout(system_layout)
         main.addSpacing(15)
-        main.addLayout(user_config_layout)
+        main.addWidget(user_config_box)
 
         self.setLayout(main)
 
@@ -497,7 +499,7 @@ class ConfigInitWindow(QWidget):
                     self.users_list.blockSignals(False)
                     return
 
-        # 重新从磁盘读取 users 以反映外部更
+        # 重新从磁盘读取 users 以反映外部更改
         cfg = read_config()
         users: list[dict[str, Any]] = cfg.get("users", [])
         if isinstance(users, list):
@@ -538,6 +540,8 @@ class ConfigInitWindow(QWidget):
             path = TEMPLATES_DIR / f"{file_id}.png"
             if path.is_file():
                 self.img_label.set_image(str(path))
+                if selected := u.get("selected_area"):
+                    self.img_label.setSelectionFromOriginalRect(QRect(*selected))
                 self.last_selected_row = row
                 return
 

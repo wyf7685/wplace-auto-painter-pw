@@ -77,6 +77,7 @@ class ImageDropLabel(QLabel):
             self._orig_pixmap = None
             self._display_pixmap = None
             return
+
         self.filepath = path
         self._orig_pixmap = pix
 
@@ -152,6 +153,31 @@ class ImageDropLabel(QLabel):
         y2 = max(0, min(orig.height(), y2))
 
         return QRect(x1, y1, max(1, x2 - x1), max(1, y2 - y1))
+
+    def setSelectionFromOriginalRect(self, rect: QRect) -> None:
+        """根据原始图片坐标系下的 QRect 设置显示坐标系下的选区。"""
+        if self._orig_pixmap is None or self._display_pixmap is None:
+            return
+
+        orig = self._orig_pixmap
+        disp = self._display_pixmap
+
+        sx = disp.width() / orig.width()
+        sy = disp.height() / orig.height()
+
+        label_w = self.width()
+        label_h = self.height()
+        dx = (label_w - disp.width()) // 2 if disp.width() <= label_w else self._offset_x
+        dy = (label_h - disp.height()) // 2 if disp.height() <= label_h else self._offset_y
+
+        x1 = int(rect.x() * sx) + dx
+        y1 = int(rect.y() * sy) + dy
+        x2 = int((rect.x() + rect.width()) * sx) + dx
+        y2 = int((rect.y() + rect.height()) * sy) + dy
+
+        self._select_start = QPoint(x1, y1)
+        self._select_end = QPoint(x2, y2)
+        self.update()
 
     # --- 鼠标绘制 ---
     def mousePressEvent(self, ev: QMouseEvent) -> None:
@@ -334,14 +360,10 @@ class ImageDropLabel(QLabel):
             # 绘制 pixmap 到当前偏移位置
             painter.drawPixmap(self._offset_x, self._offset_y, self._display_pixmap)
             # 绘制选区覆盖层
-            if self.has_selection():
-                rect = self.getSelectionDisplayRect()
-                if rect is not None:
-                    pen_color = QColor(255, 0, 0)
-                    painter.setPen(pen_color)
-                    brush_color = QColor(255, 0, 0, 50)
-                    painter.setBrush(brush_color)
-                    painter.drawRect(rect)
+            if self.has_selection() and (rect := self.getSelectionDisplayRect()) is not None:
+                painter.setPen(QColor(255, 0, 0))
+                painter.setBrush(QColor(255, 0, 0, 50))
+                painter.drawRect(rect)
             painter.end()
 
     def create_masked_template(self) -> tuple[int, int, int, int] | None:
