@@ -1,3 +1,4 @@
+import json
 import random
 from datetime import UTC, datetime
 
@@ -8,13 +9,33 @@ import httpx
 
 from app.assets import assets
 from app.browser import get_browser
-from app.config import Config, UserConfig
+from app.config import DATA_DIR, Config, UserConfig
 from app.log import escape_tag, logger
 from app.utils import requests_proxies
 
 # Event ends at Monday, Nov 3 00:00 AM (UTC)
 EVENT_END = datetime(2025, 11, 3, tzinfo=UTC)
 logger = logger.opt(colors=True)
+PUMPKIN_DATA_FILE = DATA_DIR / "pumpkin/finished_users.json"
+
+
+def _is_user_finished(identifier: str) -> bool:
+    try:
+        data: list[str] = json.loads(PUMPKIN_DATA_FILE.read_text("utf-8"))
+    except Exception:
+        return False
+    return identifier in data
+
+
+def _mark_user_finished(identifier: str) -> None:
+    try:
+        data: list[str] = json.loads(PUMPKIN_DATA_FILE.read_text("utf-8"))
+    except Exception:
+        data = []
+    if identifier not in data:
+        data.append(identifier)
+        PUMPKIN_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PUMPKIN_DATA_FILE.write_text(json.dumps(data), "utf-8")
 
 
 async def fetch_pumpkin_links() -> dict[int, str]:
@@ -95,6 +116,10 @@ async def pumpkin_claim_loop(user: UserConfig) -> None:
     prefix = f"<lm>{user.identifier}</> | <ly>Pumpkin</> |"
 
     while True:
+        if _is_user_finished(user.identifier):
+            logger.success(f"{prefix} User has already claimed all pumpkins previously.")
+            return
+
         # Wait until around xx:50 to start claiming pumpkins
         delay = max(0, random.uniform(45, 55) - datetime.now().minute)
         logger.info(f"{prefix} Waiting for <y>{delay:.1f}</> minutes until next claim attempt...")
@@ -116,6 +141,7 @@ async def pumpkin_claim_loop(user: UserConfig) -> None:
 
         if len(claimed) >= 100:
             logger.success(f"{prefix} Already claimed all pumpkins.")
+            _mark_user_finished(user.identifier)
             return
 
         logger.info(f"{prefix} Claimed <y>{len(claimed)}</> pumpkins so far.")

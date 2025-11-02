@@ -58,7 +58,7 @@ def ensure_config_gui() -> None:
 
 async def main() -> None:
     export_config_schema()
-    check_update()
+    await check_update()
 
     if "config" in sys.argv[1:]:
         launch_config_gui()
@@ -69,9 +69,11 @@ async def main() -> None:
     from app.browser import shutdown_playwright
     from app.paint import setup_paint
     from app.pumpkin import setup_pumpkin_event
+    from app.update import check_update_loop
 
     try:
         async with anyio.create_task_group() as tg:
+            tg.start_soon(check_update_loop)
             tg.start_soon(setup_paint)
             tg.start_soon(setup_pumpkin_event)
 

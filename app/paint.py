@@ -108,8 +108,8 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
 
     with claim_painting_color(entry.name):
         coords = group_adjacent(entry.pixels)[0]
-        pixels_to_paint = min((int(user_info.charges.count) - random.randint(5, 10)), len(coords) - 1)
-        if pixels_to_paint < 10:
+        pixels_to_paint = min(int(user_info.charges.count), len(coords))
+        if pixels_to_paint <= 0:
             logger.warning("Not enough pixels to paint.")
             return
         logger.info(f"Preparing to paint <y>{pixels_to_paint}</> pixels...")

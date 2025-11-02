@@ -59,7 +59,7 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
         name, channel = "chromium", name
         display = f"{name} ({channel})"
     browser_type: BrowserType = getattr(pw, name)
-    logger.opt(colors=True).debug(f"Launching {'headless ' if headless else ''}browser: <g>{display}</>")
+    logger.opt(colors=True).debug(f"Launching browser <g>{display}</> with <c>headless</>=<y>{headless}</>")
     browser = await browser_type.launch(channel=channel, headless=headless, proxy=_proxy_settings())
     async with browser:
         yield browser
