@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from bot7685_ext.wplace.consts import ALL_COLORS
 from PyQt6.QtGui import QIcon, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -44,32 +45,6 @@ class ConfigInitWindow(QWidget):
         except Exception as exc:
             logger.debug(f"无法设置窗口图标: {exc}")
 
-        # 坐标：单行输入 Blue Marble 格式
-        self.coords_edit = QLineEdit()
-        self.coords_edit.setPlaceholderText("(Tl X: 12, Tl Y: 34, Px X: 56, Px Y: 78)")
-
-        # 用户列表与控件
-        self.users_list = QListWidget()
-        # self.users_list.setMaximumHeight(70)
-        add_user_btn = QPushButton("新增用户")
-        add_user_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        add_user_btn.clicked.connect(self.add_user)
-        remove_user_btn = QPushButton("删除用户")
-        remove_user_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        remove_user_btn.clicked.connect(self.remove_user)
-
-        self.users_list.currentRowChanged.connect(self.on_user_selected)
-
-        # file_id 输入（template.file_id）
-        self.file_id_edit = QLineEdit()
-        self.file_id_edit.setPlaceholderText("template file_id (will save as data/templates/{file_id}.png)")
-
-        # 凭证输入框
-        self.token_edit = QTextEdit()
-        self.token_edit.setPlaceholderText("token")
-        self.cf_edit = QTextEdit()
-        self.cf_edit.setPlaceholderText("cf_clearance")
-
         # 浏览器选择
         self.browser_cb = QComboBox()
         self.browser_cb.addItems(["chromium", "chrome", "msedge", "firefox", "webkit"])
@@ -83,16 +58,56 @@ class ConfigInitWindow(QWidget):
         self.proxy_edit = QLineEdit()
         self.proxy_edit.setPlaceholderText("Proxy Server URL (e.g., http://127.0.0.1:7890)")
 
-        # 图片拖放区（每用户预览）
-        self.img_label = ImageDropLabel()
-        upload_btn = QPushButton("选择图片...")
-        upload_btn.clicked.connect(self.choose_image)
-
         # 保存按钮
         save_btn = QPushButton("保存 config.json")
         save_btn.setFixedWidth(125)
         save_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         save_btn.clicked.connect(self.save_config)
+
+        # 用户列表与控件
+        self.users_list = QListWidget()
+        self.users_list.currentRowChanged.connect(self.on_user_selected)
+        add_user_btn = QPushButton("新增用户")
+        add_user_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        add_user_btn.clicked.connect(self.add_user)
+        remove_user_btn = QPushButton("删除用户")
+        remove_user_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        remove_user_btn.clicked.connect(self.remove_user)
+
+        # 凭证输入框
+        self.token_edit = QTextEdit()
+        self.token_edit.setPlaceholderText("token")
+        self.cf_edit = QTextEdit()
+        self.cf_edit.setPlaceholderText("cf_clearance")
+
+        # 颜色偏好配置
+        self.colors_list = QListWidget()
+        self.colors_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.colors_list.setMinimumHeight(150)
+
+        # 导入颜色名称列表
+        self.all_colors = list(ALL_COLORS.keys())
+        add_color_btn = QPushButton("添加颜色")
+        add_color_btn.clicked.connect(self.add_color)
+        remove_color_btn = QPushButton("移除颜色")
+        remove_color_btn.clicked.connect(self.remove_color)
+        move_up_btn = QPushButton("上移")
+        move_up_btn.clicked.connect(self.move_color_up)
+        move_down_btn = QPushButton("下移")
+        move_down_btn.clicked.connect(self.move_color_down)
+
+        # 坐标：单行输入 Blue Marble 格式
+        self.coords_edit = QLineEdit()
+        self.coords_edit.setPlaceholderText("(Tl X: 12, Tl Y: 34, Px X: 56, Px Y: 78)")
+
+        # file_id 输入（template.file_id）
+        self.file_id_edit = QLineEdit()
+        self.file_id_edit.setPlaceholderText("template file_id (will save as data/templates/{file_id}.png)")
+
+        # 图片拖放区（每用户预览）
+        self.img_label = ImageDropLabel()
+        upload_btn = QPushButton("选择图片...")
+        upload_btn.clicked.connect(self.choose_image)
 
         # 用户列表布局
         users_layout = QVBoxLayout()
@@ -138,6 +153,20 @@ class ConfigInitWindow(QWidget):
         cred_layout.addWidget(self.cf_edit)
         cred_box.setLayout(cred_layout)
 
+        # 颜色偏好布局
+        colors_box = QGroupBox()
+        colors_box.setTitle("颜色偏好 (preferred_colors)")
+        colors_layout = QVBoxLayout()
+        colors_layout.addWidget(QLabel("选择优先使用的颜色顺序（可选）"))
+        colors_layout.addWidget(self.colors_list)
+        colors_btn_layout = QHBoxLayout()
+        colors_btn_layout.addWidget(add_color_btn)
+        colors_btn_layout.addWidget(remove_color_btn)
+        colors_btn_layout.addWidget(move_up_btn)
+        colors_btn_layout.addWidget(move_down_btn)
+        colors_layout.addLayout(colors_btn_layout)
+        colors_box.setLayout(colors_layout)
+
         # 模板坐标布局
         coords_layout = QVBoxLayout()
         coords_layout.addWidget(QLabel("模板坐标 (coords)"))
@@ -164,6 +193,8 @@ class ConfigInitWindow(QWidget):
         user_config_left.addLayout(users_layout)
         user_config_left.addSpacing(10)
         user_config_left.addWidget(cred_box)
+        user_config_left.addSpacing(10)
+        user_config_left.addWidget(colors_box)
         user_config_layout.addLayout(user_config_left)
         user_config_layout.addSpacing(10)
         user_config_layout.addWidget(template_box)
@@ -307,6 +338,17 @@ class ConfigInitWindow(QWidget):
         # 写入选区信息（如果有）到 user.selected_area
         user["selected_area"] = selected_area_val
 
+        # 保存颜色偏好
+        preferred_colors = []
+        for i in range(self.colors_list.count()):
+            item = self.colors_list.item(i)
+            if item:
+                preferred_colors.append(item.text())
+        if preferred_colors:
+            user["preferred_colors"] = preferred_colors
+        else:
+            user.pop("preferred_colors", None)
+
         # 将 users 和系统配置项写回配置
         cfg = {
             "users": self.users,
@@ -396,6 +438,7 @@ class ConfigInitWindow(QWidget):
         self.file_id_edit.clear()
         self.token_edit.clear()
         self.cf_edit.clear()
+        self.colors_list.clear()
         self.img_label.setText("拖放图片到此处或点击上传")
         self.img_label.filepath = None
 
@@ -417,11 +460,18 @@ class ConfigInitWindow(QWidget):
                 if all(isinstance(v, int) for v in (tlx, tly, pxx, pxy))
                 else ""
             )
+            # 获取当前颜色列表
+            current_colors = [
+                item.text() for i in range(self.colors_list.count()) if (item := self.colors_list.item(i))
+            ]
+            stored_colors: list[str] = u_prev.get("preferred_colors", [])
+
             changed = (
                 self.coords_edit.text().strip() != stored_coords
                 or self.file_id_edit.text().strip() != (tmpl.get("file_id", ""))
                 or self.token_edit.toPlainText().strip() != (u_prev.get("credentials", {}).get("token", ""))
                 or self.cf_edit.toPlainText().strip() != (u_prev.get("credentials", {}).get("cf_clearance", ""))
+                or current_colors != stored_colors
             )
             if changed:
                 msg = QMessageBox(self)
@@ -476,6 +526,13 @@ class ConfigInitWindow(QWidget):
         self.token_edit.setPlainText(creds.get("token", ""))
         self.cf_edit.setPlainText(creds.get("cf_clearance", ""))
 
+        # 加载颜色偏好
+        self.colors_list.clear()
+        preferred_colors = u.get("preferred_colors", [])
+        if isinstance(preferred_colors, list):
+            for color in preferred_colors:
+                self.colors_list.addItem(color)
+
         # 如果存在每用户模板图片则加载
         if file_id := tmpl.get("file_id"):
             path = TEMPLATES_DIR / f"{file_id}.png"
@@ -491,6 +548,38 @@ class ConfigInitWindow(QWidget):
 
         # 更新上次选中行
         self.last_selected_row = row
+
+    def add_color(self) -> None:
+        """弹出对话框选择颜色添加到列表"""
+        if not self.all_colors:
+            QMessageBox.warning(self, "错误", "无法加载颜色列表")
+            return
+
+        # 创建颜色选择对话框
+        colors_str, ok = QInputDialog.getItem(self, "选择颜色", "可用的颜色:", self.all_colors, 0, False)
+        if ok and colors_str:
+            self.colors_list.addItem(colors_str)
+
+    def remove_color(self) -> None:
+        """移除选中的颜色"""
+        for item in self.colors_list.selectedItems():
+            self.colors_list.takeItem(self.colors_list.row(item))
+
+    def move_color_up(self) -> None:
+        """将选中的颜色向上移动"""
+        current_row = self.colors_list.currentRow()
+        if current_row > 0:
+            item = self.colors_list.takeItem(current_row)
+            self.colors_list.insertItem(current_row - 1, item)
+            self.colors_list.setCurrentRow(current_row - 1)
+
+    def move_color_down(self) -> None:
+        """将选中的颜色向下移动"""
+        current_row = self.colors_list.currentRow()
+        if current_row >= 0 and current_row < self.colors_list.count() - 1:
+            item = self.colors_list.takeItem(current_row)
+            self.colors_list.insertItem(current_row + 1, item)
+            self.colors_list.setCurrentRow(current_row + 1)
 
 
 def gui_main() -> None:

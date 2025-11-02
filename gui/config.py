@@ -11,7 +11,7 @@ GUI_ICO = (
     if getattr(sys, "frozen", False)
     else Path(__file__).parent
 ) / "gui.ico"
-schema_path = "../" + CONFIG_SCHEMA_FILE.resolve().relative_to(Path.cwd().resolve()).as_posix()
+schema_path = CONFIG_SCHEMA_FILE.relative_to(CONFIG_FILE.parent).as_posix()
 
 
 def ensure_data_dirs() -> None:
