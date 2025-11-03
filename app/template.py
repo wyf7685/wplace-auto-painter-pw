@@ -1,4 +1,5 @@
 import io
+import math
 from collections import deque
 from typing import Protocol
 
@@ -56,6 +57,7 @@ async def calc_template_diff(
 def group_adjacent(
     points: list[tuple[int, int, int]],
     min_group_size: int = 100,
+    merge_distance: float = 50.0,
 ) -> list[list[tuple[int, int, int]]]:
     # 将点放入集合以便 O(1) 查找
     point_dict: dict[tuple[int, int], int] = {(x, y): color_id for x, y, color_id in points}
@@ -87,13 +89,42 @@ def group_adjacent(
         if p not in visited:
             bfs(p)
 
-    # 合并小分组
-    small_groups = sorted((g for g in groups if len(g) < min_group_size), key=len, reverse=True)
-    large_groups = [g for g in groups if len(g) >= min_group_size]
-    while small_groups:
-        group = small_groups.pop()
-        while len(group) < min_group_size and small_groups:
-            group.extend(small_groups.pop())
-        large_groups.append(group)
+    # 根据距离合并相邻的小分组
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                if calc_group_distance_centroid(groups[i], groups[j]) <= merge_distance:
+                    groups[i].extend(groups[j])
+                    groups.pop(j)
+                    merged = True
+                    break
+            if merged:
+                break
 
-    return sorted(large_groups, key=len, reverse=True)
+    # 根据大小继续合并
+    small_groups = [g for g in groups if len(g) < min_group_size]
+    large_groups = [g for g in groups if len(g) >= min_group_size]
+    for small in small_groups:
+        if not large_groups:
+            large_groups.append(small)
+            continue
+        closest_large = min(
+            large_groups,
+            key=lambda lg: calc_group_distance_centroid(small, lg),
+        )
+        closest_large.extend(small)
+
+    return sorted(groups, key=len, reverse=True)
+
+
+def calc_group_distance_centroid(
+    group1: list[tuple[int, int, int]],
+    group2: list[tuple[int, int, int]],
+) -> float:
+    cx1 = sum(x for x, _, _ in group1) / len(group1)
+    cy1 = sum(y for _, y, _ in group2) / len(group1)
+    cx2 = sum(x for x, _, _ in group2) / len(group2)
+    cy2 = sum(y for _, y, _ in group2) / len(group2)
+    return math.sqrt((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2)

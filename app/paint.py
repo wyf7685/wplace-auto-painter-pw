@@ -88,7 +88,7 @@ async def select_paint_color(
             if entry.count > 0 and entry.name in user_info.own_colors and entry.name not in COLOR_IN_USE:
                 logger.info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
                 entries.append(entry)
-            if sum(e.count for e in entries) >= 100:
+            if sum(e.count for e in entries) >= user_info.charges.count * 0.9:
                 break
         return entries or None
 
@@ -116,7 +116,8 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
     template, entries = selected
 
     with claim_painting_color(*(entry.name for entry in entries)):
-        pixels = group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])[0]
+        groups = group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])
+        pixels = [p for g in groups for p in g]
         pixels_to_paint = min(int(user_info.charges.count), len(pixels))
         if pixels_to_paint <= 0:
             logger.warning("Not enough pixels to paint.")
@@ -131,7 +132,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
         }
 
         coord = template.get_coords()[0].offset(*pixels[0][:2])
-        page = WplacePage(user.credentials, entries[0].id, coord, zoom)
+        page = WplacePage(user.credentials, pixels[0][2], coord, zoom)
         async with page.begin(script_data, any(entry.is_paid for entry in entries)) as page:
             delay = random.uniform(3, 10)
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
@@ -146,7 +147,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
                     logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")
                     prev_x, prev_y = curr_x, curr_y
 
-                delay = random.uniform(3, 10)
+                delay = random.uniform(3, 7)
                 logger.info(f"Waiting for <y>{delay:.2f}</> seconds before submitting...")
                 await anyio.sleep(delay)
                 await page.submit_paint()

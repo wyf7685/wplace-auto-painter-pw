@@ -101,9 +101,10 @@ class WplacePage:
         logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
         await btn.click()
         logger.info("Clicked submit button")
-        while await self.page.query_selector(selector):
-            logger.debug("Waiting for submit to complete...")
-            await anyio.sleep(1)
+        with anyio.fail_after(30):
+            while await self.page.query_selector(selector):
+                logger.debug("Waiting for submit to complete...")
+                await anyio.sleep(1)
         logger.info("Submit completed")
 
     async def find_and_close_modal(self) -> None:
@@ -191,13 +192,14 @@ class WplacePage:
         self._current_coord = self._current_coord.offset(dx, dy)
 
     async def move_by_pixel(self, dx: int, dy: int) -> None:
+        step_size = 30
         while dx:
-            step = max(-10, min(10, dx))
+            step = max(-step_size, min(step_size, dx))
             await self._move_by_pixel(step, 0)
             dx -= step
 
         while dy:
-            step = max(-10, min(10, dy))
+            step = max(-step_size, min(step_size, dy))
             await self._move_by_pixel(0, step)
             dy -= step
 
