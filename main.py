@@ -63,14 +63,12 @@ async def main() -> None:
 
     from app.browser import shutdown_playwright
     from app.paint import setup_paint
-    from app.pumpkin import setup_pumpkin_event
     from app.update import check_update_loop
 
     async def setup_loops() -> None:
         try:
             async with anyio.create_task_group() as inner:
                 inner.start_soon(setup_paint)
-                inner.start_soon(setup_pumpkin_event)
         finally:
             outer.cancel_scope.cancel()
 
