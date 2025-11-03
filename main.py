@@ -28,11 +28,6 @@ def launch_config_gui() -> None:
 
 
 def ensure_config_gui() -> None:
-    """检查 data/config.json 与 data/templates 中的模板图片；
-    若缺失或内容不合法，则启动 GUI 启动器并等待用户完成配置。
-    """
-
-    # 检查 config.json 是否存在且可解析
     if not CONFIG_FILE.is_file():
         return launch_config_gui()
 
@@ -71,12 +66,18 @@ async def main() -> None:
     from app.pumpkin import setup_pumpkin_event
     from app.update import check_update_loop
 
-    try:
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(check_update_loop)
-            tg.start_soon(setup_paint)
-            tg.start_soon(setup_pumpkin_event)
+    async def setup_loops() -> None:
+        try:
+            async with anyio.create_task_group() as inner:
+                inner.start_soon(setup_paint)
+                inner.start_soon(setup_pumpkin_event)
+        finally:
+            outer.cancel_scope.cancel()
 
+    try:
+        async with anyio.create_task_group() as outer:
+            outer.start_soon(setup_loops)
+            outer.start_soon(check_update_loop)
     except* KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
     except* Exception:
