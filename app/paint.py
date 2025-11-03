@@ -7,7 +7,6 @@ from typing import Any
 
 import anyio
 from bot7685_ext.wplace import ColorEntry
-from bot7685_ext.wplace.consts import COLORS_ID, PAID_COLORS
 
 from .config import Config, TemplateConfig, UserConfig
 from .exception import ShoudQuit
@@ -22,12 +21,17 @@ logger = logger.opt(colors=True)
 COLOR_IN_USE: set[str] = set()
 
 
-def pixels_to_paint_arg(template: TemplateConfig, color_id: int, pixels: list[tuple[int, int]]) -> list[dict[str, Any]]:
+def pixels_to_paint_arg(template: TemplateConfig, pixels: list[tuple[int, int, int]]) -> list[dict[str, Any]]:
     base, _ = template.get_coords()
     result = []
-    for x, y in pixels:
+    for x, y, color_id in pixels:
         coord = base.offset(x, y)
-        item = {"tile": [coord.tlx, coord.tly], "season": 0, "colorIdx": color_id, "pixel": [coord.pxx, coord.pxy]}
+        item = {
+            "tile": [coord.tlx, coord.tly],
+            "season": 0,
+            "colorIdx": color_id,
+            "pixel": [coord.pxx, coord.pxy],
+        }
         result.append(item)
     return result
 
@@ -46,14 +50,14 @@ async def get_user_info(user: UserConfig) -> WplaceUserInfo:
 
 
 @contextlib.contextmanager
-def claim_painting_color(name: str) -> Generator[Callable[[], None]]:
-    COLOR_IN_USE.add(name)
+def claim_painting_color(*name: str) -> Generator[Callable[[], None]]:
+    COLOR_IN_USE.update(name)
     released = False
 
     def release() -> None:
         nonlocal released
         if not released:
-            COLOR_IN_USE.discard(name)
+            COLOR_IN_USE.difference_update(name)
             released = True
 
     try:
@@ -62,7 +66,9 @@ def claim_painting_color(name: str) -> Generator[Callable[[], None]]:
         release()
 
 
-async def select_paint_color(user: UserConfig, user_info: WplaceUserInfo) -> tuple[TemplateConfig, ColorEntry] | None:
+async def select_paint_color(
+    user: UserConfig, user_info: WplaceUserInfo
+) -> tuple[TemplateConfig, list[ColorEntry]] | None:
     def sort_key(entry: ColorEntry) -> tuple[int, ...]:
         return (
             -(
@@ -75,13 +81,16 @@ async def select_paint_color(user: UserConfig, user_info: WplaceUserInfo) -> tup
             entry.count,
         )
 
-    async def select(template: TemplateConfig) -> ColorEntry | None:
+    async def select(template: TemplateConfig) -> list[ColorEntry] | None:
         diff = await calc_template_diff(template, include_pixels=True)
+        entries: list[ColorEntry] = []
         for entry in sorted(diff, key=sort_key, reverse=True):
             if entry.count > 0 and entry.name in user_info.own_colors and entry.name not in COLOR_IN_USE:
                 logger.info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
-                return entry
-        return None
+                entries.append(entry)
+            if sum(e.count for e in entries) >= 100:
+                break
+        return entries or None
 
     if user.selected_area is not None:
         logger.info(f"Using selected area for painting: <g>{user.selected_area}</>")
@@ -104,11 +113,11 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
 
     if (selected := await select_paint_color(user, user_info)) is None:
         return
-    template, entry = selected
+    template, entries = selected
 
-    with claim_painting_color(entry.name):
-        coords = group_adjacent(entry.pixels)[0]
-        pixels_to_paint = min(int(user_info.charges.count), len(coords))
+    with claim_painting_color(*(entry.name for entry in entries)):
+        pixels = group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])[0]
+        pixels_to_paint = min(int(user_info.charges.count), len(pixels))
         if pixels_to_paint <= 0:
             logger.warning("Not enough pixels to paint.")
             return
@@ -116,22 +125,22 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
 
         script_data = {
             "btn": f"paint-button-{int(time.time())}",
-            "a": pixels_to_paint_arg(template, COLORS_ID[entry.name], coords[:pixels_to_paint]),
+            "a": pixels_to_paint_arg(template, pixels[:pixels_to_paint]),
             "f": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
             "r": resolved_js,
         }
 
-        coord = template.get_coords()[0].offset(*coords[0])
-        page = WplacePage(user.credentials, entry.name, coord, zoom)
-        async with page.begin(script_data, entry.name in PAID_COLORS) as page:
+        coord = template.get_coords()[0].offset(*pixels[0][:2])
+        page = WplacePage(user.credentials, entries[0].id, coord, zoom)
+        async with page.begin(script_data, any(entry.is_paid for entry in entries)) as page:
             delay = random.uniform(3, 10)
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
             await anyio.sleep(delay)
 
             async with page.open_paint_panel():
-                prev_x, prev_y = coords[0]
+                prev_x, prev_y, _ = pixels[0]
                 for idx in range(pixels_to_paint):
-                    curr_x, curr_y = coords[idx]
+                    curr_x, curr_y, _ = pixels[idx]
                     await page.move_by_pixel(curr_x - prev_x, curr_y - prev_y)
                     await page.click_current_pixel()
                     logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")

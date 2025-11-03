@@ -7,6 +7,8 @@ import anyio.to_thread
 import cloudscraper
 import httpx
 
+from app.log import escape_tag, logger
+
 from .config import DATA_DIR, Config
 from .exception import ShoudQuit
 from .utils import requests_proxies, with_semaphore
@@ -66,6 +68,7 @@ class JsResolver:
             response.raise_for_status()
             if etag := response.headers.get("ETag"):
                 etags[chunk_name] = etag
+            logger.opt(colors=True).debug(f"Downloaded JS chunk: <c>{escape_tag(chunk_name)}</>")
             file.write_text(response.text, encoding="utf-8")
 
         async with httpx.AsyncClient(proxy=Config.load().proxy) as client, anyio.create_task_group() as tg:

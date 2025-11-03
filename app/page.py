@@ -5,7 +5,6 @@ from enum import Enum
 from typing import Any, Self
 
 import anyio
-from bot7685_ext.wplace.consts import COLORS_ID, ColorName
 
 from .assets import assets
 from .browser import get_browser
@@ -54,12 +53,12 @@ class WplacePage:
     def __init__(
         self,
         credentials: WplaceCredentials,
-        color_name: ColorName,
+        color_id: int,
         coord: WplacePixelCoords,
         zoom: ZoomLevel,
     ) -> None:
         self.credentials = credentials
-        self.color_name: ColorName = color_name
+        self.color_id = color_id
         self.coord = coord
         self.zoom = zoom
 
@@ -69,7 +68,7 @@ class WplacePage:
             get_browser(headless=False) as browser,
             await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
         ):
-            await context.add_init_script(assets.page_init(COLORS_ID[self.color_name], show_all_colors))
+            await context.add_init_script(assets.page_init(self.color_id, show_all_colors))
             await context.add_init_script(assets.paint_btn(script_data))
             await context.add_cookies(self.credentials.to_pw_cookies())
             self._btn_id = script_data.get("btn", "paint-button-7685")
@@ -187,15 +186,20 @@ class WplacePage:
             y - dy * pixel_size,
             steps=random.randint(7, 15),
         )
-        await anyio.sleep(0.175)
+        await anyio.sleep(random.uniform(0.1, 0.3))
         await self.page.mouse.up(button="left")
         self._current_coord = self._current_coord.offset(dx, dy)
 
     async def move_by_pixel(self, dx: int, dy: int) -> None:
-        if dx:
-            await self._move_by_pixel(dx, 0)
-        if dy:
-            await self._move_by_pixel(0, dy)
+        while dx:
+            step = max(-10, min(10, dx))
+            await self._move_by_pixel(step, 0)
+            dx -= step
+
+        while dy:
+            step = max(-10, min(10, dy))
+            await self._move_by_pixel(0, step)
+            dy -= step
 
     async def click_current_pixel(self) -> None:
         """Click the current pixel on the page."""

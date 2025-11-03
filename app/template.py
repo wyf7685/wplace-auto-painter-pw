@@ -54,31 +54,31 @@ async def calc_template_diff(
 
 
 def group_adjacent(
-    points: list[tuple[int, int]],
+    points: list[tuple[int, int, int]],
     min_group_size: int = 100,
-) -> list[list[tuple[int, int]]]:
+) -> list[list[tuple[int, int, int]]]:
     # 将点放入集合以便 O(1) 查找
-    point_set: set[tuple[int, int]] = set(points)
+    point_dict: dict[tuple[int, int], int] = {(x, y): color_id for x, y, color_id in points}
     visited: set[tuple[int, int]] = set()
-    groups: list[list[tuple[int, int]]] = []
+    groups: list[list[tuple[int, int, int]]] = []
 
     # 8 邻域方向
     directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
-    def bfs(start: tuple[int, int]) -> None:
+    def bfs(start: tuple[int, int, int]) -> None:
         """从起点开始 BFS 找出一个连通分组"""
-        q = deque([start])
+        q = deque([start[:2]])
         group = [start]
-        visited.add(start)
+        visited.add(start[:2])
 
         while q:
             x, y = q.popleft()
             for dx, dy in directions:
                 neighbor = x + dx, y + dy
-                if neighbor in point_set and neighbor not in visited:
+                if neighbor in point_dict and neighbor not in visited:
                     visited.add(neighbor)
                     q.append(neighbor)
-                    group.append(neighbor)
+                    group.append((*neighbor, point_dict[neighbor]))
 
         groups.append(group)
 
