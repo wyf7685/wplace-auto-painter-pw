@@ -115,14 +115,15 @@ class JsResolver:
             raise ShoudQuit("wrapper function not found")
         wrapper_name = match.group(1)
 
-        pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"\s+as\s+([a-zA-Z0-9_$]+)[^}]*?\};"
+        pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"(?:\s+as\s+([a-zA-Z0-9_$]+))?[^}]*?\};"
         match = re.search(pattern, content)
         if match is None:
             raise ShoudQuit("exported name for wrapper not found")
+        export_name = match.group(1) if match.group(1) else wrapper_name
 
         chunk_name = file.resolve().relative_to(self.chunks_dir.resolve()).as_posix()
         chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
-        return (match.group(1), chunk_url)
+        return (export_name, chunk_url)
 
     async def resolve(self) -> list[str]:
         self.chunks_dir = CHUNKS_DIR
