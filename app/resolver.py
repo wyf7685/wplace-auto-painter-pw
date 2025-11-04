@@ -87,11 +87,13 @@ async def resolve_pixel_map(fp: str) -> tuple[str, str]:  # chunk_url, modified_
             break
     else:
         raise ShoudQuit("paint function object not found")
+    logger.debug(f"Found paint function in chunk: {file.name}")
 
-    pattern = r"return\(await\(await [a-zA-Z0-9_$]+\(\)\)\.get\(\)\)\.visitorId"
+    pattern = r"return[a-zA-Z0-9_$\(\)\s\.]+\.visitorId"
     match = re.search(pattern, content)
     if match is None:
         raise ShoudQuit("fingerprint retrieval statement not found")
+    logger.debug("Modifying fingerprint retrieval to use provided fingerprint")
     content = re.sub(pattern, f"return '{fp}'", content)
 
     pattern = r"const " + re.escape(arg1) + r"\s*=\s*\[...([a-zA-Z0-9_$]+)\.values\(\)\];"
@@ -99,12 +101,14 @@ async def resolve_pixel_map(fp: str) -> tuple[str, str]:  # chunk_url, modified_
     if match is None:
         raise ShoudQuit("array source for paint function argument not found")
     pixels_map_var = match.group(1)
+    logger.debug(f"Array source for paint function argument found: {pixels_map_var}")
 
-    pattern = r"const " + re.escape(pixels_map_var) + r"=new Map.+?;"
+    pattern = r"const\s+" + re.escape(pixels_map_var) + r"\s*=\s*new\s+Map\b[a-zA-Z0-9_$,=\s]*;"
     match = re.search(pattern, content)
     if match is None:
         raise ShoudQuit("pixels map definition not found")
     stmt = match.group(0)
+    logger.debug(f"Pixels map definition statement found: {stmt[:60]}...")
 
     modified_content = "export const XX_EXPORT={};" + content.replace(stmt, f"{stmt}XX_EXPORT.m={pixels_map_var};")
     chunk_name = file.relative_to(CHUNKS_DIR.resolve()).as_posix()
