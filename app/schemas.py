@@ -3,8 +3,7 @@ import base64
 import functools
 import math
 from datetime import datetime
-from enum import Enum
-from typing import Any, Literal
+from typing import Any
 
 from bot7685_ext.wplace.consts import FREE_COLORS, PAID_COLORS
 from pydantic import BaseModel
@@ -69,61 +68,3 @@ class WplaceUserInfo(BaseModel):
         bitmap = self.extraColorsBitmap
         paid = {color for idx, color in enumerate(PAID_COLORS) if bitmap & (1 << idx)}
         return frozenset({"Transparent"} | set(FREE_COLORS) | paid)
-
-
-class PixelPaintedBy(BaseModel):
-    id: int
-    name: str
-    allianceId: int
-    allianceName: str
-    equippedFlag: int
-    discord: str | None = None
-
-
-class PixelRegion(BaseModel):
-    id: int
-    cityId: int
-    name: str
-    number: int
-    countryId: int
-
-
-class PixelInfo(BaseModel):
-    paintedBy: PixelPaintedBy
-    region: PixelRegion
-
-
-class RankUser(BaseModel):
-    id: int
-    name: str
-    allianceId: int
-    allianceName: str
-    pixelsPainted: int
-    equippedFlag: int
-    picture: str | None = None
-
-
-type RankType = Literal["today", "week", "month", "all-time"]
-
-
-class PurchaseItem(int, Enum):
-    MAX_CHARGE_5 = 70
-    CHARGE_30 = 80
-
-    @property
-    def price(self) -> int:
-        return PURCHASE_ITEM_PRICES[self]
-
-    @property
-    def item_name(self) -> str:
-        return PURCHASE_ITEM_NAMES[self]
-
-
-PURCHASE_ITEM_PRICES: dict[PurchaseItem, int] = {
-    PurchaseItem.MAX_CHARGE_5: 500,
-    PurchaseItem.CHARGE_30: 500,
-}
-PURCHASE_ITEM_NAMES: dict[PurchaseItem, str] = {
-    PurchaseItem.MAX_CHARGE_5: "像素上限 x5",
-    PurchaseItem.CHARGE_30: "像素余额 x30",
-}
