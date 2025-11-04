@@ -13,7 +13,7 @@ from app.config import DATA_DIR, Config, UserConfig
 from app.log import escape_tag, logger
 from app.utils import requests_proxies
 
-# Event ends at Monday, Nov 3 00:00 AM (UTC)
+EVENT_START = datetime(2025, 10, 31, tzinfo=UTC)
 EVENT_END = datetime(2025, 11, 3, tzinfo=UTC)
 logger = logger.opt(colors=True)
 PUMPKIN_DATA_FILE = DATA_DIR / "pumpkin/finished_users.json"
