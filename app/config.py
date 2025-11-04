@@ -1,8 +1,9 @@
+import functools
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
-from bot7685_ext.wplace.consts import ColorName
+from bot7685_ext.wplace.consts import COLORS_ID, ColorName
 from pydantic import BaseModel, Field
 
 from .utils import WplacePixelCoords
@@ -102,6 +103,13 @@ class UserConfig(BaseModel):
         default=None,
         description="Optional selected area on the template image as (x, y, w, h)",
     )
+
+    @functools.cached_property
+    def preferred_colors_rank(self) -> list[int]:
+        ranks = [len(COLORS_ID)] * len(COLORS_ID)
+        for r, name in enumerate(self.preferred_colors):
+            ranks[COLORS_ID[name]] = r
+        return ranks
 
 
 class Config(BaseModel):

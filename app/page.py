@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any, Self
 
 import anyio
+from bot7685_ext.wplace.consts import COLORS_NAME
 
 from .assets import assets
 from .browser import get_browser
@@ -53,22 +54,20 @@ class WplacePage:
     def __init__(
         self,
         credentials: WplaceCredentials,
-        color_id: int,
         coord: WplacePixelCoords,
-        zoom: ZoomLevel,
+        zoom: ZoomLevel = ZoomLevel.Z_15,
     ) -> None:
         self.credentials = credentials
-        self.color_id = color_id
         self.coord = coord
         self.zoom = zoom
 
     @contextlib.asynccontextmanager
-    async def begin(self, script_data: dict[str, Any], show_all_colors: bool = False) -> AsyncGenerator[Self]:
+    async def begin(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
         async with (
             get_browser(headless=False) as browser,
             await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
         ):
-            await context.add_init_script(assets.page_init(self.color_id, show_all_colors))
+            await context.add_init_script(assets.page_init())
             await context.add_init_script(assets.paint_btn(script_data))
             await context.add_cookies(self.credentials.to_pw_cookies())
             self._btn_id = script_data.get("btn", "paint-button-7685")
@@ -158,6 +157,15 @@ class WplacePage:
         logger.debug(f"Found close button: {close_btn!r}")
         await close_btn.click()
         logger.info("Closed store panel")
+
+    async def select_color(self, color_id: int) -> None:
+        color_btn = await self.page.query_selector(f"#color-{color_id}")
+        if color_btn is None:
+            raise ShoudQuit(f"Color button with ID {color_id} not found on the page")
+
+        logger.debug(f"Found color button: {color_btn!r}")
+        await color_btn.click()
+        logger.opt(colors=True).info(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
 
     @property
     def current_coord(self) -> WplacePixelCoords:

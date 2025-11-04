@@ -2,24 +2,25 @@ import contextlib
 import hashlib
 import random
 import time
-from collections.abc import Callable, Generator
+from collections.abc import AsyncGenerator, Iterable
+from datetime import datetime, timedelta
 from typing import Any
 
 import anyio
-import anyio.to_process
 from bot7685_ext.wplace import ColorEntry
+from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
 from .config import Config, TemplateConfig, UserConfig
 from .exception import ShoudQuit
 from .highlight import Highlight
 from .log import escape_tag, logger
-from .page import WplacePage, ZoomLevel, fetch_user_info
+from .page import WplacePage, fetch_user_info
 from .resolver import JsResolver
 from .schemas import WplaceUserInfo
 from .template import calc_template_diff, group_adjacent
 
 logger = logger.opt(colors=True)
-COLOR_IN_USE: set[str] = set()
+COLORS_LOCK: dict[ColorName, anyio.Lock] = {name: anyio.Lock() for name in COLORS_NAME.values()}
 
 
 def pixels_to_paint_arg(template: TemplateConfig, pixels: list[tuple[int, int, int]]) -> list[dict[str, Any]]:
@@ -42,29 +43,25 @@ async def get_user_info(user: UserConfig) -> WplaceUserInfo:
     user_info = await fetch_user_info(user.credentials)
     logger.debug(f"{prefix} Fetched user info: {Highlight.apply(user_info)}")
     logger.info(f"{prefix} Current droplets: 💧 <y>{user_info.droplets}</>")
-    logger.info(f"{prefix} Current charge: 🎨 <y>{user_info.charges.count:.2f}</>/<y>{user_info.charges.max}</>")
-    logger.info(f"{prefix} Remaining: <y>{user_info.charges.remaining_secs():.2f}</>s")
+    charges = user_info.charges
+    remaining_secs = charges.remaining_secs()
+    recover_time = (datetime.now() + timedelta(seconds=remaining_secs)).strftime("%Y-%m-%d %H:%M:%S")
+    logger.info(
+        f"{prefix} Current charge: 🎨 <y>{charges.count:.2f}</>/<y>{charges.max}</> "
+        f"| Remaining: ⏱️ <y>{remaining_secs:.2f}</>s, recovers at <g>{recover_time}</>"
+    )
     if user_info.banned:
-        logger.warning(f"{prefix} User is banned from painting!")
+        logger.error(f"{prefix} User is banned from painting!")
         raise ShoudQuit("User is banned from painting")
     return user_info
 
 
-@contextlib.contextmanager
-def claim_painting_color(*name: str) -> Generator[Callable[[], None]]:
-    COLOR_IN_USE.update(name)
-    released = False
-
-    def release() -> None:
-        nonlocal released
-        if not released:
-            COLOR_IN_USE.difference_update(name)
-            released = True
-
-    try:
-        yield release
-    finally:
-        release()
+@contextlib.asynccontextmanager
+async def claim_painting_color(names: Iterable[ColorName]) -> AsyncGenerator[None]:
+    async with contextlib.AsyncExitStack() as stack:
+        for name in names:
+            await stack.enter_async_context(COLORS_LOCK[name])
+        yield
 
 
 async def select_paint_color(
@@ -86,7 +83,7 @@ async def select_paint_color(
         diff = await calc_template_diff(template, include_pixels=True)
         entries: list[ColorEntry] = []
         for entry in sorted(diff, key=sort_key, reverse=True):
-            if entry.count > 0 and entry.name in user_info.own_colors and entry.name not in COLOR_IN_USE:
+            if entry.count > 0 and entry.name in user_info.own_colors and not COLORS_LOCK[entry.name].locked():
                 logger.info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
                 entries.append(entry)
             if sum(e.count for e in entries) >= user_info.charges.count * 0.9:
@@ -108,7 +105,7 @@ async def select_paint_color(
     return None
 
 
-async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLevel) -> None:
+async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
     resolved_js = await JsResolver().resolve()
     logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
 
@@ -116,10 +113,9 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
         return
     template, entries = selected
 
-    with claim_painting_color(*(entry.name for entry in entries)):
-        points = [(x, y, e.id) for e in entries for x, y in e.pixels]
-        groups = await anyio.to_process.run_sync(group_adjacent, points)
-        pixels = [p for g in groups for p in g]
+    async with claim_painting_color(entry.name for entry in entries):
+        groups = group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])
+        pixels = sorted((p for g in groups for p in g), key=lambda p: user.preferred_colors_rank[p[2]])
         pixels_to_paint = min(int(user_info.charges.count), len(pixels))
         if pixels_to_paint <= 0:
             logger.warning("Not enough pixels to paint.")
@@ -134,19 +130,29 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
         }
 
         coord = template.get_coords()[0].offset(*pixels[0][:2])
-        page = WplacePage(user.credentials, pixels[0][2], coord, zoom)
-        async with page.begin(script_data, any(entry.is_paid for entry in entries)) as page:
-            delay = random.uniform(3, 10)
+        async with WplacePage(user.credentials, coord).begin(script_data) as page:
+            delay = random.uniform(3, 7)
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
             await anyio.sleep(delay)
 
             async with page.open_paint_panel():
-                prev_x, prev_y, _ = pixels[0]
+                prev_x, prev_y, prev_color = pixels[0]
+                await anyio.sleep(random.uniform(0.5, 1.5))
+                await page.select_color(prev_color)
                 for idx in range(pixels_to_paint):
-                    curr_x, curr_y, _ = pixels[idx]
+                    curr_x, curr_y, curr_color = pixels[idx]
+                    if prev_color != curr_color:
+                        await anyio.sleep(random.uniform(0.5, 1.5))
+                        logger.info(
+                            f"Switching color: <g>{COLORS_NAME[prev_color]}</>(id=<c>{prev_color}</>) "
+                            f"-> <g>{COLORS_NAME[curr_color]}</>(id=<c>{curr_color}</>)"
+                        )
+                        await page.select_color(curr_color)
+                        prev_color = curr_color
+                        await anyio.sleep(random.uniform(0.5, 1.5))
                     await page.move_by_pixel(curr_x - prev_x, curr_y - prev_y)
                     await page.click_current_pixel()
-                    logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")
+                    # logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")
                     prev_x, prev_y = curr_x, curr_y
 
                 delay = random.uniform(3, 7)
@@ -155,7 +161,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
                 await page.submit_paint()
 
 
-async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> None:
+async def paint_loop(user: UserConfig) -> None:
     prefix = f"<lm>{escape_tag(user.identifier)}</> |"
     while True:
         try:
@@ -166,7 +172,7 @@ async def paint_loop(user: UserConfig, zoom: ZoomLevel = ZoomLevel.Z_15) -> None
                 logger.warning(f"{prefix} Not enough charges to paint pixels.")
                 wait_secs = max(600, user_info.charges.remaining_secs() - random.uniform(10, 20) * 60)
             else:
-                await paint_pixels(user, user_info, zoom)
+                await paint_pixels(user, user_info)
                 user_info = await get_user_info(user)
                 wait_secs = min(
                     random.uniform(60, 90) * 60,
