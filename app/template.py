@@ -57,7 +57,7 @@ async def calc_template_diff(
 def group_adjacent(
     points: list[tuple[int, int, int]],
     min_group_size: int = 100,
-    merge_distance: float = 50.0,
+    merge_distance: float = 30.0,
 ) -> list[list[tuple[int, int, int]]]:
     # 将点放入集合以便 O(1) 查找
     point_dict: dict[tuple[int, int], int] = {(x, y): color_id for x, y, color_id in points}
@@ -89,13 +89,18 @@ def group_adjacent(
         if p not in visited:
             bfs(p)
 
+    groups = sorted(groups, key=len, reverse=False)
+    group_cxy = [calc_group_cxy(group) for group in groups]
+
     # 根据距离合并相邻的小分组
     merged = True
     while merged:
         merged = False
         for i in range(len(groups)):
+            if len(groups[i]) >= min_group_size:
+                continue
             for j in range(i + 1, len(groups)):
-                if calc_group_distance_centroid(groups[i], groups[j]) <= merge_distance:
+                if cxy_distance(group_cxy[i], group_cxy[j]) <= merge_distance:
                     groups[i].extend(groups[j])
                     groups.pop(j)
                     merged = True
@@ -103,28 +108,35 @@ def group_adjacent(
             if merged:
                 break
 
-    # 根据大小继续合并
+    # 根据大小合并小分组
     small_groups = [g for g in groups if len(g) < min_group_size]
     large_groups = [g for g in groups if len(g) >= min_group_size]
+    large_group_cxy = [calc_group_cxy(group) for group in large_groups]
     for small in small_groups:
+        cxy = calc_group_cxy(small)
         if not large_groups:
             large_groups.append(small)
+            large_group_cxy.append(cxy)
             continue
         closest_large = min(
-            large_groups,
-            key=lambda lg: calc_group_distance_centroid(small, lg),
-        )
+            enumerate(large_groups),
+            key=lambda lg: cxy_distance(cxy, large_group_cxy[lg[0]]),
+        )[1]
         closest_large.extend(small)
 
     return sorted(groups, key=len, reverse=True)
 
 
-def calc_group_distance_centroid(
-    group1: list[tuple[int, int, int]],
-    group2: list[tuple[int, int, int]],
+def calc_group_cxy(
+    group: list[tuple[int, int, int]],
+) -> tuple[float, float]:
+    cx = sum(x for x, _, _ in group) / len(group)
+    cy = sum(y for _, y, _ in group) / len(group)
+    return cx, cy
+
+
+def cxy_distance(
+    cxy1: tuple[float, float],
+    cxy2: tuple[float, float],
 ) -> float:
-    cx1 = sum(x for x, _, _ in group1) / len(group1)
-    cy1 = sum(y for _, y, _ in group2) / len(group1)
-    cx2 = sum(x for x, _, _ in group2) / len(group2)
-    cy2 = sum(y for _, y, _ in group2) / len(group2)
-    return math.sqrt((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2)
+    return math.sqrt((cxy1[0] - cxy2[0]) ** 2 + (cxy1[1] - cxy2[1]) ** 2)

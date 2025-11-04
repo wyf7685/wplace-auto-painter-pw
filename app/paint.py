@@ -6,6 +6,7 @@ from collections.abc import Callable, Generator
 from typing import Any
 
 import anyio
+import anyio.to_process
 from bot7685_ext.wplace import ColorEntry
 
 from .config import Config, TemplateConfig, UserConfig
@@ -116,7 +117,8 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo, zoom: ZoomLe
     template, entries = selected
 
     with claim_painting_color(*(entry.name for entry in entries)):
-        groups = group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])
+        points = [(x, y, e.id) for e in entries for x, y in e.pixels]
+        groups = await anyio.to_process.run_sync(group_adjacent, points)
         pixels = [p for g in groups for p in g]
         pixels_to_paint = min(int(user_info.charges.count), len(pixels))
         if pixels_to_paint <= 0:
