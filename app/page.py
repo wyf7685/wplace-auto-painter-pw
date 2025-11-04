@@ -11,7 +11,7 @@ from .assets import assets
 from .browser import get_browser
 from .config import WplaceCredentials
 from .exception import FetchFailed, ShoudQuit
-from .log import escape_tag, logger
+from .log import logger
 from .schemas import WplaceUserInfo
 from .utils import WplacePixelCoords
 
@@ -62,15 +62,23 @@ class WplacePage:
         self.zoom = zoom
 
     @contextlib.asynccontextmanager
-    async def begin(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
+    async def begin(self, script_data: dict[str, Any], resolved_pixel_map: tuple[str, str]) -> AsyncGenerator[Self]:
+        self._btn_id = f"fill-btn-{random.randint(1000, 9999)}"
         async with (
             get_browser(headless=False) as browser,
             await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
         ):
             await context.add_init_script(assets.page_init())
-            await context.add_init_script(assets.paint_btn(script_data))
+            await context.add_init_script(assets.paint_map(script_data | {"btn": self._btn_id}))
             await context.add_cookies(self.credentials.to_pw_cookies())
-            self._btn_id = script_data.get("btn", "paint-button-7685")
+            await context.route(
+                resolved_pixel_map[0],
+                lambda route: route.fulfill(
+                    status=200,
+                    content_type="application/javascript",
+                    body=resolved_pixel_map[1],
+                ),
+            )
 
             async with await context.new_page() as page:
                 url = self.coord.to_share_url(zoom=self.zoom.value)
@@ -78,7 +86,6 @@ class WplacePage:
 
                 try:
                     await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10000, state="visible")
-                    await page.wait_for_selector(f"#{self._btn_id}", timeout=5000, state="attached")
                 except Exception as e:
                     raise ShoudQuit("Required buttons not found on the page, is the injected script broken?") from e
 
@@ -95,16 +102,26 @@ class WplacePage:
         selector = f"#{self._btn_id}"
         btn = await self.page.query_selector(selector)
         if btn is None:
-            raise ShoudQuit("Submit button not found, is the injected script broken?")
+            raise ShoudQuit("Fill button not found, is the injected script broken?")
 
-        logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
+        await btn.click()
+        logger.debug("Clicked fill button")
+        with anyio.fail_after(30):
+            while await self.page.query_selector(selector):
+                logger.debug("Waiting for fill to complete...")
+                await anyio.sleep(1)
+
+        btn = await self.page.query_selector(PAINT_BTN_SELECTOR)
+        if btn is None:
+            raise ShoudQuit("Paint button not found after filling, is the injected script broken?")
+
         await btn.click()
         logger.info("Clicked submit button")
         with anyio.fail_after(30):
-            while await self.page.query_selector(selector):
+            while (btn := await self.page.query_selector(PAINT_BTN_SELECTOR)) and await btn.get_attribute("disabled"):
                 logger.debug("Waiting for submit to complete...")
                 await anyio.sleep(1)
-        logger.info("Submit completed")
+        logger.success("Submit completed")
 
     async def find_and_close_modal(self) -> None:
         if modal := await self.page.query_selector(".modal[open]"):
@@ -112,7 +129,7 @@ class WplacePage:
             for el in await modal.query_selector_all("button.btn"):
                 if await el.text_content() == "Close":
                     await el.click()
-                    logger.info("Closed modal dialog")
+                    logger.success("Closed modal dialog")
                     return
             logger.info("No Close button found in modal dialog")
 
@@ -125,18 +142,18 @@ class WplacePage:
 
         logger.debug(f"Found paint button: {paint_btn!r}")
         await paint_btn.click()
-        logger.info("Clicked paint button")
+        logger.debug("Clicked paint button")
 
         yield
 
         btns = await self.page.query_selector_all(".w-full .items-center > .btn.btn-circle.btn-sm")
         if not btns:
-            logger.warning("No close button found on the paint panel")
+            logger.warning("No close button found on the paint panel. Maybe it's already closed?")
             return
         close_btn = btns[-1]
         logger.debug(f"Found close button: {close_btn!r}")
         await close_btn.click()
-        logger.info("Closed paint panel")
+        logger.debug("Closed paint panel")
 
     @contextlib.asynccontextmanager
     async def open_store_panel(self) -> AsyncGenerator[None]:
@@ -146,7 +163,7 @@ class WplacePage:
 
         logger.debug(f"Found store button: {store_btn!r}")
         await store_btn.click()
-        logger.info("Opened store panel")
+        logger.debug("Opened store panel")
 
         yield
 
@@ -156,7 +173,7 @@ class WplacePage:
             return
         logger.debug(f"Found close button: {close_btn!r}")
         await close_btn.click()
-        logger.info("Closed store panel")
+        logger.debug("Closed store panel")
 
     async def select_color(self, color_id: int) -> None:
         color_btn = await self.page.query_selector(f"#color-{color_id}")

@@ -2,6 +2,7 @@ import base64
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 ASSETS_DIR = (
     Path(sys._MEIPASS)  # noqa: SLF001  # pyright: ignore[reportAttributeAccessIssue]
@@ -18,8 +19,8 @@ class Assets:
     def page_init(self) -> str:
         return self._read("page_init.js")
 
-    def paint_btn(self, script_data: dict[str, str]) -> str:
-        return self._read("paint_btn.js").replace(
+    def paint_map(self, script_data: dict[str, Any]) -> str:
+        return self._read("paint_map.js").replace(
             "{{script_data}}", base64.b64encode(json.dumps(script_data).encode()).decode()
         )
 

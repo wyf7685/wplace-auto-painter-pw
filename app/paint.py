@@ -1,21 +1,20 @@
 import contextlib
 import hashlib
 import random
-import time
 from collections.abc import AsyncGenerator, Iterable
 from datetime import datetime, timedelta
 from typing import Any
 
 import anyio
 from bot7685_ext.wplace import ColorEntry
-from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
+from bot7685_ext.wplace.consts import COLORS_NAME, WPLACE_COLORS_MAP, ColorName
 
 from .config import Config, TemplateConfig, UserConfig
 from .exception import ShoudQuit
 from .highlight import Highlight
 from .log import escape_tag, logger
 from .page import WplacePage, fetch_user_info
-from .resolver import JsResolver
+from .resolver import resolve_pixel_map
 from .schemas import WplaceUserInfo
 from .template import calc_template_diff, group_adjacent
 
@@ -28,11 +27,13 @@ def pixels_to_paint_arg(template: TemplateConfig, pixels: list[tuple[int, int, i
     result = []
     for x, y, color_id in pixels:
         coord = base.offset(x, y)
+        r, g, b = WPLACE_COLORS_MAP[color_id - 1][1]
         item = {
+            "color": {"r": r, "g": g, "b": b, "a": 255},
             "tile": [coord.tlx, coord.tly],
+            "pixel": [coord.pxx, coord.pxy],
             "season": 0,
             "colorIdx": color_id,
-            "pixel": [coord.pxx, coord.pxy],
         }
         result.append(item)
     return result
@@ -106,8 +107,8 @@ async def select_paint_color(
 
 
 async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
-    resolved_js = await JsResolver().resolve()
-    logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
+    resolved_pixel_map = await resolve_pixel_map(hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32])
+    logger.debug(f"Resolved pixel map from: <c>{escape_tag(resolved_pixel_map[0])}</>")
 
     if (selected := await select_paint_color(user, user_info)) is None:
         return
@@ -121,16 +122,12 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
             logger.warning("Not enough pixels to paint.")
             return
         logger.info(f"Preparing to paint <y>{pixels_to_paint}</> pixels...")
+        pixels = pixels[:pixels_to_paint]
 
-        script_data = {
-            "btn": f"paint-button-{int(time.time())}",
-            "a": pixels_to_paint_arg(template, pixels[:pixels_to_paint]),
-            "f": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
-            "r": resolved_js,
-        }
+        script_data = {"pixels": pixels_to_paint_arg(template, pixels), "url": resolved_pixel_map[0]}
 
         coord = template.get_coords()[0].offset(*pixels[0][:2])
-        async with WplacePage(user.credentials, coord).begin(script_data) as page:
+        async with WplacePage(user.credentials, coord).begin(script_data, resolved_pixel_map) as page:
             delay = random.uniform(3, 7)
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
             await anyio.sleep(delay)
@@ -139,7 +136,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
                 prev_x, prev_y, prev_color = pixels[0]
                 await anyio.sleep(random.uniform(0.5, 1.5))
                 await page.select_color(prev_color)
-                for idx in range(pixels_to_paint):
+                for idx in range(len(pixels)):
                     curr_x, curr_y, curr_color = pixels[idx]
                     if prev_color != curr_color:
                         await anyio.sleep(random.uniform(0.5, 1.5))
@@ -152,7 +149,6 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
                         await anyio.sleep(random.uniform(0.5, 1.5))
                     await page.move_by_pixel(curr_x - prev_x, curr_y - prev_y)
                     await page.click_current_pixel()
-                    # logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")
                     prev_x, prev_y = curr_x, curr_y
 
                 delay = random.uniform(3, 7)
