@@ -1,4 +1,5 @@
 import base64
+import functools
 import json
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ ASSETS_DIR = (
 
 class Assets:
     @staticmethod
+    @functools.cache
     def _read(name: str) -> str:
         return ASSETS_DIR.joinpath(name).read_text("utf-8")
 
