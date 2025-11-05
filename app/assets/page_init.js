@@ -7,5 +7,4 @@
     localStorage.setItem('halloween-2025-popup', 'true')
     localStorage.setItem('selected-color', '1');
     localStorage.setItem('show-all-colors', 'true');
-
-})()
+})();
