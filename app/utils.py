@@ -1,3 +1,5 @@
+import base64
+import datetime as dt
 import functools
 import inspect
 import math
@@ -11,8 +13,11 @@ from typing import Any, NamedTuple, Self, cast
 
 import anyio
 from bot7685_ext.wplace.consts import ALL_COLORS
+from pydantic import BaseModel
 
 from .log import escape_tag, logger
+
+UTC8 = dt.timezone(dt.timedelta(hours=8))
 
 # 从多点校准中提取的常量参数
 SCALE_X = 325949.3234522017
@@ -310,3 +315,32 @@ def requests_proxies() -> dict[str, str] | None:
 
     proxy = Config.load().proxy
     return {"http": proxy, "https": proxy} if proxy else None
+
+
+class _TokenPayload(BaseModel):
+    userId: int  # noqa: N815
+    sessionId: str  # noqa: N815
+    iss: str
+    exp: int
+    iat: int
+
+    @property
+    def expires_at(self) -> dt.datetime:
+        return dt.datetime.fromtimestamp(self.exp, dt.UTC).astimezone(UTC8).replace(tzinfo=None)
+
+
+def is_token_expired(token: str, ahead_secs: int = 60) -> bool:
+    parts = token.split(".")
+    if len(parts) != 3:
+        return True
+
+    payload = parts[1]
+    if rem := len(payload) % 4:
+        payload += "=" * (4 - rem)
+
+    try:
+        payload = _TokenPayload.model_validate_json(base64.urlsafe_b64decode(payload).decode())
+    except Exception:
+        return True
+
+    return (payload.expires_at - dt.datetime.now()).total_seconds() < ahead_secs

@@ -10,6 +10,8 @@ import anyio
 from bot7685_ext.wplace import ColorEntry
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
+from app.utils import is_token_expired
+
 from .config import Config, TemplateConfig, UserConfig
 from .exception import ShoudQuit
 from .highlight import Highlight
@@ -166,6 +168,10 @@ async def paint_loop(user: UserConfig) -> None:
     while True:
         try:
             logger.info(f"{prefix} Starting painting cycle...")
+
+            if is_token_expired(user.credentials.token):
+                logger.warning(f"{prefix} Token expired, stopping paint loop.")
+                raise ShoudQuit("Token expired")
 
             user_info = await get_user_info(user)
             if user_info.charges.count < 30:
