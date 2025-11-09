@@ -22,6 +22,7 @@ from .schemas import WplaceUserInfo
 from .template import calc_template_diff, group_adjacent
 
 logger = logger.opt(colors=True)
+COLORS_CLAIMER_LOCK = anyio.Lock()
 COLORS_LOCK: dict[ColorName, anyio.Lock] = {name: anyio.Lock() for name in COLORS_NAME.values()}
 
 
@@ -48,10 +49,8 @@ async def get_user_info(user: UserConfig) -> WplaceUserInfo:
     charges = user_info.charges
     remaining_secs = charges.remaining_secs()
     recover_time = (datetime.now() + timedelta(seconds=remaining_secs)).strftime("%Y-%m-%d %H:%M:%S")
-    logger.info(
-        f"{prefix} Current charge: 🎨 <y>{charges.count:.2f}</>/<y>{charges.max}</> "
-        f"| Remaining: ⏱️ <y>{remaining_secs:.2f}</>s, recovers at <g>{recover_time}</>"
-    )
+    logger.info(f"{prefix} Current charge: 🎨 <y>{charges.count:.2f}</>/<y>{charges.max}</> ")
+    logger.info(f"{prefix} Remaining: ⏱️ <y>{remaining_secs:.2f}</>s, recovers at <g>{recover_time}</>")
     if user_info.banned:
         logger.error(f"{prefix} User is banned from painting!")
         raise ShoudQuit("User is banned from painting")
@@ -61,8 +60,9 @@ async def get_user_info(user: UserConfig) -> WplaceUserInfo:
 @contextlib.asynccontextmanager
 async def claim_painting_color(names: Iterable[ColorName]) -> AsyncGenerator[None]:
     async with contextlib.AsyncExitStack() as stack:
-        for name in names:
-            await stack.enter_async_context(COLORS_LOCK[name])
+        async with COLORS_CLAIMER_LOCK:
+            for name in names:
+                await stack.enter_async_context(COLORS_LOCK[name])
         yield
 
 
@@ -186,7 +186,9 @@ async def paint_loop(user: UserConfig) -> None:
                     user_info.charges.remaining_secs() - random.uniform(10, 20) * 60,
                 )
 
+            wakeup_time = datetime.now() + timedelta(seconds=wait_secs)
             logger.info(f"{prefix} Sleeping for <y>{wait_secs / 60:.2f}</> minutes...")
+            logger.info(f"{prefix} Next paint cycle at <g>{wakeup_time:%Y-%m-%d %H:%M:%S}</>.")
             await anyio.sleep(wait_secs)
 
         except ShoudQuit:

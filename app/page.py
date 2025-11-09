@@ -159,7 +159,7 @@ class WplacePage:
         logger.info("Closed store panel")
 
     async def select_color(self, color_id: int) -> None:
-        color_btn = await self.page.query_selector(f"#color-{color_id}")
+        color_btn = await self.page.wait_for_selector(f"#color-{color_id}", timeout=5000, state="visible")
         if color_btn is None:
             raise ShoudQuit(f"Color button with ID {color_id} not found on the page")
 
