@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
 from bot7685_ext.wplace.consts import COLORS_ID, ColorName
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from .utils import WplacePixelCoords
 
@@ -33,21 +33,21 @@ def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:
 
 
 class WplaceCredentials(BaseModel):
-    token: str = Field(description="WPlace cookie 'j' value")
-    cf_clearance: str | None = Field(
+    token: SecretStr = Field(description="WPlace cookie 'j' value")
+    cf_clearance: SecretStr | None = Field(
         default=None, description="WPlace cookie 'cf_clearance' value, could be null if not needed"
     )
 
     def to_pw_cookies(self) -> list[SetCookieParam]:
-        cookies: list[SetCookieParam] = [_construct_pw_cookie("j", self.token)]
+        cookies: list[SetCookieParam] = [_construct_pw_cookie("j", self.token.get_secret_value())]
         if self.cf_clearance:
-            cookies.append(_construct_pw_cookie("cf_clearance", self.cf_clearance))
+            cookies.append(_construct_pw_cookie("cf_clearance", self.cf_clearance.get_secret_value()))
         return cookies
 
     def to_requests_cookies(self) -> dict[str, str]:
-        cookies: dict[str, str] = {"j": self.token}
+        cookies: dict[str, str] = {"j": self.token.get_secret_value()}
         if self.cf_clearance:
-            cookies["cf_clearance"] = self.cf_clearance
+            cookies["cf_clearance"] = self.cf_clearance.get_secret_value()
         return cookies
 
 

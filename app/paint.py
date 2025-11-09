@@ -168,8 +168,9 @@ async def paint_loop(user: UserConfig) -> None:
     while True:
         try:
             logger.info(f"{prefix} Starting painting cycle...")
+            logger.debug(f"{prefix} User config: {Highlight.apply(user)}")
 
-            if is_token_expired(user.credentials.token):
+            if is_token_expired(user.credentials.token.get_secret_value()):
                 logger.warning(f"{prefix} Token expired, stopping paint loop.")
                 raise ShoudQuit("Token expired")
 
