@@ -85,8 +85,7 @@ class CroppedTemplateConfig(TemplateConfig):
 
     def get_coords(self) -> tuple[WplacePixelCoords, WplacePixelCoords]:
         x, y, w, h = self.selected
-        st, _ = super().get_coords()
-        st = st.offset(x, y)
+        st = self.coords.offset(x, y)
         ed = st.offset(w - 1, h - 1)
         return st, ed
 
@@ -106,7 +105,7 @@ class UserConfig(BaseModel):
 
     @functools.cached_property
     def preferred_colors_rank(self) -> list[int]:
-        ranks = [len(COLORS_ID)] * len(COLORS_ID)
+        ranks = [len(COLORS_ID)] * (len(COLORS_ID) + 1)
         for r, name in enumerate(self.preferred_colors):
             ranks[COLORS_ID[name]] = r
         return ranks

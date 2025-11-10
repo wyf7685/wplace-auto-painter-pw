@@ -177,13 +177,13 @@ async def paint_loop(user: UserConfig) -> None:
             user_info = await get_user_info(user)
             if user_info.charges.count < 30:
                 logger.warning(f"{prefix} Not enough charges to paint pixels.")
-                wait_secs = max(600, user_info.charges.remaining_secs() - random.uniform(10, 20) * 60)
+                wait_secs = max(600.0, user_info.charges.remaining_secs() - random.uniform(10, 20) * 60)
             else:
                 await paint_pixels(user, user_info)
                 user_info = await get_user_info(user)
                 wait_secs = min(
                     random.uniform(60, 90) * 60,
-                    user_info.charges.remaining_secs() - random.uniform(10, 20) * 60,
+                    user_info.charges.remaining_secs() - random.uniform(5, 15) * 60,
                 )
 
             wakeup_time = datetime.now() + timedelta(seconds=wait_secs)
