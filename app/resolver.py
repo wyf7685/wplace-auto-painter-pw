@@ -43,13 +43,13 @@ class JsResolver:
             )
         )
         resp.raise_for_status()
-        html = resp.text
-        chunks = {f"{match.group(1)}.js" for match in self.PATTERN_CHUNK_NAME.finditer(html)}
+
+        chunks = {f"{match.group(1)}.js" for match in self.PATTERN_CHUNK_NAME.finditer(resp.text)}
         etags = load_chunk_etags()
         for chunk_name in set(etags.keys()) - chunks:
             # Remove obsolete chunks
             del etags[chunk_name]
-            (self.chunks_dir / chunk_name).unlink(missing_ok=True)
+            self.chunks_dir.joinpath(chunk_name).unlink(missing_ok=True)
 
         async def download_js_chunk(chunk_name: str) -> None:
             file = self.chunks_dir / chunk_name
@@ -78,7 +78,7 @@ class JsResolver:
         save_chunk_etags(etags)
 
     def find_paint_fn(self) -> tuple[str, str]:
-        for file in (self.chunks_dir / "nodes").glob("*.js"):
+        for file in self.chunks_dir.joinpath("nodes").glob("*.js"):
             if match := self.PATTERN_PAINT_FN.search(file.read_text(encoding="utf-8")):
                 obj_name = match.group(1)
                 break
@@ -95,7 +95,7 @@ class JsResolver:
             raise ShoudQuit("import source for paint function object not found")
 
         source_name = match.group(1)
-        chunk_name = (file.parent / match.group(2)).resolve().relative_to(self.chunks_dir.resolve()).as_posix()
+        chunk_name = file.parent.joinpath(match.group(2)).resolve().relative_to(self.chunks_dir.resolve()).as_posix()
         chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
         return source_name, chunk_url
 
