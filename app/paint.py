@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import anyio
-from bot7685_ext.wplace import ColorEntry
+from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
 from app.utils import is_token_expired
@@ -19,7 +19,7 @@ from .log import escape_tag, logger
 from .page import WplacePage, fetch_user_info
 from .resolver import JsResolver
 from .schemas import WplaceUserInfo
-from .template import calc_template_diff, group_adjacent
+from .template import calc_template_diff
 
 logger = logger.opt(colors=True)
 COLORS_CLAIMER_LOCK = anyio.Lock()
@@ -116,7 +116,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
     template, entries = selected
 
     async with claim_painting_color(entry.name for entry in entries):
-        groups = group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])
+        groups = await group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels], 100, 30.0)
         pixels = sorted((p for g in groups for p in g), key=lambda p: user.preferred_colors_rank[p[2]])
         pixels_to_paint = min(int(user_info.charges.count), len(pixels))
         if pixels_to_paint <= 0:
