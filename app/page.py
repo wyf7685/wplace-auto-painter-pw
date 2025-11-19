@@ -1,4 +1,5 @@
 import contextlib
+import json
 import random
 from collections.abc import AsyncGenerator
 from enum import Enum
@@ -6,6 +7,8 @@ from typing import Any, Self
 
 import anyio
 from bot7685_ext.wplace.consts import COLORS_NAME
+
+from app.highlight import Highlight
 
 from .assets import assets
 from .browser import get_browser
@@ -36,7 +39,19 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
             resp = await page.goto("https://backend.wplace.live/me", wait_until="networkidle")
             if not resp:
                 raise FetchFailed("Failed to fetch user info")
-            return WplaceUserInfo.model_validate_json(await resp.text())
+            text = await resp.text()
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.opt(colors=True).warning(f"Failed to decode user info JSON: {Highlight.apply(text)}")
+            raise FetchFailed("Failed to decode user info") from e
+
+        try:
+            return WplaceUserInfo.model_validate(data)
+        except ValueError as e:
+            logger.opt(colors=True).warning(f"Failed to parse user info: {Highlight.apply(data)}")
+            raise FetchFailed("Failed to parse user info") from e
 
 
 class ZoomLevel(int, Enum):

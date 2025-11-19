@@ -51,9 +51,6 @@ async def get_user_info(user: UserConfig) -> WplaceUserInfo:
     recover_time = (datetime.now() + timedelta(seconds=remaining_secs)).strftime("%Y-%m-%d %H:%M:%S")
     logger.info(f"{prefix} Current charge: 🎨 <y>{charges.count:.2f}</>/<y>{charges.max}</> ")
     logger.info(f"{prefix} Remaining: ⏱️ <y>{remaining_secs:.2f}</>s, recovers at <g>{recover_time}</>")
-    if user_info.banned:
-        logger.error(f"{prefix} User is banned from painting!")
-        raise ShoudQuit("User is banned from painting")
     return user_info
 
 
