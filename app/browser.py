@@ -4,13 +4,11 @@ import re
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
-from playwright.async_api import ProxySettings
-
 from app.config import Config
 from app.log import logger
 
 if TYPE_CHECKING:
-    from playwright.async_api import Browser, BrowserType, Playwright
+    from playwright.async_api import Browser, BrowserType, Playwright, ProxySettings
 
 _PLAYWRIGHT: Playwright | None = None
 
