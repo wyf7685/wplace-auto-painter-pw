@@ -89,6 +89,12 @@ class CroppedTemplateConfig(TemplateConfig):
         ed = st.offset(w - 1, h - 1)
         return st, ed
 
+    def crop(self, selected: tuple[int, int, int, int]) -> CroppedTemplateConfig:
+        x0, y0, _, _ = self.selected
+        x1, y1, w, h = selected
+        x, y = x0 + x1, y0 + y1
+        return super().crop((x, y, w, h))
+
 
 class UserConfig(BaseModel):
     identifier: str = Field(description="User identifier, for logging purposes")
@@ -131,7 +137,4 @@ class Config(BaseModel):
 
 
 def export_config_schema() -> None:
-    CONFIG_SCHEMA_FILE.write_text(
-        json.dumps(Config.model_json_schema(), indent=2),
-        encoding="utf-8",
-    )
+    CONFIG_SCHEMA_FILE.write_text(json.dumps(Config.model_json_schema()), encoding="utf-8")

@@ -71,7 +71,7 @@ class JsResolver:
             logger.opt(colors=True).debug(f"Downloaded JS chunk: <c>{escape_tag(chunk_name)}</>")
             file.write_text(response.text, encoding="utf-8")
 
-        async with httpx.AsyncClient(proxy=Config.load().proxy) as client, anyio.create_task_group() as tg:
+        async with httpx.AsyncClient(proxy=Config.load().proxy, timeout=30) as client, anyio.create_task_group() as tg:
             for chunk_name in chunks:
                 tg.start_soon(download_js_chunk, chunk_name)
 

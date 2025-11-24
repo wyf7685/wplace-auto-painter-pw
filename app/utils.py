@@ -237,7 +237,7 @@ class PerfLog:
 
     def __enter__(self) -> Self:
         self._start = time.perf_counter()
-        logger.debug(self._on_start.format(start=self._start))
+        logger.opt(colors=True).debug(self._on_start.format(start=self._start))
         return self
 
     def __exit__(
@@ -247,7 +247,7 @@ class PerfLog:
         exc_traceback: types.TracebackType | None,
     ) -> None:
         self._end = time.perf_counter()
-        logger.debug(self._on_end.format(end=self._end, elapsed=self.elapsed))
+        logger.opt(colors=True).debug(self._on_end.format(end=self._end, elapsed=self.elapsed))
 
     async def __aenter__(self) -> Self:
         return self.__enter__()
@@ -279,9 +279,23 @@ class PerfLog:
     @classmethod
     def for_action(cls, action: str) -> Self:
         return cls(
-            f"Starting {action} at {{start:.2f}}",
-            f"Finished {action} at {{end:.2f}}, elapsed {{elapsed:.2f}}s",
+            f"Starting <i><c>{action}</></> at <c>{{start:.2f}}</>",
+            f"Finished <i><c>{action}</></> at <c>{{end:.2f}}</>, elapsed <c>{{elapsed:.2f}}</>s",
         )
+
+    @classmethod
+    def for_method[**P, R](cls, method_name: str | None = None) -> Callable[[Callable[P, R]], Callable[P, R]]:
+        def decorator(func: Callable[P, R]) -> Callable[P, R]:
+            name = method_name or escape_tag(func.__name__)
+
+            @functools.wraps(func)
+            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                with cls.for_action(f"<y>method</> {name}"):
+                    return func(*args, **kwargs)
+
+            return wrapper
+
+        return decorator
 
 
 def with_semaphore[T: Callable](initial_value: int) -> Callable[[T], T]:

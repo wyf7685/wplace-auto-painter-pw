@@ -29,6 +29,7 @@ class PixelAccess[TPixel](Protocol):
 logger = logger.opt(colors=True)
 
 
+@PerfLog.for_method()
 async def download_preview(
     coord1: WplacePixelCoords,
     coord2: WplacePixelCoords,
@@ -87,6 +88,7 @@ async def download_preview(
     return image
 
 
+@PerfLog.for_method()
 async def calc_template_diff(
     cfg: TemplateConfig,
     *,
