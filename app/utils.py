@@ -288,12 +288,22 @@ class PerfLog:
         def decorator(func: Callable[P, R]) -> Callable[P, R]:
             name = method_name or escape_tag(func.__name__)
 
-            @functools.wraps(func)
-            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-                with cls.for_action(f"<y>method</> {name}"):
-                    return func(*args, **kwargs)
+            if inspect.iscoroutinefunction(func):
 
-            return wrapper
+                async def wrapper_async(*args: P.args, **kwargs: P.kwargs) -> R:
+                    with cls.for_action(f"<y>method</> {name}"):
+                        return await func(*args, **kwargs)
+
+                wrapper = wrapper_async
+            else:
+
+                def wrapper_sync(*args: P.args, **kwargs: P.kwargs) -> R:
+                    with cls.for_action(f"<y>method</> {name}"):
+                        return func(*args, **kwargs)
+
+                wrapper = wrapper_sync
+
+            return cast("Callable[P, R]", functools.update_wrapper(wrapper, func))
 
         return decorator
 
