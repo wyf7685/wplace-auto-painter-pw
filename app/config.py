@@ -96,6 +96,17 @@ class CroppedTemplateConfig(TemplateConfig):
         return super().crop((x, y, w, h))
 
 
+class PurchaseMaxChargeConfig(BaseModel):
+    type: Literal["max_charges"]
+    target_max: int | None = None
+    retain_droplets: int = 0
+
+
+class PurchaseChargeConfig(BaseModel):
+    type: Literal["charges"]
+    retain_droplets: int = 0
+
+
 class UserConfig(BaseModel):
     identifier: str = Field(description="User identifier, for logging purposes")
     credentials: WplaceCredentials = Field(description="Wplace authentication credentials")
@@ -107,6 +118,10 @@ class UserConfig(BaseModel):
     selected_area: tuple[int, int, int, int] | None = Field(
         default=None,
         description="Optional selected area on the template image as (x, y, w, h)",
+    )
+    auto_purchase: PurchaseMaxChargeConfig | PurchaseChargeConfig | None = Field(
+        default=None,
+        description="Optional automatic charge purchasing configuration",
     )
 
     @functools.cached_property

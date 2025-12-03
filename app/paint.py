@@ -10,6 +10,7 @@ import anyio
 from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
+from app.purchase import do_purchase
 from app.utils import is_token_expired
 
 from .config import Config, TemplateConfig, UserConfig
@@ -120,10 +121,11 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
             logger.warning("Not enough pixels to paint.")
             return
         logger.info(f"Preparing to paint <y>{pixels_to_paint}</> pixels...")
+        pixels = pixels[:pixels_to_paint]
 
         script_data = {
             "btn": f"paint-button-{int(time.time())}",
-            "a": pixels_to_paint_arg(template, pixels[:pixels_to_paint]),
+            "a": pixels_to_paint_arg(template, pixels),
             "f": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
             "r": resolved_js,
         }
@@ -138,8 +140,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
                 prev_x, prev_y, prev_color = pixels[0]
                 await anyio.sleep(random.uniform(0.5, 1.5))
                 await paint.select_color(prev_color)
-                for idx in range(pixels_to_paint):
-                    curr_x, curr_y, curr_color = pixels[idx]
+                for curr_x, curr_y, curr_color in pixels:
                     if prev_color != curr_color:
                         await anyio.sleep(random.uniform(0.5, 1.5))
                         logger.info(
@@ -176,11 +177,30 @@ async def paint_loop(user: UserConfig) -> None:
                 wait_secs = max(600.0, user_info.charges.remaining_secs() - random.uniform(10, 20) * 60)
             else:
                 await paint_pixels(user, user_info)
+                logger.info(f"{prefix} Painting completed, refetching user info...")
                 user_info = await get_user_info(user)
+
                 wait_secs = min(
                     random.uniform(60, 90) * 60,
                     user_info.charges.remaining_secs() - random.uniform(5, 15) * 60,
                 )
+
+            if user.auto_purchase is not None:
+                logger.info(f"{prefix} Checking auto-purchase: {Highlight.apply(user.auto_purchase)}")
+                if await do_purchase(user, user_info):
+                    logger.info(f"{prefix} Purchase completed, refetching user info...")
+                    user_info = await get_user_info(user)
+                else:
+                    logger.info(f"{prefix} No purchase made.")
+
+                wait_secs = min(
+                    random.uniform(60, 90) * 60,
+                    user_info.charges.remaining_secs() - random.uniform(5, 15) * 60,
+                )
+
+            if user_info.charges.count >= 30:
+                logger.info(f"{prefix} Still have enough charges to paint, continuing immediately.")
+                continue
 
             wakeup_time = datetime.now() + timedelta(seconds=wait_secs)
             logger.info(f"{prefix} Sleeping for <y>{wait_secs / 60:.2f}</> minutes...")

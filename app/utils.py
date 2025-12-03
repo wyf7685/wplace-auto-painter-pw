@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any, NamedTuple, Self, cast
 
 import anyio
+import anyio.to_thread
 from bot7685_ext.wplace.consts import ALL_COLORS
 from pydantic import BaseModel
 
@@ -368,3 +369,17 @@ def is_token_expired(token: str, ahead_secs: int = 60) -> bool:
         return True
 
     return (payload.expires_at - dt.datetime.now()).total_seconds() < ahead_secs
+
+
+def run_sync[**P, R](call: Callable[P, R]) -> Callable[P, Coroutine[None, None, R]]:
+    """一个用于包装 sync function 为 async function 的装饰器
+
+    参数:
+        call: 被装饰的同步函数
+    """
+
+    @functools.wraps(call)
+    async def _wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        return await anyio.to_thread.run_sync(functools.partial(call, *args, **kwargs), abandon_on_cancel=True)
+
+    return _wrapper
