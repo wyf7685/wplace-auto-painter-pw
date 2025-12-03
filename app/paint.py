@@ -134,10 +134,10 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
             await anyio.sleep(delay)
 
-            async with page.open_paint_panel():
+            async with page.open_paint_panel() as paint:
                 prev_x, prev_y, prev_color = pixels[0]
                 await anyio.sleep(random.uniform(0.5, 1.5))
-                await page.select_color(prev_color)
+                await paint.select_color(prev_color)
                 for idx in range(pixels_to_paint):
                     curr_x, curr_y, curr_color = pixels[idx]
                     if prev_color != curr_color:
@@ -146,18 +146,17 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
                             f"Switching color: <g>{COLORS_NAME[prev_color]}</>(id=<c>{prev_color}</>) "
                             f"-> <g>{COLORS_NAME[curr_color]}</>(id=<c>{curr_color}</>)"
                         )
-                        await page.select_color(curr_color)
+                        await paint.select_color(curr_color)
                         prev_color = curr_color
                         await anyio.sleep(random.uniform(0.5, 1.5))
                     await page.move_by_pixel(curr_x - prev_x, curr_y - prev_y)
                     await page.click_current_pixel()
-                    # logger.debug(f"Clicked pixel #<g>{idx + 1}</> at <y>{page.current_coord.human_repr()}</>")
                     prev_x, prev_y = curr_x, curr_y
 
                 delay = random.uniform(3, 7)
                 logger.info(f"Waiting for <y>{delay:.2f}</> seconds before submitting...")
                 await anyio.sleep(delay)
-                await page.submit_paint()
+                await paint.submit()
 
 
 async def paint_loop(user: UserConfig) -> None:

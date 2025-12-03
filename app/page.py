@@ -1,9 +1,10 @@
+import abc
 import contextlib
 import json
 import random
 from collections.abc import AsyncGenerator
 from enum import Enum
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self, override
 
 import anyio
 from bot7685_ext.wplace.consts import COLORS_NAME
@@ -17,6 +18,10 @@ from .exception import FetchFailed, ShoudQuit
 from .log import escape_tag, logger
 from .schemas import WplaceUserInfo
 from .utils import WplacePixelCoords
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
+
 
 PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
 USER_AGENT = (
@@ -106,21 +111,6 @@ class WplacePage:
                 finally:
                     del self.context, self.page
 
-    async def submit_paint(self) -> None:
-        selector = f"#{self._btn_id}"
-        btn = await self.page.query_selector(selector)
-        if btn is None:
-            raise ShoudQuit("Submit button not found, is the injected script broken?")
-
-        logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
-        await btn.click()
-        logger.info("Clicked submit button")
-        with anyio.fail_after(30):
-            while await self.page.query_selector(selector):
-                logger.debug("Waiting for submit to complete...")
-                await anyio.sleep(1)
-        logger.info("Submit completed")
-
     async def find_and_close_modal(self) -> None:
         if modal := await self.page.query_selector(".modal[open]"):
             logger.info(f"Found modal dialog: {modal!r}")
@@ -132,55 +122,10 @@ class WplacePage:
             logger.info("No Close button found in modal dialog")
 
     @contextlib.asynccontextmanager
-    async def open_paint_panel(self) -> AsyncGenerator[None]:
+    async def open_paint_panel(self) -> AsyncGenerator[PaintPanel]:
         await self.find_and_close_modal()
-        paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)
-        if paint_btn is None:
-            raise ShoudQuit("No paint button found on the page")
-
-        logger.debug(f"Found paint button: {paint_btn!r}")
-        await paint_btn.click()
-        logger.info("Clicked paint button")
-
-        yield
-
-        btns = await self.page.query_selector_all(".w-full .items-center > .btn.btn-circle.btn-sm")
-        if not btns:
-            logger.warning("No close button found on the paint panel")
-            return
-        close_btn = btns[-1]
-        logger.debug(f"Found close button: {close_btn!r}")
-        await close_btn.click()
-        logger.info("Closed paint panel")
-
-    @contextlib.asynccontextmanager
-    async def open_store_panel(self) -> AsyncGenerator[None]:
-        store_btn = await self.page.query_selector('.btn[title="Store"]')
-        if store_btn is None:
-            raise ShoudQuit("Store button not found on the page")
-
-        logger.debug(f"Found store button: {store_btn!r}")
-        await store_btn.click()
-        logger.info("Opened store panel")
-
-        yield
-
-        close_btn = await self.page.query_selector(".modal[open] .btn.btn-sm.btn-circle.btn-ghost")
-        if close_btn is None:
-            logger.warning("No close button found on the store panel")
-            return
-        logger.debug(f"Found close button: {close_btn!r}")
-        await close_btn.click()
-        logger.info("Closed store panel")
-
-    async def select_color(self, color_id: int) -> None:
-        color_btn = await self.page.wait_for_selector(f"#color-{color_id}", timeout=5000, state="visible")
-        if color_btn is None:
-            raise ShoudQuit(f"Color button with ID {color_id} not found on the page")
-
-        logger.debug(f"Found color button: {color_btn!r}")
-        await color_btn.click()
-        logger.opt(colors=True).info(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
+        async with PaintPanel(self.page, self._btn_id) as panel:
+            yield panel
 
     @property
     def current_coord(self) -> WplacePixelCoords:
@@ -230,3 +175,72 @@ class WplacePage:
         """Click the current pixel on the page."""
         await self.page.mouse.up(button="left")
         await self.page.mouse.click(*self.current_center_px, delay=0.05, button="left")
+
+
+class BasePanel(abc.ABC):
+    def __init__(self, page: Page) -> None:
+        self.page = page
+
+    async def __aenter__(self) -> Self:
+        await self.open()
+        return self
+
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        await self.close()
+
+    @abc.abstractmethod
+    async def open(self) -> None: ...
+    @abc.abstractmethod
+    async def close(self) -> None: ...
+
+
+class PaintPanel(BasePanel):
+    @override
+    def __init__(self, page: Page, btn_id: str) -> None:
+        super().__init__(page)
+        self._btn_id = btn_id
+
+    @override
+    async def open(self) -> None:
+        paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)
+        if paint_btn is None:
+            raise ShoudQuit("No paint button found on the page")
+
+        logger.debug(f"Found paint button: {paint_btn!r}")
+        await paint_btn.click()
+        logger.info("Clicked paint button")
+
+    @override
+    async def close(self) -> None:
+        btns = await self.page.query_selector_all(".w-full .items-center > .btn.btn-circle.btn-sm")
+        if not btns:
+            logger.warning("No close button found on the paint panel")
+            return
+        close_btn = btns[-1]
+        logger.debug(f"Found close button: {close_btn!r}")
+        await close_btn.click()
+        logger.info("Closed paint panel")
+
+    async def select_color(self, color_id: int) -> None:
+        color_btn = await self.page.wait_for_selector(f"#color-{color_id}", timeout=5000, state="visible")
+        if color_btn is None:
+            raise ShoudQuit(f"Color button with ID {color_id} not found on the page")
+
+        logger.debug(f"Found color button: {color_btn!r}")
+        await color_btn.click()
+        logger.opt(colors=True).info(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
+
+    async def submit(self) -> None:
+        selector = f"#{self._btn_id}"
+        btn = await self.page.query_selector(selector)
+        if btn is None:
+            raise ShoudQuit("Submit button not found, is the injected script broken?")
+
+        logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
+        await btn.click()
+        logger.info("Clicked submit button")
+        with anyio.fail_after(30):
+            while await self.page.query_selector(selector):
+                logger.debug("Waiting for submit to complete...")
+                await anyio.sleep(1)
+        logger.info("Submit completed")
