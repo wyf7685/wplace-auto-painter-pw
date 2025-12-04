@@ -8,16 +8,16 @@ from typing import TYPE_CHECKING, Any, Self, override
 
 import anyio
 from bot7685_ext.wplace.consts import COLORS_NAME
+from pydantic import SecretStr
 
+from app.assets import assets
+from app.browser import get_browser
+from app.config import Config, WplaceCredentials
+from app.exception import FetchFailed, ShoudQuit
 from app.highlight import Highlight
-
-from .assets import assets
-from .browser import get_browser
-from .config import WplaceCredentials
-from .exception import FetchFailed, ShoudQuit
-from .log import escape_tag, logger
-from .schemas import WplaceUserInfo
-from .utils import WplacePixelCoords
+from app.log import escape_tag, logger
+from app.schemas import WplaceUserInfo
+from app.utils import WplacePixelCoords
 
 if TYPE_CHECKING:
     from playwright.async_api import Page
@@ -45,6 +45,27 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
             if not resp:
                 raise FetchFailed("Failed to fetch user info")
             text = await resp.text()
+            cookies = await context.cookies()
+
+            update = False
+            for ck in cookies:
+                if ck.get("domain") != ".backend.wplace.live":
+                    continue
+                ck_name = ck.get("name")
+                ck_value = ck.get("value", "")
+                if ck_name == "cf_clearance":
+                    update = update or (
+                        ck_value != credentials.cf_clearance.get_secret_value()
+                        if credentials.cf_clearance is not None
+                        else True
+                    )
+                    credentials.cf_clearance = SecretStr(ck_value)
+                elif ck_name == "j":
+                    update = update or ck_value != credentials.token.get_secret_value()
+                    credentials.token = SecretStr(ck_value)
+            if update:
+                logger.info("Updated credentials from fetched cookies")
+                Config.load().save()
 
         try:
             data = json.loads(text)

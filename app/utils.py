@@ -9,12 +9,13 @@ import time
 import types
 from collections.abc import Callable, Coroutine, Iterable, Sequence
 from dataclasses import dataclass
+from json import JSONEncoder
 from typing import Any, NamedTuple, Self, cast
 
 import anyio
 import anyio.to_thread
 from bot7685_ext.wplace.consts import ALL_COLORS
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 from .log import escape_tag, logger
 
@@ -383,3 +384,10 @@ def run_sync[**P, R](call: Callable[P, R]) -> Callable[P, Coroutine[None, None, 
         return await anyio.to_thread.run_sync(functools.partial(call, *args, **kwargs), abandon_on_cancel=True)
 
     return _wrapper
+
+
+class SecretStrEncoder(JSONEncoder):
+    def default(self, o: Any) -> Any:
+        if isinstance(o, SecretStr):
+            return o.get_secret_value()
+        return super().default(o)

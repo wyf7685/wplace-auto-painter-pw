@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal, Self
 from bot7685_ext.wplace.consts import COLORS_ID, ColorName
 from pydantic import BaseModel, Field, SecretStr
 
-from .utils import WplacePixelCoords
+from .utils import SecretStrEncoder, WplacePixelCoords
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -149,6 +149,18 @@ class Config(BaseModel):
         if cls._cache is None:
             cls._cache = cls.model_validate_json(CONFIG_FILE.read_text("utf-8"))
         return cls._cache
+
+    def save(self) -> None:
+        CONFIG_FILE.write_text(
+            json.dumps(
+                self.model_dump(exclude_defaults=True),
+                indent=2,
+                ensure_ascii=False,
+                cls=SecretStrEncoder,
+            ),
+            encoding="utf-8",
+        )
+        Config._cache = self
 
 
 def export_config_schema() -> None:
