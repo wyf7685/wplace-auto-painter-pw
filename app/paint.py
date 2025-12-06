@@ -180,10 +180,7 @@ async def paint_loop(user: UserConfig) -> None:
                 logger.info(f"{prefix} Painting completed, refetching user info...")
                 user_info = await get_user_info(user)
 
-                wait_secs = min(
-                    random.uniform(60, 90) * 60,
-                    user_info.charges.remaining_secs() - random.uniform(5, 15) * 60,
-                )
+                wait_secs = user_info.charges.remaining_secs() * random.uniform(0.85, 0.95)
 
             if user.auto_purchase is not None:
                 logger.info(f"{prefix} Checking auto-purchase: {Highlight.apply(user.auto_purchase)}")
@@ -193,10 +190,7 @@ async def paint_loop(user: UserConfig) -> None:
                 else:
                     logger.info(f"{prefix} No purchase made.")
 
-                wait_secs = min(
-                    random.uniform(60, 90) * 60,
-                    user_info.charges.remaining_secs() - random.uniform(5, 15) * 60,
-                )
+                wait_secs = user_info.charges.remaining_secs() * random.uniform(0.85, 0.95)
 
             if user_info.charges.count >= 30:
                 logger.info(f"{prefix} Still have enough charges to paint, continuing immediately.")
