@@ -2,7 +2,10 @@ import contextlib
 import functools
 import re
 from collections.abc import AsyncGenerator
+from datetime import datetime
 from typing import TYPE_CHECKING
+
+import anyio
 
 from app.config import Config
 from app.log import logger
@@ -10,17 +13,21 @@ from app.log import logger
 if TYPE_CHECKING:
     from playwright.async_api import Browser, BrowserType, Playwright, ProxySettings
 
-_PLAYWRIGHT: Playwright | None = None
+PLAYWRIGHT_MAX_IDLE_TIME = 600  # seconds
+_playwright: Playwright | None = None
+_last_used: datetime | None = None
 
 
 async def _get_playwright() -> Playwright:
-    global _PLAYWRIGHT
-    if _PLAYWRIGHT is None:
+    global _playwright, _last_used
+    if _playwright is None:
         from playwright.async_api import async_playwright
 
         logger.debug("Launching Playwright...")
-        _PLAYWRIGHT = await async_playwright().start()
-    return _PLAYWRIGHT
+        _playwright = await async_playwright().start()
+
+    _last_used = datetime.now()
+    return _playwright
 
 
 @functools.cache
@@ -64,7 +71,20 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
 
 
 async def shutdown_playwright() -> None:
-    global _PLAYWRIGHT
-    if _PLAYWRIGHT is not None:
-        await _PLAYWRIGHT.stop()
-        _PLAYWRIGHT = None
+    global _playwright
+    if _playwright is not None:
+        logger.debug("Shutting down Playwright...")
+        await _playwright.stop()
+        _playwright = None
+
+
+async def shutdown_idle_playwright_loop() -> None:
+    while True:
+        await anyio.sleep(PLAYWRIGHT_MAX_IDLE_TIME // 4)
+        if (
+            _playwright is not None
+            and _last_used is not None
+            and (datetime.now() - _last_used).total_seconds() >= PLAYWRIGHT_MAX_IDLE_TIME
+        ):
+            logger.debug("Shutting down idle Playwright...")
+            await shutdown_playwright()

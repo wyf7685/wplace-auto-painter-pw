@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 ASSETS_DIR = (
-    Path(sys._MEIPASS)  # noqa: SLF001  # pyright: ignore[reportAttributeAccessIssue]
+    Path(sys._MEIPASS)  # noqa: SLF001  # type: ignore[attr-defined]
     if getattr(sys, "frozen", False)
     else Path(__file__).parent
 ) / "assets"

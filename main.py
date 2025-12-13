@@ -53,7 +53,6 @@ def ensure_config_gui() -> None:
 
 async def main() -> None:
     export_config_schema()
-    await check_update()
 
     if "config" in sys.argv[1:]:
         launch_config_gui()
@@ -61,7 +60,10 @@ async def main() -> None:
 
     ensure_config_gui()
 
-    from app.browser import shutdown_playwright
+    if Config.load().check_update:
+        await check_update()
+
+    from app.browser import shutdown_idle_playwright_loop, shutdown_playwright
     from app.paint import setup_paint
     from app.update import check_update_loop
 
@@ -69,19 +71,21 @@ async def main() -> None:
         try:
             async with anyio.create_task_group() as inner:
                 inner.start_soon(setup_paint)
+                # inner.start_soon(...)
         finally:
             outer.cancel_scope.cancel()
 
     try:
         async with anyio.create_task_group() as outer:
             outer.start_soon(setup_loops)
-            outer.start_soon(check_update_loop)
+            outer.start_soon(shutdown_idle_playwright_loop)
+            if Config.load().check_update:
+                outer.start_soon(check_update_loop)
     except* KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
     except* Exception:
         logger.exception("Unexpected error occurred")
     finally:
-        logger.info("Shutting down Playwright...")
         await shutdown_playwright()
 
 

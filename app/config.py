@@ -127,7 +127,7 @@ class UserConfig(BaseModel):
     @functools.cached_property
     def preferred_colors_rank(self) -> list[int]:
         ranks = [len(COLORS_ID)] * (len(COLORS_ID) + 1)
-        for r, name in enumerate(self.preferred_colors):
+        for r, name in enumerate[ColorName](self.preferred_colors):
             ranks[COLORS_ID[name]] = r
         return ranks
 
@@ -143,6 +143,7 @@ class Config(BaseModel):
     log_level: Literal["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="DEBUG", description="Logging level for console"
     )
+    check_update: bool = Field(default=True, description="Whether to check for updates")
 
     @classmethod
     def load(cls) -> Self:

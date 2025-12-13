@@ -2,7 +2,7 @@ from typing import Literal, assert_never
 
 import cloudscraper
 
-from app.config import Config, UserConfig, WplaceCredentials
+from app.config import Config, PurchaseChargeConfig, PurchaseMaxChargeConfig, UserConfig, WplaceCredentials
 from app.exception import FetchFailed
 from app.log import logger
 from app.schemas import WplaceUserInfo
@@ -57,32 +57,33 @@ async def do_purchase(cfg: UserConfig, user_info: WplaceUserInfo) -> bool:
     if cfg.auto_purchase is None:
         return False
 
-    if cfg.auto_purchase.type == "max_charges":
-        target = cfg.auto_purchase.target_max
-        if target is not None and user_info.charges.max >= target:
-            return False
+    match cfg.auto_purchase:
+        case PurchaseMaxChargeConfig(target_max=target, retain_droplets=retain):
+            if target is not None and user_info.charges.max >= target:
+                return False
 
-        max_amount = (user_info.droplets - cfg.auto_purchase.retain_droplets) // 500
-        amount = min((target - user_info.charges.max) // 5, max_amount) if target is not None else max_amount
-        if amount <= 0:
-            return False
+            max_amount = (user_info.droplets - retain) // 500
+            amount = min((target - user_info.charges.max) // 5, max_amount) if target is not None else max_amount
+            if amount <= 0:
+                return False
 
-        logger.opt(colors=True).info(
-            "Auto-purchasing max charges: "
-            f"current_max=<y>{user_info.charges.max}</>, target_max=<y>{target}</>, amount=<y>{amount}</>"
-        )
-        await _post_purchase(cfg.credentials, "max_charges", amount)
-        return True
+            logger.opt(colors=True).info(
+                "Auto-purchasing max charges: "
+                f"current_max=<y>{user_info.charges.max}</>, target_max=<y>{target}</>, amount=<y>{amount}</>"
+            )
+            await _post_purchase(cfg.credentials, "max_charges", amount)
+            return True
 
-    if cfg.auto_purchase.type == "charges":
-        amount = (user_info.droplets - cfg.auto_purchase.retain_droplets) // 500
-        if amount <= 0:
-            return False
+        case PurchaseChargeConfig(retain_droplets=retain):
+            amount = (user_info.droplets - retain) // 500
+            if amount <= 0:
+                return False
 
-        logger.opt(colors=True).info(
-            f"Auto-purchasing charges: current=<y>{user_info.charges.count:.2f}</>, amount=<y>{amount}</>"
-        )
-        await _post_purchase(cfg.credentials, "charges", amount)
-        return True
+            logger.opt(colors=True).info(
+                f"Auto-purchasing charges: current=<y>{user_info.charges.count:.2f}</>, amount=<y>{amount}</>"
+            )
+            await _post_purchase(cfg.credentials, "charges", amount)
+            return True
 
-    assert_never(cfg.auto_purchase.type)
+        case x:
+            assert_never(x)

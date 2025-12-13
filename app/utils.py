@@ -207,6 +207,8 @@ def with_retry[**P, R](
         exc_types = (*exc,)
 
     def decorator(func: AsyncCallable[P, R]) -> AsyncCallable[P, R]:
+        func_name = escape_tag(getattr(func, "__name__", repr(func)))
+
         @functools.wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             caught: list[Exception] = []
@@ -216,11 +218,11 @@ def with_retry[**P, R](
                     return await func(*args, **kwargs)
                 except exc_types as e:
                     logger.opt(colors=True).debug(
-                        f"函数 <g>{escape_tag(func.__name__)}</> "
+                        f"函数 <g>{func_name}</> "
                         f"第 <y>{attempt + 1}</>/<y>{retries}</> 次调用失败: "
                         f"<r>{escape_tag(repr(e))}</>"
                     )
-                    caught.append(e)
+                    caught.append(cast("Exception", e))
                     await anyio.sleep(delay)
 
             raise ExceptionGroup(f"所有 {retries} 次尝试均失败", caught) from caught[0]
@@ -288,13 +290,14 @@ class PerfLog:
     @classmethod
     def for_method[**P, R](cls, method_name: str | None = None) -> Callable[[Callable[P, R]], Callable[P, R]]:
         def decorator(func: Callable[P, R]) -> Callable[P, R]:
-            name = method_name or escape_tag(func.__name__)
+            name = method_name or escape_tag(getattr(func, "__name__", repr(func)))
 
             if inspect.iscoroutinefunction(func):
+                afunc = cast("AsyncCallable[P, R]", func)
 
                 async def wrapper_async(*args: P.args, **kwargs: P.kwargs) -> R:
                     with cls.for_action(f"<y>method</> {name}"):
-                        return await func(*args, **kwargs)
+                        return await afunc(*args, **kwargs)
 
                 wrapper = wrapper_async
             else:
@@ -313,20 +316,21 @@ class PerfLog:
 def with_semaphore[T: Callable](initial_value: int) -> Callable[[T], T]:
     def decorator(func: T) -> T:
         if inspect.iscoroutinefunction(func):
-            sem = anyio.Semaphore(initial_value)
+            async_sem = anyio.Semaphore(initial_value)
+            afunc = cast("AsyncCallable[[T], T]", func)
 
             @functools.wraps(func)
             async def wrapper_async(*args: Any, **kwargs: Any) -> Any:
-                async with sem:
-                    return await func(*args, **kwargs)
+                async with async_sem:
+                    return await afunc(*args, **kwargs)
 
             wrapper = wrapper_async
         else:
-            sem = threading.Semaphore(initial_value)
+            sync_sem = threading.Semaphore(initial_value)
 
             @functools.wraps(func)
             def wrapper_sync(*args: Any, **kwargs: Any) -> Any:
-                with sem:
+                with sync_sem:
                     return func(*args, **kwargs)
 
             wrapper = wrapper_sync
