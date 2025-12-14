@@ -13,7 +13,7 @@ from app.log import logger
 if TYPE_CHECKING:
     from playwright.async_api import Browser, BrowserType, Playwright, ProxySettings
 
-PLAYWRIGHT_MAX_IDLE_TIME = 600  # seconds
+PLAYWRIGHT_MAX_IDLE_TIME = 60 * 30  # 30 minutes
 _playwright: Playwright | None = None
 _last_used: datetime | None = None
 
@@ -57,6 +57,8 @@ def _proxy_settings() -> ProxySettings | None:
 
 @contextlib.asynccontextmanager
 async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
+    global _last_used
+
     pw = await _get_playwright()
     name = display = Config.load().browser
     channel = None
@@ -68,14 +70,15 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
     browser = await browser_type.launch(channel=channel, headless=headless, proxy=_proxy_settings())
     async with browser:
         yield browser
+        _last_used = datetime.now()
 
 
 async def shutdown_playwright() -> None:
-    global _playwright
+    global _playwright, _last_used
     if _playwright is not None:
         logger.debug("Shutting down Playwright...")
         await _playwright.stop()
-        _playwright = None
+        _playwright = _last_used = None
 
 
 async def shutdown_idle_playwright_loop() -> None:
