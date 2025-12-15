@@ -148,13 +148,14 @@ class Config(BaseModel):
     @classmethod
     def load(cls) -> Self:
         if cls._cache is None:
-            cls._cache = cls.model_validate_json(CONFIG_FILE.read_text("utf-8"))
+            cls._cache = cls.model_validate_json(CONFIG_FILE.read_text("utf-8"), extra="ignore")
         return cls._cache
 
     def save(self) -> None:
         CONFIG_FILE.write_text(
             json.dumps(
-                self.model_dump(exclude_defaults=True),
+                {"$schema": CONFIG_SCHEMA_FILE.relative_to(CONFIG_FILE.parent).as_posix()}
+                | self.model_dump(exclude_defaults=True),
                 indent=2,
                 ensure_ascii=False,
                 cls=SecretStrEncoder,
