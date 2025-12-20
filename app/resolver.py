@@ -111,7 +111,7 @@ class JsResolver:
         pattern = (
             r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\s*\{return "
             + re.escape(func_name)
-            + r"\(\{type:\s*['\"]paintPixels['\"],data:\s*q\}\)\}"
+            + r"\(\{type:\s*['\"]paintPixels['\"],data:\s*[a-zA-Z0-9_$]+\}\)\}"
         )
         match = re.search(pattern, content)
         if match is None:
