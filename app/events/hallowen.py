@@ -70,7 +70,7 @@ def fetch_claimed_pumpkins(user: UserConfig) -> set[int]:
 
 
 async def claim_pumpkins(user: UserConfig) -> set[int] | None:
-    prefix = f"<lm>{user.identifier}</> | <ly>Pumpkin</> |"
+    prefix = f"<lm>{user.identifier}</> | <ly>Hallowen</> |"
 
     links = await fetch_pumpkin_links()
     logger.info(f"{prefix} Fetched <y>{len(links)}</> pumpkin links from api")
@@ -113,7 +113,7 @@ async def claim_pumpkins(user: UserConfig) -> set[int] | None:
 
 
 async def pumpkin_claim_loop(user: UserConfig) -> None:
-    prefix = f"<lm>{user.identifier}</> | <ly>Pumpkin</> |"
+    prefix = f"<lm>{user.identifier}</> | <ly>Hallowen</> |"
 
     while True:
         if _is_user_finished(user.identifier):
@@ -150,13 +150,12 @@ async def pumpkin_claim_loop(user: UserConfig) -> None:
         await anyio.sleep((61 - datetime.now().minute) * 60)
 
 
-async def setup_pumpkin_event() -> None:
-    now = datetime.now(UTC)
-    if now >= EVENT_END:
-        logger.info("Pumpkin event has ended.")
+async def setup_hallowen() -> None:
+    if datetime.now(UTC) >= EVENT_END:
+        logger.info("Hallowen event has ended.")
         return
 
-    logger.info("Pumpkin event is active.")
+    logger.info("Hallowen event is active.")
     async with anyio.create_task_group() as tg:
         for user in Config.load().users:
             logger.opt(colors=True).info(f"Starting pumpkin claim loop for user: <lm>{escape_tag(user.identifier)}</>")
