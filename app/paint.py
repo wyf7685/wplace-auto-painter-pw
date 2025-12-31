@@ -17,7 +17,7 @@ from .config import Config, TemplateConfig, UserConfig
 from .exception import ShoudQuit
 from .highlight import Highlight
 from .log import escape_tag, logger
-from .page import WplacePage, fetch_user_info
+from .page import WplacePage, fetch_user_info, get_pixels_painted_today
 from .resolver import JsResolver
 from .schemas import WplaceUserInfo
 from .template import calc_template_diff
@@ -202,9 +202,12 @@ async def paint_loop(user: UserConfig) -> None:
                 logger.info(f"{prefix} Still have enough charges to paint, continuing immediately.")
                 continue
 
-            wakeup_time = datetime.now() + timedelta(seconds=wait_secs)
+            painted_today = await get_pixels_painted_today(user.credentials)
+            logger.info(f"{prefix} Pixels painted today: <y>{painted_today}</>")
+
+            wakeup_at = datetime.now() + timedelta(seconds=wait_secs)
             logger.info(f"{prefix} Sleeping for <y>{wait_secs / 60:.2f}</> minutes...")
-            logger.info(f"{prefix} Next paint cycle at <g>{wakeup_time:%Y-%m-%d %H:%M:%S}</>.")
+            logger.info(f"{prefix} Next paint cycle at <g>{wakeup_at:%Y-%m-%d %H:%M:%S}</>.")
             await anyio.sleep(wait_secs)
 
         except ShoudQuit:

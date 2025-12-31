@@ -20,7 +20,7 @@ from app.schemas import WplaceUserInfo
 from app.utils import WplacePixelCoords
 
 if TYPE_CHECKING:
-    from playwright.async_api import Page
+    from playwright.async_api import BrowserContext, Page
 
 
 PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
@@ -29,7 +29,8 @@ USER_AGENT = (
 )
 
 
-async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
+@contextlib.asynccontextmanager
+async def _headless_context(credentials: WplaceCredentials) -> AsyncGenerator[BrowserContext]:
     async with (
         get_browser(headless=True) as browser,
         await browser.new_context(
@@ -40,44 +41,68 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
     ):
         await context.add_init_script(assets.page_init())
         await context.add_cookies(credentials.to_pw_cookies())
-        async with await context.new_page() as page:
-            resp = await page.goto("https://backend.wplace.live/me", wait_until="networkidle")
-            if not resp:
-                raise FetchFailed("Failed to fetch user info")
-            text = await resp.text()
-            cookies = await context.cookies()
+        yield context
 
-            update = False
-            for ck in cookies:
-                if ck.get("domain") != ".backend.wplace.live":
-                    continue
-                ck_name = ck.get("name")
-                ck_value = ck.get("value", "")
-                if ck_name == "cf_clearance":
-                    update = update or (
-                        ck_value != credentials.cf_clearance.get_secret_value()
-                        if credentials.cf_clearance is not None
-                        else True
-                    )
-                    credentials.cf_clearance = SecretStr(ck_value)
-                elif ck_name == "j":
-                    update = update or ck_value != credentials.token.get_secret_value()
-                    credentials.token = SecretStr(ck_value)
-            if update:
-                logger.info("Updated credentials from fetched cookies")
-                Config.load().save()
 
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as e:
-            logger.opt(colors=True).warning(f"Failed to decode user info JSON: {Highlight.apply(text)}")
-            raise FetchFailed("Failed to decode user info") from e
+async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
+    async with _headless_context(credentials) as context, await context.new_page() as page:
+        resp = await page.goto("https://backend.wplace.live/me", wait_until="networkidle")
+        if not resp:
+            raise FetchFailed("Failed to fetch user info")
+        text = await resp.text()
+        cookies = await context.cookies()
 
-        try:
-            return WplaceUserInfo.model_validate(data)
-        except ValueError as e:
-            logger.opt(colors=True).warning(f"Failed to parse user info: {Highlight.apply(data)}")
-            raise FetchFailed("Failed to parse user info") from e
+        update = False
+        for ck in cookies:
+            if ck.get("domain") != ".backend.wplace.live":
+                continue
+            ck_name = ck.get("name")
+            ck_value = ck.get("value", "")
+            if ck_name == "cf_clearance":
+                update = update or (
+                    ck_value != credentials.cf_clearance.get_secret_value()
+                    if credentials.cf_clearance is not None
+                    else True
+                )
+                credentials.cf_clearance = SecretStr(ck_value)
+            elif ck_name == "j":
+                update = update or ck_value != credentials.token.get_secret_value()
+                credentials.token = SecretStr(ck_value)
+        if update:
+            logger.info("Updated credentials from fetched cookies")
+            Config.load().save()
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        logger.opt(colors=True).warning(f"Failed to decode user info JSON: {Highlight.apply(text)}")
+        raise FetchFailed("Failed to decode user info") from e
+
+    try:
+        return WplaceUserInfo.model_validate(data)
+    except ValueError as e:
+        logger.opt(colors=True).warning(f"Failed to parse user info: {Highlight.apply(data)}")
+        raise FetchFailed("Failed to parse user info") from e
+
+
+async def get_pixels_painted_today(credentials: WplaceCredentials) -> int:
+    async with _headless_context(credentials) as context, await context.new_page() as page:
+        resp = await page.goto("https://backend.wplace.live/me/pixels-painted-today", wait_until="networkidle")
+        if not resp:
+            raise FetchFailed("Failed to fetch user info")
+        text = await resp.text()
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        logger.opt(colors=True).warning(f"Failed to decode pixels painted today JSON: {Highlight.apply(text)}")
+        raise FetchFailed("Failed to decode pixels painted today") from e
+
+    try:
+        return int(data["paintedToday"])
+    except (KeyError, TypeError) as e:
+        logger.opt(colors=True).warning(f"Failed to parse pixels painted today: {Highlight.apply(data)}")
+        raise FetchFailed("Failed to parse pixels painted today") from e
 
 
 class ZoomLevel(int, Enum):
