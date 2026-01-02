@@ -85,26 +85,6 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
         raise FetchFailed("Failed to parse user info") from e
 
 
-async def get_pixels_painted_today(credentials: WplaceCredentials) -> int:
-    async with _headless_context(credentials) as context, await context.new_page() as page:
-        resp = await page.goto("https://backend.wplace.live/me/pixels-painted-today", wait_until="networkidle")
-        if not resp:
-            raise FetchFailed("Failed to fetch user info")
-        text = await resp.text()
-
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.opt(colors=True).warning(f"Failed to decode pixels painted today JSON: {Highlight.apply(text)}")
-        raise FetchFailed("Failed to decode pixels painted today") from e
-
-    try:
-        return int(data["paintedToday"])
-    except (KeyError, TypeError) as e:
-        logger.opt(colors=True).warning(f"Failed to parse pixels painted today: {Highlight.apply(data)}")
-        raise FetchFailed("Failed to parse pixels painted today") from e
-
-
 class ZoomLevel(int, Enum):
     Z_16 = 16.0
     Z_15 = 15.0
