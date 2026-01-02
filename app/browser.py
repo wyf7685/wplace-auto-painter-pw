@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 PLAYWRIGHT_MAX_IDLE_TIME = 60 * 30  # 30 minutes
 _playwright: Playwright | None = None
 _last_used: datetime | None = None
+_in_use: int = 0
 
 
 async def _get_playwright() -> Playwright:
@@ -57,7 +58,7 @@ def _proxy_settings() -> ProxySettings | None:
 
 @contextlib.asynccontextmanager
 async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
-    global _last_used
+    global _last_used, _in_use
 
     pw = await _get_playwright()
     name = display = Config.load().browser
@@ -69,8 +70,13 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
     logger.opt(colors=True).debug(f"Launching browser <g>{display}</> with <c>headless</>=<y>{headless}</>")
     browser = await browser_type.launch(channel=channel, headless=headless, proxy=_proxy_settings())
     async with browser:
-        yield browser
-        _last_used = datetime.now()
+        try:
+            _in_use += 1
+            _last_used = datetime.now()
+            yield browser
+        finally:
+            _in_use -= 1
+            _last_used = datetime.now()
 
 
 async def shutdown_playwright() -> None:
@@ -85,7 +91,8 @@ async def shutdown_idle_playwright_loop() -> None:
     while True:
         await anyio.sleep(PLAYWRIGHT_MAX_IDLE_TIME // 4)
         if (
-            _playwright is not None
+            _in_use > 0
+            and _playwright is not None
             and _last_used is not None
             and (datetime.now() - _last_used).total_seconds() >= PLAYWRIGHT_MAX_IDLE_TIME
         ):
