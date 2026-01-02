@@ -93,6 +93,9 @@ class WplacePixelCoords:
         lat, lon = self.to_lat_lon()
         return f"https://wplace.live/?lat={lat}&lng={lon}&zoom={zoom}"
 
+    def to_blue_marble_str(self) -> str:
+        return f"(Tl X: {self.tlx}, Tl Y: {self.tly}, Px X: {self.pxx}, Px Y: {self.pxy})"
+
     @classmethod
     def from_lat_lon(cls, lat: float, lon: float) -> WplacePixelCoords:
         # 计算墨卡托坐标
