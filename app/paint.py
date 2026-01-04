@@ -2,6 +2,7 @@ import contextlib
 import hashlib
 import random
 import time
+import uuid
 from collections.abc import AsyncGenerator, Iterable
 from datetime import datetime, timedelta
 from typing import Any
@@ -128,6 +129,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
             "a": pixels_to_paint_arg(template, pixels),
             "f": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
             "r": resolved_js,
+            "t": f"data-{uuid.uuid4().hex[:8]}",
         }
 
         coord = template.get_coords()[0].offset(*pixels[0][:2])
