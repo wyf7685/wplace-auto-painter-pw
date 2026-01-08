@@ -128,6 +128,9 @@ class WplacePixelCoords:
         (x1, y1), (x2, y2) = coord1.to_abs(), coord2.to_abs()
         return x2 - x1 + 1, y2 - y1 + 1
 
+    def tuple(self) -> tuple[int, int, int, int]:
+        return self.tlx, self.tly, self.pxx, self.pxy
+
 
 def find_color_name(rgba: tuple[int, int, int, int]) -> str:
     if rgba[3] == 0:

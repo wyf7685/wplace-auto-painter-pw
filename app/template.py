@@ -2,11 +2,9 @@ import io
 from typing import Protocol
 
 import anyio
-import anyio.to_thread
 import bot7685_ext.wplace
 import httpx
-from bot7685_ext.wplace import ColorEntry
-from PIL import Image
+from bot7685_ext.wplace import ColorEntry, compose_tiles
 
 from .config import Config, TemplateConfig
 from .log import logger
@@ -57,33 +55,13 @@ async def download_preview(
             tg.start_soon(fetch_tile, x, y)
     logger.info(f"Downloaded <g>{len(tile_imgs)}</> tiles (<y>{perf.elapsed:.2f}</>s)")
 
-    def create_image() -> bytes:
-        bg_color = (0, 0, 0, 0)
-        if background is not None and (bg_rgb := parse_rgb_str(background)):
-            bg_color = (*bg_rgb, 255)
-
-        img = Image.new("RGBA", coord1.size_with(coord2), bg_color)
-        for (tx, ty), tile_bytes in tile_imgs.items():
-            tile_img = Image.open(io.BytesIO(tile_bytes)).convert("RGBA")
-            src_box = (
-                0 if tx != coord1.tlx else coord1.pxx,
-                0 if ty != coord1.tly else coord1.pxy,
-                1000 if tx != coord2.tlx else coord2.pxx + 1,
-                1000 if ty != coord2.tly else coord2.pxy + 1,
-            )
-            paste_pos = (
-                (tx - coord1.tlx) * 1000 - (0 if tx == coord1.tlx else coord1.pxx),
-                (ty - coord1.tly) * 1000 - (0 if ty == coord1.tly else coord1.pxy),
-            )
-            src = tile_img.crop(src_box)
-            img.paste(src, paste_pos, src.getchannel("A"))
-
-        with io.BytesIO() as output:
-            img.save(output, format="PNG")
-            return output.getvalue()
-
     with PerfLog.for_action("creating image") as perf:
-        image = await anyio.to_thread.run_sync(create_image)
+        image = await compose_tiles(
+            [*tile_imgs.items()],
+            coord1.tuple(),
+            coord2.tuple(),
+            parse_rgb_str(background) if background else None,
+        )
     logger.info(f"Created image in <y>{perf.elapsed:.2f}</>s")
     return image
 
