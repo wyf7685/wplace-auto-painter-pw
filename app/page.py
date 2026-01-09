@@ -59,14 +59,14 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
             ck_name = ck.get("name")
             ck_value = ck.get("value", "")
             if ck_name == "cf_clearance":
-                update = update or (
+                update |= (
                     ck_value != credentials.cf_clearance.get_secret_value()
                     if credentials.cf_clearance is not None
                     else True
                 )
                 credentials.cf_clearance = SecretStr(ck_value)
             elif ck_name == "j":
-                update = update or ck_value != credentials.token.get_secret_value()
+                update |= ck_value != credentials.token.get_secret_value()
                 credentials.token = SecretStr(ck_value)
         if update:
             logger.info("Updated credentials from fetched cookies")
