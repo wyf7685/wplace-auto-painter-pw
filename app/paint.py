@@ -11,6 +11,7 @@ import anyio
 from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
+from app.ansi_image import draw_ansi
 from app.purchase import do_purchase
 from app.utils import is_token_expired
 
@@ -113,6 +114,9 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
     if (selected := await select_paint_color(user, user_info)) is None:
         return
     template, entries = selected
+
+    logger.info("Template preview:")
+    draw_ansi(template.load_im())
 
     async with claim_painting_color(entry.name for entry in entries):
         groups = await group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels], 100, 30.0)
