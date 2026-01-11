@@ -95,13 +95,13 @@ async def select_paint_color(
     if user.selected_area is not None:
         logger.info(f"Using selected area for painting: <g>{user.selected_area}</>")
         template = user.template.crop(user.selected_area)
-        if entry := await select(template):
-            return template, entry
+        if entries := await select(template):
+            return template, entries
 
         logger.warning("No available colors to paint in the selected area, falling back to full template.")
 
-    if entry := await select(user.template):
-        return user.template, entry
+    if entries := await select(user.template):
+        return user.template, entries
 
     logger.warning("No available colors to paint the template.")
     return None
@@ -119,7 +119,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
     draw_ansi(template.load_im())
 
     async with claim_painting_color(entry.name for entry in entries):
-        groups = await group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels], 100, 30.0)
+        groups = await group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])
         pixels = sorted((p for g in groups for p in g), key=lambda p: user.preferred_colors_rank[p[2]])
         pixels_to_paint = min(int(user_info.charges.count), len(pixels))
         if pixels_to_paint <= 0:
@@ -178,10 +178,7 @@ async def paint_loop(user: UserConfig) -> None:
                 raise ShoudQuit("Token expired")
 
             user_info = await get_user_info(user)
-            if user_info.charges.count < 30:
-                logger.warning(f"{prefix} Not enough charges to paint pixels.")
-                wait_secs = max(600.0, user_info.charges.remaining_secs() - random.uniform(10, 20) * 60)
-            else:
+            if should_paint := user_info.charges.count >= user.min_paint_charges:
                 await paint_pixels(user, user_info)
                 logger.info(f"{prefix} Painting completed, refetching user info...")
                 user_info = await get_user_info(user)
@@ -190,6 +187,10 @@ async def paint_loop(user: UserConfig) -> None:
                     user_info.charges.remaining_secs() * random.uniform(0.85, 0.95),
                     60 * 60 * 4 + random.uniform(-10, 10) * 60,
                 )
+            else:
+                logger.warning(f"{prefix} Not enough charges to paint pixels.")
+                logger.warning(f"{prefix} Minimum required charges: <y>{user.min_paint_charges}</>")
+                wait_secs = max(600.0, user_info.charges.remaining_secs() - random.uniform(10, 20) * 60)
 
             if user.auto_purchase is not None:
                 logger.info(f"{prefix} Checking auto-purchase: {Highlight.apply(user.auto_purchase)}")
@@ -204,9 +205,22 @@ async def paint_loop(user: UserConfig) -> None:
                     60 * 60 * 4 + random.uniform(-10, 10) * 60,
                 )
 
-            if user_info.charges.count >= 30:
-                logger.info(f"{prefix} Still have enough charges to paint, continuing immediately.")
+            if user_info.charges.count >= user.min_paint_charges:
+                logger.info(
+                    f"{prefix} Still have enough charges to paint (>=<y>{user.min_paint_charges}</>), "
+                    "continuing immediately."
+                )
                 continue
+
+            if should_paint and user.selected_area is not None:
+                template = user.template.crop(user.selected_area)
+                diff = await calc_template_diff(template, include_pixels=False)
+                if diff := sorted(diff, key=lambda e: e.count, reverse=True)[:5]:
+                    logger.info(f"{prefix} Top {len(diff)} colors needed in selected area:")
+                    for idx, entry in enumerate(diff, 1):
+                        logger.info(f" {idx}. <g>{entry.name}</>: <y>{entry.count}</> pixels")
+                else:
+                    logger.warning(f"{prefix} Selected area is fully painted, consider changing it.")
 
             wakeup_at = datetime.now() + timedelta(seconds=wait_secs)
             logger.info(f"{prefix} Sleeping for <y>{wait_secs / 60:.2f}</> minutes...")

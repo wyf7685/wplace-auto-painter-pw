@@ -123,6 +123,10 @@ class UserConfig(BaseModel):
         default=None,
         description="Optional automatic charge purchasing configuration",
     )
+    min_paint_charges: int = Field(
+        default=30,
+        description="Minimum number of charges required to start painting",
+    )
 
     @functools.cached_property
     def preferred_colors_rank(self) -> list[int]:
