@@ -1,5 +1,4 @@
 import io
-from typing import Protocol
 
 import anyio
 import bot7685_ext.wplace
@@ -15,14 +14,6 @@ from .utils import (
     with_retry,
     with_semaphore,
 )
-
-type RGBA = tuple[int, int, int, int]
-
-
-class PixelAccess[TPixel](Protocol):
-    def __getitem__(self, xy: tuple[int, int]) -> TPixel: ...
-    def __setitem__(self, xy: tuple[int, int], color: TPixel) -> None: ...
-
 
 logger = logger.opt(colors=True)
 
