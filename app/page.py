@@ -53,21 +53,16 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
         cookies = await context.cookies()
 
         update = False
-        for ck in cookies:
-            if ck.get("domain") != ".backend.wplace.live":
-                continue
-            ck_name = ck.get("name")
-            ck_value = ck.get("value", "")
-            if ck_name == "cf_clearance":
-                update |= (
-                    ck_value != credentials.cf_clearance.get_secret_value()
-                    if credentials.cf_clearance is not None
-                    else True
-                )
-                credentials.cf_clearance = SecretStr(ck_value)
-            elif ck_name == "j":
-                update |= ck_value != credentials.token.get_secret_value()
-                credentials.token = SecretStr(ck_value)
+        for ck in filter(lambda ck: ck.get("domain") == ".backend.wplace.live", cookies):
+            match (ck.get("name"), ck.get("value", "")):
+                case ("cf_clearance", ck_val) if (
+                    credentials.cf_clearance is None or ck_val != credentials.cf_clearance.get_secret_value()
+                ):
+                    credentials.cf_clearance = SecretStr(ck_val)
+                    update = True
+                case ("j", ck_val) if ck_val != credentials.token.get_secret_value():
+                    credentials.token = SecretStr(ck_val)
+                    update = True
         if update:
             logger.info("Updated credentials from fetched cookies")
             Config.load().save()
@@ -86,8 +81,8 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
 
 
 class ZoomLevel(int, Enum):
-    Z_16 = 16.0
-    Z_15 = 15.0
+    Z_16 = 16
+    Z_15 = 15
 
 
 _ZOOM_PIXEL_SIZE: dict[ZoomLevel, float] = {
@@ -130,8 +125,6 @@ class WplacePage:
 
                 self.context = context
                 self.page = page
-                self._current_coord = self.coord.offset(0, 0)
-
                 try:
                     yield self
                 finally:
@@ -152,10 +145,6 @@ class WplacePage:
         await self.find_and_close_modal()
         async with PaintPanel(self.page, self._btn_id) as panel:
             yield panel
-
-    @property
-    def current_coord(self) -> WplacePixelCoords:
-        return self._current_coord
 
     @property
     def current_page_viewport(self) -> tuple[int, int]:
@@ -183,7 +172,6 @@ class WplacePage:
         )
         await anyio.sleep(random.uniform(0.1, 0.3))
         await self.page.mouse.up(button="left")
-        self._current_coord = self._current_coord.offset(dx, dy)
 
     async def move_by_pixel(self, dx: int, dy: int) -> None:
         step_size = 30
@@ -254,7 +242,7 @@ class PaintPanel(BasePanel):
 
         logger.debug(f"Found color button: {color_btn!r}")
         await color_btn.click()
-        logger.opt(colors=True).info(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
+        logger.opt(colors=True).debug(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
 
     async def submit(self) -> None:
         selector = f"#{self._btn_id}"
@@ -265,8 +253,6 @@ class PaintPanel(BasePanel):
         logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
         await btn.click()
         logger.info("Clicked submit button")
-        with anyio.fail_after(30):
-            while await self.page.query_selector(selector):
-                logger.debug("Waiting for submit to complete...")
-                await anyio.sleep(1)
+        logger.debug("Waiting for submit to complete...")
+        await self.page.wait_for_selector(selector, timeout=30 * 1000, state="detached")
         logger.info("Submit completed")
