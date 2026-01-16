@@ -1,3 +1,4 @@
+import contextlib
 import dataclasses
 import json
 import shutil
@@ -21,6 +22,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -168,6 +170,31 @@ class ConfigInitWindow(QWidget):
         colors_layout.addLayout(colors_btn_layout)
         colors_box.setLayout(colors_layout)
 
+        # 自动购买布局
+        purchase_box = QGroupBox()
+        purchase_box.setTitle("自动购买 (auto_purchase)")
+        purchase_layout = QHBoxLayout()
+        self.auto_purchase_cb = QComboBox()
+        self.auto_purchase_cb.addItems(["不买", "买上限", "买余额"])
+        self.auto_purchase_cb.setCurrentIndex(0)
+        self.ap_target_spin = QSpinBox()
+        self.ap_target_spin.setRange(0, 1000000)
+        self.ap_target_spin.setToolTip("目标上限 (target_max)")
+        self.ap_retain_spin = QSpinBox()
+        self.ap_retain_spin.setRange(0, 1000000000)
+        self.ap_retain_spin.setToolTip("保留水滴 (retain_droplets)")
+        purchase_layout.addWidget(self.auto_purchase_cb)
+        purchase_layout.addWidget(QLabel("目标上限:"))
+        purchase_layout.addWidget(self.ap_target_spin)
+        purchase_layout.addWidget(QLabel("保留水滴:"))
+        purchase_layout.addWidget(self.ap_retain_spin)
+        purchase_box.setLayout(purchase_layout)
+
+        # 连接自动购买选项切换
+        self.auto_purchase_cb.currentIndexChanged.connect(self.on_auto_purchase_changed)
+        # 初始隐藏/显示正确的控件
+        # 先调用以设置初始可见性
+
         # 模板布局
         template_box = QGroupBox()
         template_box.setTitle("模板图片 (template)")
@@ -194,6 +221,8 @@ class ConfigInitWindow(QWidget):
         user_config_left.addWidget(cred_box)
         user_config_left.addSpacing(10)
         user_config_left.addWidget(colors_box)
+        user_config_left.addSpacing(10)
+        user_config_left.addWidget(purchase_box)
         user_config_layout.addLayout(user_config_left)
         user_config_layout.addSpacing(10)
         user_config_layout.addWidget(template_box)
@@ -214,6 +243,9 @@ class ConfigInitWindow(QWidget):
 
         ensure_data_dirs()
         self.load_config()
+        # Ensure auto-purchase widgets visibility matches current selection
+        with contextlib.suppress(Exception):
+            self.on_auto_purchase_changed(self.auto_purchase_cb.currentIndex())
         # track last selected row for auto-save behavior
         self.last_selected_row = self.users_list.currentRow() if self.users_list.count() > 0 else -1
 
@@ -339,6 +371,19 @@ class ConfigInitWindow(QWidget):
 
         # 写入选区信息（如果有）到 user.selected_area
         user["selected_area"] = selected_area_val
+
+        # 自动购买配置
+        idx = self.auto_purchase_cb.currentIndex()
+        if idx == 0:
+            user.pop("auto_purchase", None)
+        elif idx == 1:
+            user["auto_purchase"] = {
+                "type": "max_charges",
+                "target_max": int(self.ap_target_spin.value()),
+                "retain_droplets": int(self.ap_retain_spin.value()),
+            }
+        else:
+            user["auto_purchase"] = {"type": "charges", "retain_droplets": int(self.ap_retain_spin.value())}
 
         # 保存颜色偏好
         preferred_colors = []
@@ -535,6 +580,28 @@ class ConfigInitWindow(QWidget):
             for color in preferred_colors:
                 self.colors_list.addItem(color)
 
+        # 自动购买配置加载
+        ap = u.get("auto_purchase")
+        if not ap:
+            self.auto_purchase_cb.setCurrentIndex(0)
+            self.ap_target_spin.setValue(0)
+            self.ap_retain_spin.setValue(0)
+        else:
+            t = ap.get("type")
+            if t == "max_charges":
+                self.auto_purchase_cb.setCurrentIndex(1)
+                target = ap.get("target_max")
+                if isinstance(target, int):
+                    self.ap_target_spin.setValue(target)
+                retain = ap.get("retain_droplets", 0)
+                if isinstance(retain, int):
+                    self.ap_retain_spin.setValue(retain)
+            elif t == "charges":
+                self.auto_purchase_cb.setCurrentIndex(2)
+                retain = ap.get("retain_droplets", 0)
+                if isinstance(retain, int):
+                    self.ap_retain_spin.setValue(retain)
+
         # 如果存在每用户模板图片则加载
         if file_id := tmpl.get("file_id"):
             path = TEMPLATES_DIR / f"{file_id}.png"
@@ -584,6 +651,24 @@ class ConfigInitWindow(QWidget):
             item = self.colors_list.takeItem(current_row)
             self.colors_list.insertItem(current_row + 1, item)
             self.colors_list.setCurrentRow(current_row + 1)
+
+    def on_auto_purchase_changed(self, idx: int) -> None:
+        """根据下拉选择显示或隐藏相关输入控件。
+
+        idx: 0 = 不买, 1 = 买上限, 2 = 买余额
+        """
+        try:
+            if idx == 0:
+                self.ap_target_spin.setVisible(False)
+                self.ap_retain_spin.setVisible(False)
+            elif idx == 1:
+                self.ap_target_spin.setVisible(True)
+                self.ap_retain_spin.setVisible(True)
+            else:
+                self.ap_target_spin.setVisible(False)
+                self.ap_retain_spin.setVisible(True)
+        except Exception:
+            logger.exception("on_auto_purchase_changed failed")
 
 
 def gui_main() -> None:
