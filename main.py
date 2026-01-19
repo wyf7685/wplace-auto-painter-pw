@@ -7,7 +7,7 @@ import anyio
 
 from app.config import CONFIG_FILE, Config, export_config_schema
 from app.log import logger
-from app.update import check_update
+from app.utils.update import check_update
 
 
 def launch_config_gui() -> None:
@@ -65,7 +65,7 @@ async def main() -> None:
 
     from app.browser import shutdown_idle_playwright_loop, shutdown_playwright
     from app.paint import setup_paint
-    from app.update import check_update_loop
+    from app.utils.update import check_update_loop
 
     async def setup_loops() -> None:
         try:

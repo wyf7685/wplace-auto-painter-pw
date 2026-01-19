@@ -7,3 +7,4 @@ from .func import requests_proxies as requests_proxies
 from .func import run_sync as run_sync
 from .func import with_retry as with_retry
 from .func import with_semaphore as with_semaphore
+from .highlight import Highlight as Highlight

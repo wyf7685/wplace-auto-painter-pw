@@ -14,10 +14,9 @@ from app.assets import assets
 from app.browser import get_browser
 from app.config import Config, WplaceCredentials
 from app.exception import FetchFailed, ShoudQuit
-from app.highlight import Highlight
 from app.log import escape_tag, logger
 from app.schemas import WplaceUserInfo
-from app.utils import WplacePixelCoords
+from app.utils import Highlight, WplacePixelCoords
 
 if TYPE_CHECKING:
     from playwright.async_api import BrowserContext, Page

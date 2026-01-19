@@ -11,17 +11,16 @@ import anyio
 from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
-from app.ansi_image import draw_ansi
 from app.config import Config, TemplateConfig, UserConfig
 from app.exception import ShoudQuit
-from app.highlight import Highlight
 from app.log import escape_tag, logger
 from app.page import WplacePage, fetch_user_info
 from app.purchase import do_purchase
 from app.resolver import JsResolver
 from app.schemas import WplaceUserInfo
 from app.template import calc_template_diff
-from app.utils import is_token_expired
+from app.utils import Highlight, is_token_expired
+from app.utils.ansi_image import draw_ansi
 
 logger = logger.opt(colors=True)
 COLORS_CLAIMER_LOCK = anyio.Lock()

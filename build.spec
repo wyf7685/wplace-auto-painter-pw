@@ -45,14 +45,12 @@ def write_commit_hash() -> None:
     import subprocess
     from pathlib import Path
 
-    res = subprocess.run(
+    commit_hash = subprocess.run(
         ["git", "rev-parse", "HEAD"],  # noqa: S607
         capture_output=True,
         text=True,
         check=True,
-    )
-
-    commit_hash = res.stdout.strip()
+    ).stdout.strip()
     Path("app/assets/.git_commit_hash").write_text(commit_hash, encoding="utf-8")
 
 
