@@ -215,7 +215,7 @@ async def paint_loop(user: UserConfig) -> None:
             if should_paint and user.selected_area is not None:
                 template = user.template.crop(user.selected_area)
                 diff = await calc_template_diff(template, include_pixels=False)
-                if diff := sorted(diff, key=lambda e: e.count, reverse=True)[:5]:
+                if diff := sorted(filter(lambda e: e.count, diff), key=lambda e: e.count, reverse=True)[:5]:
                     logger.info(f"{prefix} Top {len(diff)} colors needed in selected area:")
                     for idx, entry in enumerate(diff, 1):
                         logger.info(f" {idx}. <g>{entry.name}</>: <y>{entry.count}</> pixels")

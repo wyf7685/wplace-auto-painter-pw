@@ -1,7 +1,7 @@
 import functools
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Literal, Self
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from bot7685_ext.wplace.consts import COLORS_ID, ColorName
 from pydantic import BaseModel, Field, SecretStr
@@ -137,7 +137,7 @@ class UserConfig(BaseModel):
 
 
 class Config(BaseModel):
-    _cache: ClassVar[Self | None] = None
+    _cache: ClassVar[Config | None] = None
 
     users: list[UserConfig] = Field(description="List of user configurations")
     browser: Literal["chromium", "firefox", "webkit", "chrome", "msedge"] = Field(
@@ -150,7 +150,7 @@ class Config(BaseModel):
     check_update: bool = Field(default=True, description="Whether to check for updates")
 
     @classmethod
-    def load(cls) -> Self:
+    def load(cls) -> Config:
         if cls._cache is None:
             cls._cache = cls.model_validate_json(CONFIG_FILE.read_text("utf-8"), extra="ignore")
         return cls._cache
