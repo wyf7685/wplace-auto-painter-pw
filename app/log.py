@@ -50,7 +50,7 @@ logger.remove()
 def _filter() -> Callable[[Record], bool]:
     @functools.cache
     def _level() -> int:
-        from .config import Config
+        from app.config import Config
 
         return logger.level(Config.load().log_level).no
 

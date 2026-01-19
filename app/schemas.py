@@ -8,7 +8,7 @@ from typing import Any
 from bot7685_ext.wplace.consts import FREE_COLORS, PAID_COLORS
 from pydantic import BaseModel
 
-from .utils import WplacePixelCoords
+from app.utils import WplacePixelCoords
 
 
 class Charges(BaseModel):

@@ -7,11 +7,10 @@ import anyio.to_thread
 import cloudscraper
 import httpx
 
+from app.config import DATA_DIR, Config
+from app.exception import ShoudQuit
 from app.log import escape_tag, logger
-
-from .config import DATA_DIR, Config
-from .exception import ShoudQuit
-from .utils import requests_proxies, with_semaphore
+from app.utils import requests_proxies, with_semaphore
 
 CHUNKS_DIR = DATA_DIR / "js_chunks"
 CHUNK_ETAG_FILE = CHUNKS_DIR / "etag.json"

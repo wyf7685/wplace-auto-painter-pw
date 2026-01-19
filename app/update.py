@@ -5,8 +5,8 @@ from datetime import datetime
 import anyio
 import httpx
 
-from .assets import ASSETS_DIR
-from .log import logger
+from app.assets import ASSETS_DIR
+from app.log import logger
 
 IS_FROZEN = getattr(sys, "frozen", False)
 OWNER = "wyf7685"

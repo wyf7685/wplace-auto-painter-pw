@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 from pydantic import BaseModel
 from tarina import LRU
 
-from .log import escape_tag
+from app.log import escape_tag
 
 DATETIME_FIELDS = [
     "year",

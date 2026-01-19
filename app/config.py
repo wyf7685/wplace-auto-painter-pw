@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 from bot7685_ext.wplace.consts import COLORS_ID, ColorName
 from pydantic import BaseModel, Field, SecretStr
 
-from .utils import SecretStrEncoder, WplacePixelCoords
+from app.utils import SecretStrEncoder, WplacePixelCoords
 
 if TYPE_CHECKING:
     from PIL import Image
