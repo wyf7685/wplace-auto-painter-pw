@@ -13,7 +13,7 @@ from pydantic import SecretStr
 from app.assets import assets
 from app.browser import get_browser
 from app.config import Config, WplaceCredentials
-from app.exception import FetchFailed, ShoudQuit
+from app.exception import ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
 from app.schemas import WplaceUserInfo
 from app.utils import Highlight, WplacePixelCoords
@@ -120,7 +120,9 @@ class WplacePage:
                     await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10000, state="visible")
                     await page.wait_for_selector(f"#{self._btn_id}", timeout=5000, state="attached")
                 except Exception as e:
-                    raise ShoudQuit("Required buttons not found on the page, is the injected script broken?") from e
+                    raise ElementNotFound(
+                        "Required buttons not found on the page, is the injected script broken?"
+                    ) from e
 
                 self.context = context
                 self.page = page
@@ -217,7 +219,7 @@ class PaintPanel(BasePanel):
     async def open(self) -> None:
         paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)
         if paint_btn is None:
-            raise ShoudQuit("No paint button found on the page")
+            raise ElementNotFound("No paint button found on the page")
 
         logger.debug(f"Found paint button: {paint_btn!r}")
         await paint_btn.click()
@@ -237,7 +239,7 @@ class PaintPanel(BasePanel):
     async def select_color(self, color_id: int) -> None:
         color_btn = await self.page.wait_for_selector(f"#color-{color_id}", timeout=5000, state="visible")
         if color_btn is None:
-            raise ShoudQuit(f"Color button with ID {color_id} not found on the page")
+            raise ElementNotFound(f"Color button with ID {color_id} not found on the page")
 
         logger.debug(f"Found color button: {color_btn!r}")
         await color_btn.click()
@@ -247,7 +249,7 @@ class PaintPanel(BasePanel):
         selector = f"#{self._btn_id}"
         btn = await self.page.query_selector(selector)
         if btn is None:
-            raise ShoudQuit("Submit button not found, is the injected script broken?")
+            raise ElementNotFound("Submit button not found, is the injected script broken?")
 
         logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
         await btn.click()

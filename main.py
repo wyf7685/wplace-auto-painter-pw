@@ -6,6 +6,7 @@ from pathlib import Path
 import anyio
 
 from app.config import CONFIG_FILE, Config, export_config_schema
+from app.exception import AppException
 from app.log import logger
 from app.utils.update import check_update
 
@@ -83,6 +84,8 @@ async def main() -> None:
                 outer.start_soon(check_update_loop)
     except* KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
+    except* AppException:
+        logger.exception("Uncaught application exception occurred")
     except* Exception:
         logger.exception("Unexpected error occurred")
     finally:

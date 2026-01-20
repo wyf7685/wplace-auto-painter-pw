@@ -12,11 +12,11 @@ from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
 from app.config import Config, TemplateConfig, UserConfig
-from app.exception import ShoudQuit
+from app.exception import PaintFinished, ShouldQuit, TokenExpired
 from app.log import escape_tag, logger
 from app.page import WplacePage, fetch_user_info
 from app.purchase import do_purchase
-from app.resolver import JsResolver
+from app.resolver import resolve_js
 from app.schemas import WplaceUserInfo
 from app.template import calc_template_diff
 from app.utils import Highlight, is_token_expired
@@ -106,11 +106,11 @@ async def select_paint_color(
 
 
 async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
-    resolved_js = await JsResolver().resolve()
+    resolved_js = await resolve_js()
     logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
 
     if (selected := await select_paint_color(user, user_info)) is None:
-        raise ShoudQuit("No colors available to paint")
+        raise PaintFinished("No colors available to paint")
     template, entries = selected
 
     logger.info("Template preview:")
@@ -173,7 +173,7 @@ async def paint_loop(user: UserConfig) -> None:
 
             if is_token_expired(user.credentials.token.get_secret_value()):
                 logger.warning(f"{prefix} Token expired, stopping paint loop.")
-                raise ShoudQuit("Token expired")
+                raise TokenExpired("Token expired")
 
             user_info = await get_user_info(user)
             if should_paint := user_info.charges.count >= user.min_paint_charges:
@@ -225,7 +225,7 @@ async def paint_loop(user: UserConfig) -> None:
             logger.info(f"{prefix} Next paint cycle at <g>{wakeup_at:%Y-%m-%d %H:%M:%S}</>.")
             await anyio.sleep(wait_secs)
 
-        except ShoudQuit:
+        except ShouldQuit:
             logger.opt(colors=True, exception=True).warning(f"{prefix} Received shutdown signal, exiting paint loop.")
             break
 
