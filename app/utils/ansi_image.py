@@ -5,11 +5,10 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from typing import Protocol, TextIO
 
-    from PIL import Image
+    from PIL.Image import Image
 
     type Cols = int
     type Rows = int
-
     type RGBA = tuple[int, int, int, int]
 
     class PixelAccess[TPixel](Protocol):
@@ -18,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def draw_ansi(
-    img: Image.Image,
+    img: Image,
     file: TextIO = sys.stdout,
     max_size: tuple[Cols, Rows] | None = None,
 ) -> None:

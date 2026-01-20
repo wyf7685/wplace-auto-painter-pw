@@ -3,13 +3,15 @@ import inspect
 import logging
 import re
 import sys
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import loguru
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from loguru import Logger, Record
+
 
 logger: Logger = loguru.logger
 

@@ -1,0 +1,19 @@
+{
+  "configurations": [
+    {
+      "name": "调试",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "main.py",
+      "justMyCode": false
+    },
+    {
+      "name": "调试 - GUI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "main.py",
+      "args": ["config"],
+      "justMyCode": true
+    }
+  ]
+}

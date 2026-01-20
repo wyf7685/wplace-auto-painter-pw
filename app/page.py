@@ -2,7 +2,6 @@ import abc
 import contextlib
 import json
 import random
-from collections.abc import AsyncGenerator
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Self, override
 
@@ -19,6 +18,8 @@ from app.schemas import WplaceUserInfo
 from app.utils import Highlight, WplacePixelCoords
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
     from playwright.async_api import BrowserContext, Page
 
 

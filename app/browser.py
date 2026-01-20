@@ -1,7 +1,6 @@
 import contextlib
 import functools
 import re
-from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -11,7 +10,10 @@ from app.config import Config
 from app.log import logger
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
     from playwright.async_api import Browser, BrowserType, Playwright, ProxySettings
+
 
 PLAYWRIGHT_MAX_IDLE_TIME = 60 * 30  # 30 minutes
 _playwright: Playwright | None = None

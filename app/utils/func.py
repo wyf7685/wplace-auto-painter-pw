@@ -5,9 +5,8 @@ import inspect
 import threading
 import time
 import types
-from collections.abc import Callable, Coroutine
 from json import JSONEncoder
-from typing import Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import anyio
 import anyio.to_thread
@@ -15,9 +14,14 @@ from pydantic import BaseModel, SecretStr
 
 from app.log import escape_tag, logger
 
-type AsyncCallable[**P, R] = Callable[P, Coroutine[None, None, R]]
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
+    type AsyncCallable[**P, R] = Callable[P, Coroutine[None, None, R]]
+
 
 UTC8 = dt.timezone(dt.timedelta(hours=8))
+
 
 def with_retry[**P, R](
     *exc: type[Exception],

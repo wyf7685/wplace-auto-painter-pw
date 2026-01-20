@@ -1,13 +1,15 @@
 import datetime
 import functools
-from collections.abc import Callable, Iterable
 from enum import Enum
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel
 from tarina import LRU
 
 from app.log import escape_tag
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 DATETIME_FIELDS = [
     "year",

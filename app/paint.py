@@ -3,9 +3,8 @@ import hashlib
 import random
 import time
 import uuid
-from collections.abc import AsyncGenerator, Iterable
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import anyio
 from bot7685_ext.wplace import ColorEntry, group_adjacent
@@ -21,6 +20,10 @@ from app.schemas import WplaceUserInfo
 from app.template import calc_template_diff
 from app.utils import Highlight, is_token_expired
 from app.utils.ansi_image import draw_ansi
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Iterable
+
 
 logger = logger.opt(colors=True)
 COLORS_CLAIMER_LOCK = anyio.Lock()

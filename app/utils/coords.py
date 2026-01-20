@@ -1,9 +1,12 @@
 import datetime as dt
 import math
 import re
-from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import NamedTuple, Self
+from typing import TYPE_CHECKING, NamedTuple, Self
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 
 UTC8 = dt.timezone(dt.timedelta(hours=8))
 
