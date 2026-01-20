@@ -110,7 +110,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
     logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
 
     if (selected := await select_paint_color(user, user_info)) is None:
-        return
+        raise ShoudQuit("No colors available to paint")
     template, entries = selected
 
     logger.info("Template preview:")
