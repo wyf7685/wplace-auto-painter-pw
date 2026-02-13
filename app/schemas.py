@@ -26,9 +26,15 @@ class FavoriteLocation(BaseModel):
     latitude: float
     longitude: float
 
-    @property
-    def coords(self) -> WplacePixelCoords:
+    def as_coords(self) -> WplacePixelCoords:
         return WplacePixelCoords.from_lat_lon(self.latitude, self.longitude)
+
+
+class Badge(BaseModel):
+    id: int
+    imageUrl: str
+    name: str
+    rarity: str
 
 
 class WplaceUserInfo(BaseModel):
@@ -36,9 +42,14 @@ class WplaceUserInfo(BaseModel):
     allianceRole: str | None = None
     charges: Charges
     country: str
-    discord: str | None = None
+    discord: str = ""
+    discordId: str = ""
     droplets: int
-    equippedFlag: int  # 0 when not equipped
+    equippedBadges: list[Badge | None]  # len() == 3, None when not equipped
+    equippedFlag: int = 0  # 0 when not equipped
+    equippedFrameId: int = 0  # 0 when not equipped
+    equippedFrameUrl: str = ""  # "" when not equipped
+    equippedNameCosmetic: dict[str, Any]
     experiments: dict[str, Any]
     extraColorsBitmap: int
     favoriteLocations: list[FavoriteLocation]
@@ -51,6 +62,7 @@ class WplaceUserInfo(BaseModel):
     needsPhoneVerification: bool
     picture: str
     pixelsPainted: int
+    role: str  # maybe enum?
     showLastPixel: bool
     timeoutUntil: datetime
 
