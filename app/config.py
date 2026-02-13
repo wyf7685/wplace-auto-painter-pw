@@ -128,6 +128,10 @@ class UserConfig(BaseModel):
         default=30,
         description="Minimum number of charges required to start painting",
     )
+    max_paint_charges: int | None = Field(
+        default=None,
+        description="Maximum number of charges to use for single paint loop, null means no limit",
+    )
 
     @functools.cached_property
     def preferred_colors_rank(self) -> list[int]:

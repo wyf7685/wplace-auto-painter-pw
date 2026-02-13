@@ -123,6 +123,8 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
         groups = await group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])
         pixels = sorted((p for g in groups for p in g), key=lambda p: user.preferred_colors_rank[p[2]])
         pixels_to_paint = min(int(user_info.charges.count), len(pixels))
+        if user.max_paint_charges is not None:
+            pixels_to_paint = min(pixels_to_paint, user.max_paint_charges)
         if pixels_to_paint <= 0:
             logger.warning("Not enough pixels to paint.")
             return

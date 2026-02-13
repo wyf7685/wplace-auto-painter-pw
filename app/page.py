@@ -175,15 +175,13 @@ class WplacePage:
         await anyio.sleep(random.uniform(0.1, 0.3))
         await self.page.mouse.up(button="left")
 
-    async def move_by_pixel(self, dx: int, dy: int) -> None:
-        step_size = 30
+    async def move_by_pixel(self, dx: int, dy: int, max_step: int = 30) -> None:
         while dx:
-            step = max(-step_size, min(step_size, dx))
+            step = max(-max_step, min(max_step, dx))
             await self._move_by_pixel(step, 0)
             dx -= step
-
         while dy:
-            step = max(-step_size, min(step_size, dy))
+            step = max(-max_step, min(max_step, dy))
             await self._move_by_pixel(0, step)
             dy -= step
 
