@@ -93,7 +93,7 @@ async def shutdown_idle_playwright_loop() -> None:
     while True:
         await anyio.sleep(PLAYWRIGHT_MAX_IDLE_TIME // 4)
         if (
-            _in_use > 0
+            _in_use == 0
             and _playwright is not None
             and _last_used is not None
             and (datetime.now() - _last_used).total_seconds() >= PLAYWRIGHT_MAX_IDLE_TIME
