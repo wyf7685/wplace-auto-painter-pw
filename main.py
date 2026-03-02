@@ -6,10 +6,7 @@ from pathlib import Path
 
 import anyio
 
-from app.config import CONFIG_FILE, Config, export_config_schema
-from app.exception import AppException
 from app.log import logger
-from app.utils.update import check_update
 
 
 def launch_config_gui() -> None:
@@ -30,6 +27,8 @@ def launch_config_gui() -> None:
 
 
 def ensure_config_gui() -> None:
+    from app.config import CONFIG_FILE, Config
+
     if not CONFIG_FILE.is_file():
         return launch_config_gui()
 
@@ -54,6 +53,8 @@ def ensure_config_gui() -> None:
 
 
 async def async_main() -> None:
+    from app.config import Config, export_config_schema
+
     export_config_schema()
 
     if "config" in sys.argv[1:]:
@@ -63,11 +64,14 @@ async def async_main() -> None:
     ensure_config_gui()
 
     if Config.load().check_update:
+        from app.utils.update import check_update
+
         await check_update()
 
     from app.browser import shutdown_idle_playwright_loop, shutdown_playwright
-    from app.paint import setup_paint
+    from app.exception import AppException
     from app.utils.update import check_update_loop
+    from app.wplace import setup_paint
 
     async def setup_loops() -> None:
         try:
@@ -105,6 +109,9 @@ def _should_use_tray() -> bool:
         return False
     if "--tray" in sys.argv[1:]:
         return True
+
+    from app.config import Config
+
     try:
         return Config.load().tray_mode
     except Exception:

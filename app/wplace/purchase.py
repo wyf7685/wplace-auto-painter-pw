@@ -5,8 +5,8 @@ import cloudscraper
 from app.config import Config, PurchaseChargeConfig, PurchaseMaxChargeConfig, UserConfig, WplaceCredentials
 from app.exception import FetchFailed
 from app.log import logger
-from app.schemas import WplaceUserInfo
 from app.utils import run_sync
+from app.wplace.schemas import WplaceUserInfo
 
 WPLACE_PURCHASE_API_URL = "https://backend.wplace.live/purchase"
 _SCRAPER_HEADERS = {

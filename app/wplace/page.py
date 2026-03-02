@@ -11,14 +11,13 @@ import anyio.to_thread
 from bot7685_ext.wplace.consts import COLORS_NAME
 from pydantic import SecretStr
 
-from app import toast
 from app.assets import assets
 from app.browser import get_browser
 from app.config import Config, WplaceCredentials
 from app.exception import ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
-from app.schemas import WplaceUserInfo
-from app.utils import Highlight, WplacePixelCoords
+from app.utils import Highlight, WplacePixelCoords, toast
+from app.wplace.schemas import WplaceUserInfo
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

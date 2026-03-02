@@ -37,8 +37,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from app.assets import ICON_PATH
-
 type AsyncMain = Callable[[], Coroutine[None, None, None]]
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -161,6 +159,8 @@ class _TrayIcon(QSystemTrayIcon):
 
 
 def _load_icon() -> QIcon:
+    from app.assets import ICON_PATH
+
     if ICON_PATH.is_file():
         return QIcon(str(ICON_PATH))
     # Fallback: a solid 16×16 square in the Windows accent blue
@@ -241,10 +241,10 @@ def run_tray(async_main: AsyncMain) -> None:
 
     from app.config import Config
     from app.log import log_format, logger
-    from app.toast import notify
+    from app.utils import toast
 
     Config.set_background_mode()
-    notify(
+    toast.notify(
         "wplace-auto-painter",
         "应用已在后台启动，可通过托盘图标查看状态。",
     )

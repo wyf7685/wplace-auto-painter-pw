@@ -152,7 +152,7 @@ async def pumpkin_claim_loop(user: UserConfig) -> None:
 
 async def setup_hallowen() -> None:
     if datetime.now(UTC) >= EVENT_END:
-        logger.info("Hallowen event has ended.")
+        logger.debug("Hallowen event has ended.")
         return
 
     logger.info("Hallowen event is active.")
