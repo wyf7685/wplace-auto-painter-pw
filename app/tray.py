@@ -30,12 +30,14 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
     QMenu,
-    QPlainTextEdit,
     QPushButton,
     QSystemTrayIcon,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
+
+from app.utils.ansi_qt import LOG_BG, iter_segments
 
 type AsyncMain = Callable[[], Coroutine[None, None, None]]
 
@@ -89,18 +91,21 @@ class LogWindow(QWidget):
         self.setWindowIcon(_load_icon())
         self.resize(960, 560)
 
-        self._text = QPlainTextEdit()
+        self._text = QTextEdit()
         self._text.setReadOnly(True)
-        self._text.setMaximumBlockCount(5000)
+        if doc := self._text.document():
+            doc.setMaximumBlockCount(5000)
+        self._text.setStyleSheet(f"QTextEdit {{ background-color: {LOG_BG.name()}; }}")
         font = QFont("Consolas")
         font.setPointSize(9)
         self._text.setFont(font)
+        self._first_line = True
 
         self._auto_scroll = QCheckBox("自动滚动")
         self._auto_scroll.setChecked(True)
 
         clear_btn = QPushButton("清空")
-        clear_btn.clicked.connect(self._text.clear)
+        clear_btn.clicked.connect(self._clear)
 
         toolbar = QHBoxLayout()
         toolbar.addWidget(self._auto_scroll)
@@ -113,16 +118,30 @@ class LogWindow(QWidget):
 
         # Replay log history buffered before the window was first opened
         for line in _log_buffer:
-            self._text.appendPlainText(line)
+            self._append_ansi_line(line)
         self._scroll_to_bottom()
 
     def append_log(self, text: str) -> None:
-        self._text.appendPlainText(text)
+        self._append_ansi_line(text)
         if self._auto_scroll.isChecked():
             self._scroll_to_bottom()
 
     def _scroll_to_bottom(self) -> None:
         self._text.moveCursor(QTextCursor.MoveOperation.End)
+
+    def _clear(self) -> None:
+        self._text.clear()
+        self._first_line = True
+
+    def _append_ansi_line(self, text: str) -> None:
+        cursor = self._text.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        if self._first_line:
+            self._first_line = False
+        else:
+            cursor.insertBlock()
+        for segment, fmt in iter_segments(text):
+            cursor.insertText(segment, fmt)
 
     @override
     def closeEvent(self, event: QCloseEvent) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -253,7 +272,7 @@ def run_tray(async_main: AsyncMain) -> None:
         _qt_sink,
         format=log_format,
         level="TRACE",
-        colorize=False,  # strip colour tags → clean plain text in QPlainTextEdit
+        colorize=True,  # preserve ANSI codes for LogWindow's rich-text renderer
         enqueue=True,
     )
 
