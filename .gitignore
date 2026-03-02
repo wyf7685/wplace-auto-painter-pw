@@ -12,3 +12,4 @@ wheels/
 /logs
 
 .git_commit_hash
+AGENTS.md
