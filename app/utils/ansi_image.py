@@ -18,9 +18,12 @@ if TYPE_CHECKING:
 
 def draw_ansi(
     img: Image,
-    file: TextIO = sys.stdout,
+    file: TextIO | None = sys.stdout,  # sys.stdout can be None
     max_size: tuple[Cols, Rows] | None = None,
 ) -> None:
+    if file is None:
+        return
+
     img = img.convert("RGBA")
 
     width, height = img.size

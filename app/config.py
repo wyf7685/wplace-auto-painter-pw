@@ -153,6 +153,10 @@ class Config(BaseModel):
         default="DEBUG", description="Logging level for console"
     )
     check_update: bool = Field(default=True, description="Whether to check for updates")
+    tray_mode: bool = Field(
+        default=False,
+        description="Hide the console and show a system tray icon instead (Windows only)",
+    )
 
     @classmethod
     def load(cls) -> Config:

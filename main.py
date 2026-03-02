@@ -1,4 +1,5 @@
 import contextlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -52,7 +53,7 @@ def ensure_config_gui() -> None:
     return None
 
 
-async def main() -> None:
+async def async_main() -> None:
     export_config_schema()
 
     if "config" in sys.argv[1:]:
@@ -92,6 +93,64 @@ async def main() -> None:
         await shutdown_playwright()
 
 
-if __name__ == "__main__":
+def _should_use_tray() -> bool:
+    """Return True when tray mode should be used.
+
+    Checks (in order):
+    1. ``--tray`` command-line flag (highest priority, works before config exists)
+    2. ``config.tray_mode`` field (requires a valid config file)
+    3. Platform guard: tray mode is Windows-only.
+    """
+    if sys.platform != "win32":
+        return False
+    if "--tray" in sys.argv[1:]:
+        return True
+    try:
+        return Config.load().tray_mode
+    except Exception:
+        return False
+
+
+def _respawn_as_pythonw() -> None:
+    """Re-launch the current process under pythonw.exe and exit.
+
+    ``pythonw.exe`` has PE subsystem WINDOWS rather than CONSOLE, so the
+    shell releases the terminal immediately after spawning it, without
+    waiting for the process to exit.  The guard env-var
+    ``WPLACE_TRAY_RESPAWNED=1`` prevents an infinite re-spawn loop.
+
+    Falls through silently when:
+    - the guard env-var is already set (we *are* the respawned process), or
+    - ``pythonw.exe`` is not found next to ``sys.executable`` (non-Windows).
+    """
+    if os.environ.get("WPLACE_TRAY_RESPAWNED"):
+        return
+    pythonw = Path(sys.executable).with_stem("pythonw")
+    if not pythonw.is_file():
+        return
+    env = os.environ.copy()
+    env["WPLACE_TRAY_RESPAWNED"] = "1"
+    subprocess.Popen(  # noqa: S603
+        [str(pythonw), *sys.argv],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    sys.exit(0)
+
+
+def main() -> None:
     with contextlib.suppress(KeyboardInterrupt):
-        anyio.run(main)
+        if _should_use_tray():
+            _respawn_as_pythonw()
+            # Lazy import: app.tray (and PyQt6) are never loaded in normal mode.
+            from app.tray import run_tray
+
+            run_tray(async_main)
+        else:
+            anyio.run(async_main)
+
+
+if __name__ == "__main__":
+    main()
