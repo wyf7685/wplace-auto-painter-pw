@@ -9,6 +9,7 @@ ASSETS_DIR = (
     if getattr(sys, "frozen", False)
     else Path(__file__).parent
 ) / "assets"
+ICON_PATH = ASSETS_DIR / "gui.ico"
 
 
 class Assets:

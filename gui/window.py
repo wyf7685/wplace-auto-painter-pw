@@ -28,10 +28,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from app.assets import ICON_PATH
 from app.log import logger
 from app.utils import WplacePixelCoords
 
-from .config import CONFIG_FILE, GUI_ICO, TEMPLATES_DIR, ensure_data_dirs, read_config, write_config
+from .config import CONFIG_FILE, TEMPLATES_DIR, ensure_data_dirs, read_config, write_config
 from .image import ImageDropLabel
 from .user import create_user
 
@@ -43,8 +44,8 @@ class ConfigInitWindow(QWidget):
 
         # 尝试设置窗口图标（确保传入字符串路径）
         try:
-            if GUI_ICO.is_file():
-                self.setWindowIcon(QIcon(str(GUI_ICO)))
+            if ICON_PATH.is_file():
+                self.setWindowIcon(QIcon(str(ICON_PATH)))
         except Exception as exc:
             logger.debug(f"无法设置窗口图标: {exc}")
 

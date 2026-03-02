@@ -1,14 +1,17 @@
 import abc
 import contextlib
+import functools
 import json
 import random
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Self, override
 
 import anyio
+import anyio.to_thread
 from bot7685_ext.wplace.consts import COLORS_NAME
 from pydantic import SecretStr
 
+from app import toast
 from app.assets import assets
 from app.browser import get_browser
 from app.config import Config, WplaceCredentials
@@ -91,6 +94,26 @@ _ZOOM_PIXEL_SIZE: dict[ZoomLevel, float] = {
 }
 
 
+async def notify_open_browser() -> None:
+    if Config.is_background_mode() and toast.is_available():
+        # Block until the user acknowledges or the toast times out (10 s).
+        # notify_with_button is synchronous; run it off the async thread so
+        # it does not block the event loop during the wait.
+        clicked = await anyio.to_thread.run_sync(
+            functools.partial(
+                toast.notify_with_button,
+                "wplace-auto-painter",
+                "即将打开浏览器窗口进行绘制操作。",
+                button="确认",
+            ),
+            abandon_on_cancel=True,
+        )
+        if not clicked:
+            logger.info("Toast timed out or dismissed, proceeding to open browser.")
+    else:
+        toast.notify("wplace-auto-painter", "即将打开浏览器窗口进行绘制操作。")
+
+
 class WplacePage:
     def __init__(
         self,
@@ -104,6 +127,8 @@ class WplacePage:
 
     @contextlib.asynccontextmanager
     async def begin(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
+        await notify_open_browser()
+
         async with (
             get_browser(headless=False) as browser,
             await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,

@@ -143,6 +143,18 @@ class UserConfig(BaseModel):
 
 class Config(BaseModel):
     _cache: ClassVar[Config | None] = None
+    # Runtime-only flag; never written to config.json.
+    # Set to True by the tray entry point so other modules can adapt their
+    # behaviour (e.g. wait for user confirmation before opening a browser).
+    _background_mode: ClassVar[bool] = False
+
+    @classmethod
+    def set_background_mode(cls, value: bool = True) -> None:
+        cls._background_mode = value
+
+    @classmethod
+    def is_background_mode(cls) -> bool:
+        return cls._background_mode
 
     users: list[UserConfig] = Field(description="List of user configurations")
     browser: Literal["chromium", "firefox", "webkit", "chrome", "msedge"] = Field(

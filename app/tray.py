@@ -37,14 +37,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from app.assets import ASSETS_DIR
+from app.assets import ICON_PATH
 
 type AsyncMain = Callable[[], Coroutine[None, None, None]]
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 _LOG_BUFFER_MAXLEN = 2000
-_ICON_PATH = ASSETS_DIR / "gui.ico"
 
 # ── Shared state (initialised before any sink is registered) ───────────────────
 
@@ -162,8 +161,8 @@ class _TrayIcon(QSystemTrayIcon):
 
 
 def _load_icon() -> QIcon:
-    if _ICON_PATH.is_file():
-        return QIcon(str(_ICON_PATH))
+    if ICON_PATH.is_file():
+        return QIcon(str(ICON_PATH))
     # Fallback: a solid 16×16 square in the Windows accent blue
     pm = QPixmap(16, 16)
     pm.fill(QColor(0, 120, 215))
@@ -240,7 +239,15 @@ def run_tray(async_main: AsyncMain) -> None:
     emitter = _Emitter()
     _emitter = emitter
 
+    from app.config import Config
     from app.log import log_format, logger
+    from app.toast import notify
+
+    Config.set_background_mode()
+    notify(
+        "wplace-auto-painter",
+        "应用已在后台启动，可通过托盘图标查看状态。",
+    )
 
     logger.add(
         _qt_sink,
