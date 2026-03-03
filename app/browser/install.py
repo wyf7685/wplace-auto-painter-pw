@@ -13,11 +13,11 @@ https://github.com/kexue-z/nonebot-plugin-htmlrender/blob/v0.7.0.a.3/nonebot_plu
 import asyncio
 import contextlib
 import os
-import sys
 from collections.abc import Awaitable, Callable, Iterator
 from urllib.parse import urlparse
 
 from app.log import logger
+from app.utils import subprocess_options
 
 from .const import MIRRORS, PLAYWRIGHT_BROWSERS_PATH, MirrorSource
 
@@ -108,7 +108,7 @@ async def read_stream(
             if not line_data:
                 break
 
-            line = line_data.decode().strip()
+            line = line_data.decode(errors="replace").strip()
 
             if callback:
                 try:
@@ -138,6 +138,8 @@ async def install_playwright_browser(browser: str, timeout: float = 300.0) -> bo
 
     Returns ``True`` on success, ``False`` on failure.
     """
+    from playwright._impl._driver import compute_driver_executable, get_driver_env
+
     setup_playwright_env()
     PLAYWRIGHT_BROWSERS_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -145,15 +147,18 @@ async def install_playwright_browser(browser: str, timeout: float = 300.0) -> bo
     with ensure_mirror_env(mirror):
         logger.info(f"Installing Playwright browser: {browser!r} ...")
         try:
+            driver_executable, driver_cli = compute_driver_executable()
+
             process = await asyncio.create_subprocess_exec(
-                sys.executable,
-                "-m",
-                "playwright",
+                driver_executable,
+                driver_cli,
                 "install",
                 "--with-deps",
                 browser,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=get_driver_env(),
+                **subprocess_options(),
             )
 
             async def stdout_callback(line: str) -> None:

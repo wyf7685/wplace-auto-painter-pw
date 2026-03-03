@@ -1,24 +1,16 @@
 import datetime as dt
-import importlib
 import inspect
-from collections.abc import Awaitable, Callable, Iterator
-from pathlib import Path
-from types import ModuleType
+from collections.abc import Awaitable, Callable
 
 import anyio
 
 from app.log import logger
 
+from . import christmas, hallowen
+
 _EVENT_END_ATTRIBUTE_NAME = "EVENT_END"
 _SETUP_FUNCTION_NAME = "setup"
-
-
-def _iter_event_modules() -> Iterator[ModuleType]:
-    for path in Path(__file__).parent.iterdir():
-        if (path.is_file() and path.suffix == ".py" and path.stem != "__init__") or (
-            path.is_dir() and (path / "__init__.py").exists()
-        ):
-            yield importlib.import_module(f".{path.stem}", __package__)
+_EVENT_MODULES = [hallowen, christmas]
 
 
 async def _run_setup_func(setup_func: Callable[[], Awaitable[object]], module_name: str) -> None:
@@ -32,7 +24,7 @@ async def setup_events() -> None:
     setups: list[tuple[str, Callable[[], Awaitable[object]]]] = []
     utc_now = dt.datetime.now(dt.UTC)
 
-    for module in _iter_event_modules():
+    for module in _EVENT_MODULES:
         if not hasattr(module, _EVENT_END_ATTRIBUTE_NAME):
             logger.warning(f"Module {module.__name__} does not have attribute '{_EVENT_END_ATTRIBUTE_NAME}', skipping")
             continue

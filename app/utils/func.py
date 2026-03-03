@@ -2,17 +2,38 @@ import base64
 import datetime as dt
 import functools
 import inspect
+import subprocess
+import sys
 import threading
 import time
 import types
 from json import JSONEncoder
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, NotRequired, Self, TypedDict, cast
 
 import anyio
 import anyio.to_thread
 from pydantic import BaseModel, SecretStr
 
 from app.log import escape_tag, logger
+
+
+class _SubprocessOptions(TypedDict):
+    startupinfo: NotRequired[subprocess.STARTUPINFO]
+    creationflags: NotRequired[int]
+
+
+def subprocess_options() -> _SubprocessOptions:
+    if sys.platform != "win32":
+        return {}
+
+    # 在 Windows 下使用 pyinstaller console=False 打包时
+    # 隐藏启动 subprocess 的控制台窗口
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = subprocess.SW_HIDE
+    creationflags = subprocess.CREATE_NO_WINDOW
+    return {"startupinfo": startupinfo, "creationflags": creationflags}
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine

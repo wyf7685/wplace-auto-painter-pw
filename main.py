@@ -1,3 +1,7 @@
+import multiprocessing
+
+multiprocessing.freeze_support()
+
 import contextlib
 import os
 import subprocess
@@ -139,7 +143,7 @@ def _respawn_as_pythonw() -> None:
     - the guard env-var is already set (we *are* the respawned process), or
     - ``pythonw.exe`` is not found next to ``sys.executable`` (non-Windows).
     """
-    if os.environ.get("WPLACE_TRAY_RESPAWNED"):
+    if os.environ.get("WPLACE_TRAY_RESPAWNED") or _is_frozen():
         return
     pythonw = Path(sys.executable).with_stem("pythonw")
     if not pythonw.is_file():

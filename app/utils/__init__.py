@@ -5,6 +5,7 @@ from .func import SecretStrEncoder as SecretStrEncoder
 from .func import is_token_expired as is_token_expired
 from .func import requests_proxies as requests_proxies
 from .func import run_sync as run_sync
+from .func import subprocess_options as subprocess_options
 from .func import with_retry as with_retry
 from .func import with_semaphore as with_semaphore
 from .highlight import Highlight as Highlight

@@ -2,7 +2,6 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import NotRequired, TypedDict
 
 import anyio
 import httpx
@@ -10,28 +9,12 @@ import httpx
 from app.assets import ASSETS_DIR
 from app.log import logger
 
+from .func import subprocess_options
+
 IS_FROZEN = getattr(sys, "frozen", False)
 OWNER = "wyf7685"
 REPO = "wplace-auto-painter-pw"
 BRANCH = "master"
-
-
-class _SubprocessOptions(TypedDict):
-    startupinfo: NotRequired[subprocess.STARTUPINFO]
-    creationflags: NotRequired[int]
-
-
-def subprocess_options() -> _SubprocessOptions:
-    if sys.platform != "win32":
-        return {}
-
-    # 在 Windows 下使用 pyinstaller console=False 打包时
-    # 隐藏启动 subprocess 的控制台窗口
-    startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    startupinfo.wShowWindow = subprocess.SW_HIDE
-    creationflags = subprocess.CREATE_NO_WINDOW
-    return {"startupinfo": startupinfo, "creationflags": creationflags}
 
 
 def get_local_commit_hash() -> str | None:
