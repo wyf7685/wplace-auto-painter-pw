@@ -71,11 +71,22 @@ _emitter: _Emitter | None = None
 # ── Loguru sink (called from loguru's internal enqueue thread) ─────────────────
 
 
-def _qt_sink(message: Any) -> None:
-    text = str(message).rstrip("\n")
-    _log_buffer.append(text)
-    if _emitter is not None:
-        _emitter.new_log.emit(text)
+def _apply_qt_sink() -> None:
+    from app.log import log_format, logger
+
+    def _qt_sink(message: Any) -> None:
+        text = str(message).rstrip("\n")
+        _log_buffer.append(text)
+        if _emitter is not None:
+            _emitter.new_log.emit(text)
+
+    logger.add(
+        _qt_sink,
+        format=log_format,
+        level="TRACE",
+        colorize=True,  # preserve ANSI codes for LogWindow's rich-text renderer
+        enqueue=True,
+    )
 
 
 # ── Widgets ────────────────────────────────────────────────────────────────────
@@ -221,7 +232,7 @@ def _anyio_thread(async_main: AsyncMain, emitter: _Emitter) -> None:
     """Thread target: run *async_main* under anyio and notify Qt when done."""
 
     async def _runner() -> None:
-        async def _notify_startup() -> None:
+        async def _startup_notifier() -> None:
             from app.utils import toast
 
             await toast.toast_async(
@@ -240,7 +251,7 @@ def _anyio_thread(async_main: AsyncMain, emitter: _Emitter) -> None:
             scope.cancel()
 
         async with anyio.create_task_group() as tg:
-            tg.start_soon(_notify_startup)
+            tg.start_soon(_startup_notifier)
             tg.start_soon(_stop_waiter, tg.cancel_scope)
             try:
                 await async_main()
@@ -281,18 +292,9 @@ def run_tray(async_main: AsyncMain) -> None:
     _emitter = emitter
 
     from app.config import Config
-    from app.log import log_format, logger
 
     Config.set_background_mode()
-
-    logger.add(
-        _qt_sink,
-        format=log_format,
-        level="TRACE",
-        colorize=True,  # preserve ANSI codes for LogWindow's rich-text renderer
-        enqueue=True,
-    )
-
+    _apply_qt_sink()
     log_window = LogWindow()
     tray = _TrayIcon(app, log_window)
     emitter.new_log.connect(log_window.append_log)

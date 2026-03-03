@@ -278,6 +278,17 @@ class PaintPanel(BasePanel):
         logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
         await btn.click()
         logger.info("Clicked submit button")
+
         logger.debug("Waiting for submit to complete...")
-        await self.page.wait_for_selector(selector, timeout=30 * 1000, state="detached")
-        logger.info("Submit completed")
+        try:
+            await self.page.wait_for_selector(selector, timeout=30 * 1000, state="detached")
+            logger.info("Submit completed")
+        except _pw_timeout_error():
+            logger.warning("Submit button still present after timeout")
+
+
+@functools.cache
+def _pw_timeout_error() -> type[Exception]:
+    from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
+
+    return PlaywrightTimeoutError

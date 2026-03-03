@@ -78,20 +78,18 @@ async def async_main() -> None:
     from app.utils.update import check_update_loop
     from app.wplace import setup_events, setup_paint
 
-    async def setup_loops() -> None:
-        try:
-            async with anyio.create_task_group() as inner:
-                inner.start_soon(setup_paint)
-                inner.start_soon(setup_events)
-        finally:
-            outer.cancel_scope.cancel()
-
     try:
-        async with anyio.create_task_group() as outer:
-            outer.start_soon(setup_loops)
-            outer.start_soon(shutdown_idle_playwright_loop)
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(setup_events)
+            tg.start_soon(shutdown_idle_playwright_loop)
             if Config.load().check_update:
-                outer.start_soon(check_update_loop)
+                tg.start_soon(check_update_loop)
+
+            try:
+                await setup_paint()
+            finally:
+                tg.cancel_scope.cancel()
+
     except* KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
     except* AppException:
