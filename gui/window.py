@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
 
 from app.assets import ICON_PATH
 from app.log import logger
-from app.utils import WplacePixelCoords
+from app.schemas import WplacePixelCoords
 
 from .config import CONFIG_FILE, TEMPLATES_DIR, ensure_data_dirs, read_config, write_config
 from .image import ImageDropLabel

@@ -11,15 +11,15 @@ import anyio
 from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
-from app.config import Config, TemplateConfig, UserConfig
+from app.config import Config, UserConfig
 from app.exception import PaintFinished, ShouldQuit, TokenExpired
 from app.log import escape_tag, logger
+from app.schemas import TemplateConfig, WplaceUserInfo
 from app.utils import Highlight, is_token_expired
 from app.utils.ansi_image import draw_ansi
 from app.wplace.page import WplacePage, fetch_user_info
 from app.wplace.purchase import do_purchase
 from app.wplace.resolver import resolve_js
-from app.wplace.schemas import WplaceUserInfo
 from app.wplace.template import calc_template_diff
 
 if TYPE_CHECKING:

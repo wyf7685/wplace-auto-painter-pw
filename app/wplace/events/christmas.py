@@ -7,10 +7,11 @@ from pydantic import BaseModel, TypeAdapter, computed_field
 
 from app.assets import assets
 from app.browser import get_browser
-from app.config import UserConfig, WplaceCredentials
+from app.config import UserConfig
 from app.exception import FetchFailed
 from app.log import logger
-from app.utils import Highlight, WplacePixelCoords, requests_proxies, run_sync
+from app.schemas import WplaceCredentials, WplacePixelCoords
+from app.utils import Highlight, requests_proxies, run_sync
 
 # Event ends at Friday, Jan 2 00:00 AM (UTC)
 EVENT_END = datetime(2025, 1, 2, tzinfo=UTC)

@@ -1,4 +1,3 @@
-import datetime as dt
 import math
 import re
 from dataclasses import dataclass
@@ -7,10 +6,6 @@ from typing import TYPE_CHECKING, NamedTuple, Self
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-
-UTC8 = dt.timezone(dt.timedelta(hours=8))
-
-# 从多点校准中提取的常量参数
 SCALE_X = 325949.3234522017
 SCALE_Y = -325949.3234522014
 OFFSET_X = 1023999.5

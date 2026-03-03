@@ -1,5 +1,6 @@
 # ruff: noqa: N815
 import base64
+import datetime as dt
 import functools
 import math
 from datetime import datetime
@@ -8,7 +9,9 @@ from typing import Any
 from bot7685_ext.wplace.consts import FREE_COLORS, PAID_COLORS
 from pydantic import BaseModel
 
-from app.utils import WplacePixelCoords
+from .coords import WplacePixelCoords
+
+UTC8 = dt.timezone(dt.timedelta(hours=8))
 
 
 class Charges(BaseModel):

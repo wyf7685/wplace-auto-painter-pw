@@ -1,6 +1,5 @@
 from . import toast as toast
 from .color import parse_rgb_str as parse_rgb_str
-from .coords import WplacePixelCoords as WplacePixelCoords
 from .func import PerfLog as PerfLog
 from .func import SecretStrEncoder as SecretStrEncoder
 from .func import is_token_expired as is_token_expired

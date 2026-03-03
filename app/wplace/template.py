@@ -5,9 +5,10 @@ import bot7685_ext.wplace
 import httpx
 from bot7685_ext.wplace import ColorEntry
 
-from app.config import Config, TemplateConfig
+from app.config import Config
 from app.log import logger
-from app.utils import PerfLog, WplacePixelCoords, parse_rgb_str, with_retry, with_semaphore
+from app.schemas import TemplateConfig, WplacePixelCoords
+from app.utils import PerfLog, parse_rgb_str, with_retry, with_semaphore
 
 logger = logger.opt(colors=True)
 
