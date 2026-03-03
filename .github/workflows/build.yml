@@ -1,6 +1,15 @@
 name: Build
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'build.spec'
+      - 'app/**'
+      - 'main.py'
+      - 'gui_main.py'
+      - 'uv.lock'
   workflow_dispatch:
 
 jobs:
