@@ -38,7 +38,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from app.config import APP_NAME
+from app.const import APP_NAME
 from app.utils.ansi_qt import LOG_BG, iter_segments
 
 type AsyncMain = Callable[[], Coroutine[None, None, None]]
@@ -227,7 +227,7 @@ def _anyio_thread(async_main: AsyncMain, emitter: _Emitter) -> None:
             await toast.toast_async(
                 APP_NAME,
                 "应用已在后台启动，可通过托盘图标查看状态。",
-                duration="short",
+                duration=toast.Duration.Short,
                 on_click=lambda *_: emitter.open_logs.emit(),
             )
 

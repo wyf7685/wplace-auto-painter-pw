@@ -13,7 +13,8 @@ from pydantic import SecretStr
 
 from app.assets import assets
 from app.browser import get_browser
-from app.config import APP_NAME, Config, WplaceCredentials
+from app.config import Config, WplaceCredentials
+from app.const import APP_NAME
 from app.exception import ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
 from app.utils import Highlight, WplacePixelCoords, toast

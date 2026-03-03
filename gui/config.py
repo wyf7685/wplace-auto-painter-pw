@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.config import CONFIG_FILE, CONFIG_SCHEMA_FILE, DATA_DIR, TEMPLATES_DIR, export_config_schema
+from app.config import export_config_schema
+from app.const import CONFIG_FILE, CONFIG_SCHEMA_FILE, DATA_DIR, TEMPLATES_DIR
 from app.log import logger
 
 schema_path = CONFIG_SCHEMA_FILE.relative_to(CONFIG_FILE.parent).as_posix()

@@ -7,7 +7,8 @@ import anyio.to_thread
 import cloudscraper
 import httpx
 
-from app.config import DATA_DIR, Config
+from app.config import Config
+from app.const import DATA_DIR
 from app.exception import ResolveFailed
 from app.log import escape_tag, logger
 from app.utils import requests_proxies, with_semaphore

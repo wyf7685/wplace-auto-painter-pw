@@ -9,8 +9,12 @@ import anyio
 from app.log import logger
 
 
+def _is_frozen() -> bool:
+    return getattr(sys, "frozen", False)
+
+
 def launch_config_gui() -> None:
-    if getattr(sys, "frozen", False):
+    if _is_frozen():
         gui_executable = Path(sys.executable).parent / ("config-gui" + (".exe" if sys.platform == "win32" else ""))
         if not gui_executable.is_file():
             logger.error(f"找不到配置 GUI 可执行文件: {gui_executable}")
@@ -27,7 +31,8 @@ def launch_config_gui() -> None:
 
 
 def ensure_config_gui() -> None:
-    from app.config import CONFIG_FILE, Config
+    from app.config import Config
+    from app.const import CONFIG_FILE
 
     if not CONFIG_FILE.is_file():
         return launch_config_gui()
@@ -98,22 +103,27 @@ async def async_main() -> None:
 
 
 def _should_use_tray() -> bool:
-    """Return True when tray mode should be used.
-
-    Checks (in order):
-    1. ``--tray`` command-line flag (highest priority, works before config exists)
-    2. Environment variable ``WPLACE_TRAY_RESPAWNED=1`` (set by the respawn logic)
-    3. ``config.tray_mode`` field (requires a valid config file)
-    4. Platform guard: tray mode is Windows-only.
-    """
+    """Return True when tray mode should be used."""
+    # Platform guard: tray mode is Windows-only.
     if sys.platform != "win32":
         return False
-    if "--tray" in sys.argv[1:] or os.environ.get("WPLACE_TRAY_RESPAWNED"):
+
+    # Frozen guard: if we're already frozen, we must be the tray process.
+    if _is_frozen():
         return True
 
-    from app.config import Config
+    # `--tray` command-line flag (works before config exists)
+    if "--tray" in sys.argv[1:]:
+        return True
 
+    # Environment variable `WPLACE_TRAY_RESPAWNED=1` (set by the respawn logic)
+    if os.environ.get("WPLACE_TRAY_RESPAWNED"):
+        return True
+
+    # config.tray_mode field (requires a valid config file)
     try:
+        from app.config import Config
+
         return Config.load().tray_mode
     except Exception:
         return False
@@ -152,7 +162,8 @@ def _respawn_as_pythonw() -> None:
 def main() -> None:
     with contextlib.suppress(KeyboardInterrupt):
         if _should_use_tray():
-            _respawn_as_pythonw()
+            if not _is_frozen():
+                _respawn_as_pythonw()
             # Lazy import: app.tray (and PyQt6) are never loaded in normal mode.
             from app.tray import run_tray
 

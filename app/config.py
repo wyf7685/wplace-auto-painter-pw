@@ -6,20 +6,12 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 from bot7685_ext.wplace.consts import COLORS_ID, ColorName
 from pydantic import BaseModel, Field, SecretStr
 
+from app.const import CONFIG_FILE, CONFIG_SCHEMA_FILE, TEMPLATES_DIR
 from app.utils import SecretStrEncoder, WplacePixelCoords
 
 if TYPE_CHECKING:
     from PIL import Image
     from playwright._impl._api_structures import SetCookieParam
-
-
-APP_NAME = "wplace-auto-painter"
-DATA_DIR = Path.cwd().resolve().joinpath("data")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-TEMPLATES_DIR = DATA_DIR / "templates"
-TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-CONFIG_FILE = DATA_DIR / "config.json"
-CONFIG_SCHEMA_FILE = DATA_DIR / ".config.schema.json"
 
 
 def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:
