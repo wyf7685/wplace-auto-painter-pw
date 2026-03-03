@@ -1,6 +1,8 @@
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
+from typing import NotRequired, TypedDict
 
 import anyio
 import httpx
@@ -14,15 +16,37 @@ REPO = "wplace-auto-painter-pw"
 BRANCH = "master"
 
 
+class _SubprocessOptions(TypedDict):
+    startupinfo: NotRequired[subprocess.STARTUPINFO]
+    creationflags: NotRequired[int]
+
+
+def subprocess_options() -> _SubprocessOptions:
+    if sys.platform != "win32":
+        return {}
+
+    # 在 Windows 下使用 pyinstaller console=False 打包时
+    # 隐藏启动 subprocess 的控制台窗口
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = subprocess.SW_HIDE
+    creationflags = subprocess.CREATE_NO_WINDOW
+    return {"startupinfo": startupinfo, "creationflags": creationflags}
+
+
 def get_local_commit_hash() -> str | None:
     if IS_FROZEN:
         commit_hash_file = ASSETS_DIR / ".git_commit_hash"
         return commit_hash_file.read_text("utf-8").strip() if commit_hash_file.is_file() else None
 
+    if not Path(".git").is_dir():
+        return None
+
     p = subprocess.run(
         ["git", "status", "--porcelain"],  # noqa: S607
         capture_output=True,
         text=True,
+        **subprocess_options(),
     )
     if p.returncode != 0 or p.stdout.strip():
         return None
@@ -31,6 +55,7 @@ def get_local_commit_hash() -> str | None:
         ["git", "rev-parse", "HEAD"],  # noqa: S607
         capture_output=True,
         text=True,
+        **subprocess_options(),
     )
     return p.stdout.strip() if p.returncode == 0 else None
 
