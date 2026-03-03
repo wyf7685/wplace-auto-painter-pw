@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
     QMenu,
+    QMenuBar,
     QPushButton,
     QSystemTrayIcon,
     QTextEdit,
@@ -114,7 +115,15 @@ class LogWindow(QWidget):
         toolbar.addStretch()
         toolbar.addWidget(clear_btn)
 
+        menu_bar = QMenuBar()
+        app_menu = menu_bar.addMenu("应用")
+        assert app_menu is not None
+        quit_act = app_menu.addAction("退出")
+        assert quit_act is not None
+        quit_act.triggered.connect(_request_quit)
+
         layout = QVBoxLayout(self)
+        layout.addWidget(menu_bar)
         layout.addLayout(toolbar)
         layout.addWidget(self._text)
 
