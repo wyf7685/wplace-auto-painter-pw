@@ -25,6 +25,7 @@ def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:
         "sameSite": "Lax",
     }
 
+type PlaywrightBrowserType = Literal["chromium", "firefox", "webkit", "chrome", "msedge"]
 
 class WplaceCredentials(BaseModel):
     token: SecretStr = Field(description="WPlace cookie 'j' value")
@@ -150,9 +151,7 @@ class Config(BaseModel):
         return cls._background_mode
 
     users: list[UserConfig] = Field(description="List of user configurations")
-    browser: Literal["chromium", "firefox", "webkit", "chrome", "msedge"] = Field(
-        description="Playwright browser type to use"
-    )
+    browser: PlaywrightBrowserType = Field(description="Playwright browser type to use")
     proxy: str | None = Field(default=None, description="Optional proxy server URL to access wplace")
     log_level: Literal["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="DEBUG", description="Logging level for console"

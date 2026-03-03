@@ -1,0 +1,229 @@
+"""Playwright and Browser lifecycle management.
+
+Architecture
+------------
+* A single :class:`playwright.async_api.Playwright` instance is shared across
+  all ``get_browser()`` calls and is started lazily on first use.
+* Each ``get_browser()`` invocation launches a **fresh** browser process and
+  closes it when the context exits, matching the original semantics.
+* Usage is tracked via ``_in_use``.  When the counter drops to zero the idle
+  timer is armed.  If no new browser is requested within
+  ``PLAYWRIGHT_IDLE_TIMEOUT`` seconds the Playwright instance is stopped to
+  reclaim memory.  It will be restarted transparently on the next call.
+
+Idle shutdown
+-------------
+1. ``_idle_event`` is set every time ``_in_use`` drops to 0.
+2. ``shutdown_idle_playwright_loop`` waits for that event, then sleeps only
+   as long as necessary to reach the deadline (``_last_use_ended +
+   IDLE_TIMEOUT``).
+3. If the browser was used again during the sleep the in-use counter is
+   non-zero and/or ``_last_use_ended`` has been updated, so the loop simply
+   restarts without shutting down.
+"""
+
+import asyncio
+import contextlib
+import functools
+import re
+import time
+from typing import TYPE_CHECKING
+
+from app.config import Config
+from app.exception import BrowserNotAvailable
+from app.log import logger
+
+from .const import PLAYWRIGHT_IDLE_TIMEOUT
+from .install import install_playwright_browser, setup_playwright_env
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+    from playwright.async_api import Browser, BrowserType, Playwright, ProxySettings
+
+# ---------------------------------------------------------------------------
+# Module-level state
+# ---------------------------------------------------------------------------
+
+_playwright: Playwright | None = None
+_playwright_lock = asyncio.Lock()
+
+# Number of currently open get_browser() contexts.
+_in_use: int = 0
+
+# Monotonic timestamp recorded when _in_use last dropped to 0.
+_last_use_ended: float = 0.0
+
+# Set whenever _in_use drops to 0, consumed by shutdown_idle_playwright_loop.
+_idle_event: asyncio.Event = asyncio.Event()
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+async def _ensure_playwright() -> Playwright:
+    """Return the shared Playwright instance, starting it (and optionally
+    installing the browser) if necessary.  Thread-safe via asyncio Lock."""
+    global _playwright
+
+    async with _playwright_lock:
+        if _playwright is not None:
+            return _playwright
+
+        from playwright.async_api import async_playwright
+
+        setup_playwright_env()
+        logger.debug("Starting Playwright...")
+        pw = await async_playwright().start()
+
+        # Verify the configured browser binary is present by attempting a
+        # headless launch.  If it fails, install it and restart.
+        browser_name, _ = _resolve_browser_type()
+        browser_type: BrowserType = getattr(pw, browser_name)
+        try:
+            probe = await browser_type.launch(headless=True)
+            await probe.close()
+            logger.debug(f"Playwright browser {browser_name!r} is available.")
+        except Exception as exc:
+            logger.warning(f"Browser {browser_name!r} not found\n{exc}")
+            logger.warning("Attempting automatic installation...")
+            await pw.stop()
+            installed = await install_playwright_browser(browser_name)
+            if not installed:
+                raise BrowserNotAvailable(f"Failed to install Playwright browser: {browser_name!r}") from exc
+            pw = await async_playwright().start()
+            logger.debug(f"Playwright restarted after installing {browser_name!r}.")
+
+        _playwright = pw
+        return _playwright
+
+
+def _resolve_browser_type() -> tuple[str, str | None]:
+    """Map channel aliases (chrome, msedge) to the underlying engine name."""
+    config = Config.load()
+    name = config.browser
+    channel: str | None = None
+    if name in ("chrome", "msedge"):
+        name, channel = "chromium", name
+    return name, channel
+
+
+@functools.cache
+def _proxy_settings() -> ProxySettings | None:
+    proxy_host = Config.load().proxy
+    if not proxy_host:
+        return None
+
+    pattern = re.compile(
+        r"^(?P<protocol>https?|socks5?|http)://"
+        r"(?P<username>[^:]+):(?P<password>[^@]+)"
+        r"@(?P<host>[^:/]+)(?::(?P<port>\d+))?$",
+        re.IGNORECASE,
+    )
+    if m := pattern.match(proxy_host):
+        info = m.groupdict()
+        url = f"{info['protocol']}://{info['host']}:{info['port'] or 80}"
+        return {"server": url, "username": info["username"], "password": info["password"]}
+
+    return {"server": proxy_host}
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+@contextlib.asynccontextmanager
+async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
+    """Async context manager that yields a freshly launched :class:`Browser`.
+
+    The Playwright instance is shared and reused; only the browser process is
+    created and destroyed per invocation.
+    """
+    global _in_use, _last_use_ended
+
+    pw = await _ensure_playwright()
+    name, channel = _resolve_browser_type()
+
+    browser_type: BrowserType = getattr(pw, name)
+    display = f"{name} ({channel})" if channel else name
+    logger.opt(colors=True).debug(f"Launching browser <g>{display}</> with <c>headless</>=<y>{headless}</>")
+
+    browser: Browser = await browser_type.launch(
+        channel=channel,
+        headless=headless,
+        proxy=_proxy_settings(),
+    )
+    _in_use += 1
+    try:
+        async with browser:
+            yield browser
+    finally:
+        _in_use -= 1
+        _last_use_ended = time.monotonic()
+        if _in_use == 0:
+            _idle_event.set()
+
+
+async def shutdown_playwright() -> None:
+    """Stop the shared Playwright instance.  Safe to call even if not running."""
+    global _playwright
+
+    async with _playwright_lock:
+        if _playwright is None:
+            return
+        pw, _playwright = _playwright, None
+
+    logger.debug("Shutting down Playwright...")
+    with contextlib.suppress(Exception):
+        await pw.stop()
+    logger.debug("Playwright stopped.")
+
+
+async def shutdown_idle_playwright_loop() -> None:
+    """Background coroutine that stops Playwright after it has been idle for
+    ``PLAYWRIGHT_IDLE_TIMEOUT`` seconds.
+
+    Designed to be run as a long-lived task alongside the main work tasks::
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(setup_paint)
+            tg.start_soon(shutdown_idle_playwright_loop)
+
+    **Algorithm** (event-based, no polling):
+
+    1. Block until ``_idle_event`` is set (i.e., ``_in_use`` just dropped to 0).
+    2. Clear the event and compute the remaining time until the idle deadline.
+    3. Sleep only for that remaining duration.
+    4. If ``_in_use`` is still 0 *and* the deadline has truly passed, shut down
+       Playwright.  Otherwise restart from step 1.
+    """
+    logger.debug("Idle Playwright shutdown loop started.")
+    while True:
+        # Wait until someone signals that there are no active browsers.
+        await _idle_event.wait()
+        _idle_event.clear()
+
+        # Sleep until the idle deadline.  _last_use_ended may advance while we
+        # sleep (if the browser is used again and released), which is fine — we
+        # will simply find _in_use > 0 or the deadline has not yet passed.
+        deadline = _last_use_ended + PLAYWRIGHT_IDLE_TIMEOUT
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            logger.debug(f"Playwright became idle; will shut down in {remaining:.0f}s if no new requests arrive.")
+            await asyncio.sleep(remaining)
+
+        # Guard: the browser may have been used again while we were sleeping.
+        if _in_use > 0:
+            continue
+
+        # Guard: _last_use_ended may have been updated (another idle cycle
+        # started and our sleep did not cover the new deadline).
+        if time.monotonic() < _last_use_ended + PLAYWRIGHT_IDLE_TIMEOUT:
+            continue
+
+        if _playwright is not None:
+            logger.debug(f"Playwright has been idle for {PLAYWRIGHT_IDLE_TIMEOUT}s; shutting down.")
+            await shutdown_playwright()

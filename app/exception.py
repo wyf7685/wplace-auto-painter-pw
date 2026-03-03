@@ -10,6 +10,10 @@ class ShouldQuit(AppException):
     """Exception to signal that a loop should stop."""
 
 
+class BrowserNotAvailable(ShouldQuit):
+    """Exception raised when the configured Playwright browser is not available."""
+
+
 class ResolveFailed(ShouldQuit):
     """Exception raised when resolving JS functions fails."""
 
