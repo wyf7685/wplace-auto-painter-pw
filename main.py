@@ -102,12 +102,13 @@ def _should_use_tray() -> bool:
 
     Checks (in order):
     1. ``--tray`` command-line flag (highest priority, works before config exists)
-    2. ``config.tray_mode`` field (requires a valid config file)
-    3. Platform guard: tray mode is Windows-only.
+    2. Environment variable ``WPLACE_TRAY_RESPAWNED=1`` (set by the respawn logic)
+    3. ``config.tray_mode`` field (requires a valid config file)
+    4. Platform guard: tray mode is Windows-only.
     """
     if sys.platform != "win32":
         return False
-    if "--tray" in sys.argv[1:]:
+    if "--tray" in sys.argv[1:] or os.environ.get("WPLACE_TRAY_RESPAWNED"):
         return True
 
     from app.config import Config
@@ -137,13 +138,14 @@ def _respawn_as_pythonw() -> None:
         return
     env = os.environ.copy()
     env["WPLACE_TRAY_RESPAWNED"] = "1"
-    subprocess.Popen(  # noqa: S603
+    p = subprocess.Popen(  # noqa: S603
         [str(pythonw), *sys.argv],
         env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    logger.info(f"Respawning with pythonw.exe (PID {p.pid}), exiting current process")
     sys.exit(0)
 
 
