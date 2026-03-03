@@ -52,7 +52,7 @@ class WplaceUserInfo(BaseModel):
     equippedFlag: int = 0  # 0 when not equipped
     equippedFrameId: int = 0  # 0 when not equipped
     equippedFrameUrl: str = ""  # "" when not equipped
-    equippedNameCosmetic: dict[str, Any]
+    equippedNameCosmetic: dict[str, Any] | None = None
     experiments: dict[str, Any]
     extraColorsBitmap: int
     favoriteLocations: list[FavoriteLocation]
