@@ -76,13 +76,13 @@ async def async_main() -> None:
     from app.browser import shutdown_idle_playwright_loop, shutdown_playwright
     from app.exception import AppException
     from app.utils.update import check_update_loop
-    from app.wplace import setup_paint
+    from app.wplace import setup_events, setup_paint
 
     async def setup_loops() -> None:
         try:
             async with anyio.create_task_group() as inner:
                 inner.start_soon(setup_paint)
-                # inner.start_soon(...)
+                inner.start_soon(setup_events)
         finally:
             outer.cancel_scope.cancel()
 
