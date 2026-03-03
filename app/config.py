@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from playwright._impl._api_structures import SetCookieParam
 
 
+APP_NAME = "wplace-auto-painter"
 DATA_DIR = Path.cwd().resolve().joinpath("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR = DATA_DIR / "templates"

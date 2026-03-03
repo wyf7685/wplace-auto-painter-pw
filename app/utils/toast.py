@@ -51,6 +51,26 @@ def notify(
         _w11t.notify(title, body, icon=_ICON, **kwargs)
 
 
+async def toast_async(
+    title: str,
+    body: str = "",
+    # Passed through to win11toast.notify(); ignored on unsupported platforms.
+    **kwargs: Any,
+) -> None:
+    """Async variant of notify().
+
+    Still fire-and-forget; the caller need not await it.  Silently does
+    nothing when not running on Windows or when win11toast is unavailable.
+    """
+    if not _available(_w11t):
+        return
+
+    try:
+        await _w11t.toast_async(title, body, icon=_ICON, **kwargs)
+    except Exception:
+        logger.opt(exception=True).warning("Failed to show toast notification")
+
+
 def notify_with_button(
     title: str,
     body: str = "",

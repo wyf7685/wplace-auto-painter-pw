@@ -13,7 +13,7 @@ from pydantic import SecretStr
 
 from app.assets import assets
 from app.browser import get_browser
-from app.config import Config, WplaceCredentials
+from app.config import APP_NAME, Config, WplaceCredentials
 from app.exception import ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
 from app.utils import Highlight, WplacePixelCoords, toast
@@ -101,7 +101,7 @@ async def notify_open_browser() -> None:
         clicked = await anyio.to_thread.run_sync(
             functools.partial(
                 toast.notify_with_button,
-                "wplace-auto-painter",
+                APP_NAME,
                 "即将打开浏览器窗口进行绘制操作。",
                 button="确认",
             ),
@@ -110,7 +110,7 @@ async def notify_open_browser() -> None:
         if not clicked:
             logger.info("Toast timed out or dismissed, proceeding to open browser.")
     else:
-        toast.notify("wplace-auto-painter", "即将打开浏览器窗口进行绘制操作。")
+        toast.notify(APP_NAME, "即将打开浏览器窗口进行绘制操作。")
 
 
 class WplacePage:

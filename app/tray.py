@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from app.config import APP_NAME
 from app.utils.ansi_qt import LOG_BG, iter_segments
 
 type AsyncMain = Callable[[], Coroutine[None, None, None]]
@@ -59,6 +60,7 @@ class _Emitter(QObject):
 
     new_log = pyqtSignal(str)  # anyio/loguru thread → Qt: a new log line
     anyio_done = pyqtSignal()  # anyio thread → Qt: async work has finished
+    open_logs = pyqtSignal()  # any thread → Qt: user wants to open the logs window
 
 
 # module-level instance; set in run_tray() before the sink is registered
@@ -87,7 +89,7 @@ class LogWindow(QWidget):
 
     def __init__(self) -> None:
         super().__init__(None, Qt.WindowType.Window)
-        self.setWindowTitle("wplace-auto-painter — Logs")
+        self.setWindowTitle(f"{APP_NAME} — Logs")
         self.setWindowIcon(_load_icon())
         self.resize(960, 560)
 
@@ -157,21 +159,21 @@ class _TrayIcon(QSystemTrayIcon):
         menu = QMenu()
         show_act = menu.addAction("显示日志")
         assert show_act is not None
-        show_act.triggered.connect(self._show_logs)
+        show_act.triggered.connect(self.show_logs_window)
         menu.addSeparator()
         quit_act = menu.addAction("退出")
         assert quit_act is not None
         quit_act.triggered.connect(_request_quit)
 
         self.setContextMenu(menu)
-        self.setToolTip("wplace-auto-painter")
+        self.setToolTip(APP_NAME)
         self.activated.connect(self._on_activated)
 
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self._show_logs()
+            self.show_logs_window()
 
-    def _show_logs(self) -> None:
+    def show_logs_window(self) -> None:
         self._log_window.show()
         self._log_window.raise_()
         self._log_window.activateWindow()
@@ -210,6 +212,16 @@ def _anyio_thread(async_main: AsyncMain, emitter: _Emitter) -> None:
     """Thread target: run *async_main* under anyio and notify Qt when done."""
 
     async def _runner() -> None:
+        async def _notify_startup() -> None:
+            from app.utils import toast
+
+            await toast.toast_async(
+                APP_NAME,
+                "应用已在后台启动，可通过托盘图标查看状态。",
+                duration="short",
+                on_click=lambda *_: emitter.open_logs.emit(),
+            )
+
         async def _stop_waiter(scope: anyio.CancelScope) -> None:
             # Block a thread-pool thread until Qt signals "stop", then cancel.
             # abandon_on_cancel=True: if the outer scope is cancelled first
@@ -219,6 +231,7 @@ def _anyio_thread(async_main: AsyncMain, emitter: _Emitter) -> None:
             scope.cancel()
 
         async with anyio.create_task_group() as tg:
+            tg.start_soon(_notify_startup)
             tg.start_soon(_stop_waiter, tg.cancel_scope)
             try:
                 await async_main()
@@ -260,13 +273,8 @@ def run_tray(async_main: AsyncMain) -> None:
 
     from app.config import Config
     from app.log import log_format, logger
-    from app.utils import toast
 
     Config.set_background_mode()
-    toast.notify(
-        "wplace-auto-painter",
-        "应用已在后台启动，可通过托盘图标查看状态。",
-    )
 
     logger.add(
         _qt_sink,
@@ -281,6 +289,7 @@ def run_tray(async_main: AsyncMain) -> None:
     emitter.new_log.connect(log_window.append_log)
     # anyio finished on its own → ask Qt to quit as well
     emitter.anyio_done.connect(_request_quit)
+    emitter.open_logs.connect(tray.show_logs_window)
     tray.show()
 
     t = threading.Thread(
