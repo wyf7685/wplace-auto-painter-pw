@@ -1,21 +1,28 @@
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from PyInstaller.building.api import EXE, PYZ
 from PyInstaller.building.build_main import Analysis
-from PyInstaller.utils.hooks import collect_data_files
 
 ROOT = Path.cwd()
 ICON = ROOT.joinpath("app", "assets", "gui.ico")
-ROOT.joinpath("app", "assets", ".git_commit_hash").write_text(
-    subprocess.run(
-        ["git", "rev-parse", "HEAD"],  # noqa: S607
+
+
+def write_git_commit_hash() -> None:
+    git = shutil.which("git")
+    if git is None:
+        raise RuntimeError("Git is not available")
+
+    p = subprocess.run(  # noqa: S603
+        [git, "rev-parse", "HEAD"],
         capture_output=True,
         text=True,
         check=True,
-    ).stdout.strip(),
-    encoding="utf-8",
-)
+    )
+    commit_hash = p.stdout.strip()
+    ROOT.joinpath("app", "assets", ".git_commit_hash").write_text(commit_hash, encoding="utf-8")
 
 
 # Build config-gui
@@ -24,10 +31,7 @@ def build_config_gui() -> None:
         ["gui_main.py"],
         pathex=[],
         binaries=[],
-        datas=[
-            ("app/assets", "assets"),
-            *collect_data_files("tarina"),
-        ],
+        datas=[("app/assets", "assets")],
         hiddenimports=[],
         hookspath=[],
         hooksconfig={},
@@ -67,10 +71,7 @@ def build_main_app() -> None:
         ["main.py"],
         pathex=[],
         binaries=[],
-        datas=[
-            ("app/assets", "assets"),
-            *collect_data_files("tarina"),
-        ],
+        datas=[("app/assets", "assets")],
         hiddenimports=[],
         hookspath=[],
         hooksconfig={},
@@ -81,6 +82,7 @@ def build_main_app() -> None:
     )
     pyz = PYZ(a.pure)
 
+    is_windows = sys.platform == "win32"
     EXE(
         pyz,
         a.scripts,
@@ -95,7 +97,7 @@ def build_main_app() -> None:
         upx=True,
         upx_exclude=[],
         runtime_tmpdir=None,
-        console=False,
+        console=not is_windows,
         disable_windowed_traceback=False,
         argv_emulation=False,
         target_arch=None,
@@ -104,5 +106,6 @@ def build_main_app() -> None:
     )
 
 
+write_git_commit_hash()
 build_config_gui()
 build_main_app()

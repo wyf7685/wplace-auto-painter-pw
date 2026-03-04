@@ -10,7 +10,7 @@ from pathlib import Path
 
 import anyio
 
-from app.log import logger
+from app.log import escape_tag, logger
 
 
 def _is_frozen() -> bool:
@@ -21,11 +21,14 @@ def launch_config_gui() -> None:
     if _is_frozen():
         gui_executable = Path(sys.executable).parent / ("config-gui" + (".exe" if sys.platform == "win32" else ""))
         if not gui_executable.is_file():
-            logger.error(f"找不到配置 GUI 可执行文件: {gui_executable}")
+            logger.opt(colors=True).error(f"找不到配置 GUI 可执行文件: <y>{escape_tag(str(gui_executable))}</y>")
             return
         args = [str(gui_executable)]
     else:
         gui_entry = Path(__file__).parent / "gui_main.py"
+        if not gui_entry.is_file():
+            logger.opt(colors=True).error(f"找不到配置 GUI 入口文件: <y>{escape_tag(str(gui_entry))}</y>")
+            return
         args = [sys.executable, str(gui_entry)]
 
     try:

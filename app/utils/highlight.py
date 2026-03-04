@@ -3,8 +3,8 @@ import functools
 from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from bot7685_ext import LRU
 from pydantic import BaseModel
-from tarina import LRU
 
 from app.log import escape_tag
 
