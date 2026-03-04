@@ -15,6 +15,8 @@ IS_FROZEN = getattr(sys, "frozen", False)
 OWNER = "wyf7685"
 REPO = "wplace-auto-painter-pw"
 BRANCH = "master"
+WORKFLOW_FILE = "build.yml"
+ACTIONS_URL = f"https://github.com/{OWNER}/{REPO}/actions/workflows/{WORKFLOW_FILE}"
 
 
 def get_local_commit_hash() -> str | None:
@@ -71,7 +73,9 @@ async def check_update() -> None:
     logger.warning("=" * 60)
     logger.opt(colors=True).warning(f"检测到有新版本可用: <y>{local_hash[:7]}</> -> <g>{latest_hash[:7]}</>")
     logger.opt(colors=True).warning(
-        "请前往仓库 Actions 页面下载最新构建" if IS_FROZEN else "请使用命令 <y>git pull</> 拉取最新代码并重新运行程序"
+        f"请前往 <y>{ACTIONS_URL}</> 下载最新构建并替换当前程序"
+        if IS_FROZEN
+        else "请使用命令 <y>git pull</> 拉取最新代码并重新运行程序"
     )
     logger.warning("=" * 60)
 
