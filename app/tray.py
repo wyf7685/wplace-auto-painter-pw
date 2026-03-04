@@ -19,10 +19,11 @@ import sys
 import threading
 from collections import deque
 from collections.abc import Callable, Coroutine
-from typing import Any, override
+from typing import override
 
 import anyio
 import anyio.to_thread
+import loguru
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtGui import QCloseEvent, QColor, QFont, QIcon, QPixmap, QTextCursor
 from PyQt6.QtWidgets import (
@@ -72,9 +73,9 @@ _emitter: _Emitter | None = None
 
 
 def _apply_qt_sink() -> None:
-    from app.log import log_format, logger
+    from app.log import log_format, log_level_filter, logger
 
-    def _qt_sink(message: Any) -> None:
+    def _qt_sink(message: loguru.Message) -> None:
         text = str(message).rstrip("\n")
         _log_buffer.append(text)
         if _emitter is not None:
@@ -83,7 +84,8 @@ def _apply_qt_sink() -> None:
     logger.add(
         _qt_sink,
         format=log_format,
-        level="TRACE",
+        filter=log_level_filter(),
+        level="DEBUG",
         colorize=True,  # preserve ANSI codes for LogWindow's rich-text renderer
         enqueue=True,
     )

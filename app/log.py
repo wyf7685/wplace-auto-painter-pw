@@ -3,17 +3,11 @@ import inspect
 import logging
 import re
 import sys
-from typing import TYPE_CHECKING
+from collections.abc import Callable
 
 import loguru
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from loguru import Logger, Record
-
-
-logger: Logger = loguru.logger
+logger: loguru.Logger = loguru.logger
 
 
 def escape_tag(s: str) -> str:
@@ -49,14 +43,14 @@ log_format = "<g>{time:HH:mm:ss}</g> [<lvl>{level}</lvl>] <c><u>{name}</u></c> |
 logger.remove()
 
 
-def _filter() -> Callable[[Record], bool]:
+def log_level_filter() -> Callable[[loguru.Record], bool]:
     @functools.cache
     def _level() -> int:
         from app.config import Config
 
         return logger.level(Config.load().log_level).no
 
-    def filter_func(record: Record) -> bool:
+    def filter_func(record: loguru.Record) -> bool:
         try:
             return record["level"].no >= _level()
         except Exception:
@@ -72,8 +66,9 @@ if sys.stdout:
         diagnose=False,
         enqueue=True,
         format=log_format,
-        filter=_filter(),
+        filter=log_level_filter(),
     )
+
 logger.add(
     "./logs/{time:YYYY-MM-DD}.log",
     rotation="00:00",
@@ -81,4 +76,5 @@ logger.add(
     diagnose=True,
     enqueue=True,
     format=log_format,
+    encoding="utf-8",
 )
