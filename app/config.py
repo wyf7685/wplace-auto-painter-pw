@@ -35,6 +35,10 @@ class Config(BaseModel):
         default=False,
         description="Hide the console and show a system tray icon instead (Windows only)",
     )
+    disable_notifications: bool = Field(
+        default=False,
+        description="Whether to disable desktop notifications (not recommended)",
+    )
 
     @classmethod
     def load(cls) -> Config:

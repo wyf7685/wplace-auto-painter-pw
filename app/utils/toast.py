@@ -79,6 +79,13 @@ def _build_toast(title: str, body: str, duration: Duration = Duration.Default) -
     return toast
 
 
+def _is_disabled() -> bool:
+    """Return ``True`` if notifications are disabled by config."""
+    from app.config import Config
+
+    return Config.load().disable_notifications
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 
@@ -93,7 +100,7 @@ def notify(
     Non-blocking; returns immediately.  Does nothing on non-Windows or when
     windows_toasts is unavailable.
     """
-    if not _available(_wt):
+    if not _available(_wt) or _is_disabled():
         return
 
     try:
@@ -119,7 +126,7 @@ async def toast_async(
     (required for reliable ``on_activated`` delivery); falls back to
     ``WindowsToaster`` otherwise.
     """
-    if not _available(_wt):
+    if not _available(_wt) or _is_disabled():
         return
 
     try:
@@ -149,7 +156,7 @@ def notify_with_button(
     Returns ``True`` when the user clicked the button, ``False`` on
     timeout / dismiss / error or on non-Windows / unavailable platforms.
     """
-    if not _available(_wt):
+    if not _available(_wt) or _is_disabled():
         return False
 
     done = threading.Event()
