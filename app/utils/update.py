@@ -1,17 +1,15 @@
 import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
 
 import anyio
 import httpx
 
-from app.assets import ASSETS_DIR
+from app.const import ASSETS_DIR, IS_FROZEN
 from app.log import logger
 
 from .func import subprocess_options
 
-IS_FROZEN = getattr(sys, "frozen", False)
 OWNER = "wyf7685"
 REPO = "wplace-auto-painter-pw"
 BRANCH = "master"

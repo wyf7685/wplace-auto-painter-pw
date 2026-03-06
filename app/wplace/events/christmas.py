@@ -5,9 +5,9 @@ import anyio
 import cloudscraper
 from pydantic import BaseModel, TypeAdapter, computed_field
 
-from app.assets import assets
 from app.browser import get_browser
 from app.config import UserConfig
+from app.const import assets
 from app.exception import FetchFailed
 from app.log import logger
 from app.schemas import WplaceCredentials, WplacePixelCoords

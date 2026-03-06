@@ -202,10 +202,10 @@ class _TrayIcon(QSystemTrayIcon):
 
 
 def _load_icon() -> QIcon:
-    from app.assets import ICON_PATH
+    from app.const import assets
 
-    if ICON_PATH.is_file():
-        return QIcon(str(ICON_PATH))
+    if assets.icon.is_file():
+        return QIcon(str(assets.icon))
     # Fallback: a solid 16×16 square in the Windows accent blue
     pm = QPixmap(16, 16)
     pm.fill(QColor(0, 120, 215))

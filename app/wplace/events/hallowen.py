@@ -7,10 +7,9 @@ import anyio.to_thread
 import cloudscraper
 import httpx
 
-from app.assets import assets
 from app.browser import get_browser
 from app.config import Config, UserConfig
-from app.const import DATA_DIR
+from app.const import DATA_DIR, assets
 from app.log import escape_tag, logger
 from app.utils import requests_proxies
 

@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from app.assets import ICON_PATH
+from app.const import assets
 from app.log import logger
 from app.schemas import WplacePixelCoords
 
@@ -44,8 +44,8 @@ class ConfigInitWindow(QWidget):
 
         # 尝试设置窗口图标（确保传入字符串路径）
         try:
-            if ICON_PATH.is_file():
-                self.setWindowIcon(QIcon(str(ICON_PATH)))
+            if assets.icon.is_file():
+                self.setWindowIcon(QIcon(str(assets.icon)))
         except Exception as exc:
             logger.debug(f"无法设置窗口图标: {exc}")
 

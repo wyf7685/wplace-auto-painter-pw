@@ -17,8 +17,7 @@ from collections.abc import Callable
 from enum import Enum
 from typing import TYPE_CHECKING, TypeGuard
 
-from app.assets import ICON_PATH
-from app.const import APP_NAME
+from app.const import APP_NAME, assets
 from app.log import logger
 
 if TYPE_CHECKING:
@@ -60,11 +59,11 @@ def is_available() -> bool:
 
 def _logo_image() -> ToastDisplayImage | None:
     """Return a ``ToastDisplayImage`` for the app icon, or ``None`` if unavailable."""
-    if not _available(_wt) or not ICON_PATH.is_file():
+    if not _available(_wt) or not assets.icon.is_file():
         return None
     with contextlib.suppress(Exception):
         return _wt.ToastDisplayImage.fromPath(
-            ICON_PATH,
+            assets.icon,
             position=_wt.ToastImagePosition.AppLogo,
         )
     return None
