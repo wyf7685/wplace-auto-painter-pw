@@ -1,7 +1,7 @@
 # wplace-auto-painter-pw
 
 > [!CAUTION]
-> 
+>
 > This project is not affiliated with [WPlace.live](https://wplace.live/), and its use may violate the site's rules. The developers are not responsible for any account penalties. Use at your own risk.
 
 [![python](https://img.shields.io/badge/python-3.14+-blue?logo=python&logoColor=edb641)](https://www.python.org/)
@@ -10,7 +10,13 @@
 
 Paint on wplace with playwright
 
-## Prerequisites
+> [!tip]
+>
+> Prebuilt binaries are available on [GitHub Actions](https://github.com/wyf7685/wplace-auto-painter-pw/actions) for Windows and Linux.
+>
+> Note that prebuilt versions have limited support. Running from source is recommended for better compatibility.
+
+## Develop
 
 Before setting up this project, ensure you have the following installed:
 
@@ -32,29 +38,18 @@ cd wplace-auto-painter-pw
 uv sync
 ```
 
-3. (Optional) Install Playwright browsers:
+3. ~~Install Playwright browsers~~ 
 
-If your [configuration](#configuration) uses **Chrome** (`chrome`) or **Microsoft Edge** (`msedge`), no additional installation is needed as they use the system-installed browsers.
+No longer needed
 
-For other browsers, install Playwright's browser binaries:
-
-```bash
-# Install Chromium
-uv run playwright install chromium
-
-# Install Firefox
-uv run playwright install firefox
-
-# Install WebKit
-uv run playwright install webkit
-```
+Playwright browsers will be automatically downloaded into `data/` when running the app for the first time.
 
 ## Configuration
 
 Execute the following command to open the config GUI:
 
 ```bash
-uv run gui_main.py
+uv run main.py config
 ```
 
 This will help you to create `data/config.json` and `data/templates/` to store your credentials and templates.
@@ -70,12 +65,6 @@ uv run main.py
 > [!note]
 >
 > If your configuration is not set up or broken, this will open the config GUI first.
-
-> [!tip]
->
-> Prebuilt binaries are available on [GitHub Actions](https://github.com/wyf7685/wplace-auto-painter-pw/actions) for Windows and Linux.
->
-> Note that prebuilt versions have limited support. Running from source is recommended for better compatibility.
 
 ## See Also
 
