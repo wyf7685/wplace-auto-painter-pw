@@ -37,11 +37,36 @@ else:
 
 # windows_toasts is a Windows-only optional dependency; import is guarded below.
 _wt = None
+_interactive_toast_available = False
 
 if sys.platform == "win32":
-    with contextlib.suppress(ImportError):
-        import windows_toasts as _wt
-        from windows_toasts import ToastDuration as Duration
+
+    def _load_windows_toasts() -> None:
+        global _wt, Duration, _interactive_toast_available
+
+        try:
+            import windows_toasts as wt
+            from winrt.windows.ui.notifications import NotificationSetting
+        except ImportError:
+            logger.debug("windows_toasts is not available; toast notifications will be disabled")
+            return
+
+        if wt.WindowsToaster(APP_NAME).toastNotifier.setting != NotificationSetting.ENABLED:
+            logger.debug("Notifications are disabled in Windows settings; toast notifications will be disabled")
+            return
+
+        logger.debug("windows_toasts is available")
+        if wt.InteractableWindowsToaster(APP_NAME).toastNotifier.setting == NotificationSetting.ENABLED:
+            _interactive_toast_available = True
+        else:
+            logger.debug("Interacitve toasts are not available; action buttons and click callbacks will not work")
+
+        _wt = wt
+        if not TYPE_CHECKING:
+            # type checker complains about using variable in type annotations
+            Duration = wt.ToastDuration
+
+    _load_windows_toasts()
 
 
 def _available[M](mod: M | None) -> TypeGuard[M]:
@@ -80,7 +105,7 @@ def _build_toast(title: str, body: str, duration: Duration = Duration.Default) -
 
 
 def _is_disabled() -> bool:
-    """Return ``True`` if notifications are disabled by config."""
+    """Return ``True`` if notifications are disabled."""
     from app.config import Config
 
     return Config.load().disable_notifications
@@ -131,7 +156,7 @@ async def toast_async(
 
     try:
         toast = _build_toast(title, body, duration)
-        if on_click is not None:
+        if on_click is not None and _interactive_toast_available:
             toast.on_activated = lambda _args: on_click()
             toaster = _wt.InteractableWindowsToaster(APP_NAME)
         else:
@@ -157,6 +182,10 @@ def notify_with_button(
     timeout / dismiss / error or on non-Windows / unavailable platforms.
     """
     if not _available(_wt) or _is_disabled():
+        return False
+
+    if not _interactive_toast_available:
+        notify(title, body, duration=duration)
         return False
 
     done = threading.Event()
