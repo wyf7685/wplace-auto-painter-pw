@@ -17,7 +17,7 @@ from app.const import APP_NAME, assets
 from app.exception import ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
 from app.schemas import WplaceCredentials, WplacePixelCoords, WplaceUserInfo
-from app.utils import Highlight, toast
+from app.utils import Highlight
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -94,7 +94,10 @@ _ZOOM_PIXEL_SIZE: dict[ZoomLevel, float] = {
 
 
 async def notify_open_browser() -> None:
-    if Config.is_background_mode() and toast.is_available():
+    from app.utils import toast
+
+    logger.debug("Sending notification for opening browser...")
+    if Config.is_background_mode():
         # Block until the user acknowledges or the toast times out (10 s).
         # notify_with_button is synchronous; run it off the async thread so
         # it does not block the event loop during the wait.
@@ -123,6 +126,7 @@ class WplacePage:
         self.credentials = credentials
         self.coord = coord
         self.zoom = zoom
+        self._pixel_size = _ZOOM_PIXEL_SIZE[zoom]
 
     @contextlib.asynccontextmanager
     async def begin(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
@@ -136,6 +140,7 @@ class WplacePage:
             await context.add_init_script(assets.paint_btn(script_data))
             await context.add_cookies(self.credentials.to_pw_cookies())
             self._btn_id = script_data.get("btn", "paint-button-7685")
+            logger.opt(colors=True).debug(f"Using paint button ID: <c>{escape_tag(self._btn_id)}</>")
 
             async with await context.new_page() as page:
                 url = self.coord.to_share_url(zoom=self.zoom.value)
@@ -164,7 +169,7 @@ class WplacePage:
                     await el.click()
                     logger.info("Closed modal dialog")
                     return
-            logger.info("No Close button found in modal dialog")
+            logger.warning("No Close button found in modal dialog")
 
     @contextlib.asynccontextmanager
     async def open_paint_panel(self) -> AsyncGenerator[PaintPanel]:
@@ -186,14 +191,13 @@ class WplacePage:
 
     async def _move_by_pixel(self, dx: int, dy: int) -> None:
         """Move the page by pixel offsets."""
-        pixel_size = _ZOOM_PIXEL_SIZE[self.zoom]
         x, y = self.current_center_px
         await self.page.mouse.up(button="left")
         await self.page.mouse.move(x, y)
         await self.page.mouse.down(button="left")
         await self.page.mouse.move(
-            x - dx * pixel_size,
-            y - dy * pixel_size,
+            x - dx * self._pixel_size,
+            y - dy * self._pixel_size,
             steps=random.randint(7, 15),
         )
         await anyio.sleep(random.uniform(0.1, 0.3))
