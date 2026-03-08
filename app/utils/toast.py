@@ -11,10 +11,10 @@ to cmd.exe, which is enough for our purposes.
 """
 
 import contextlib
+import enum
 import sys
 import threading
 from collections.abc import Callable
-from enum import Enum
 from typing import TYPE_CHECKING, TypeGuard
 
 from app.const import APP_NAME, assets
@@ -23,9 +23,10 @@ from app.log import logger
 if TYPE_CHECKING:
     from windows_toasts import Toast, ToastActivatedEventArgs, ToastDisplayImage
     from windows_toasts import ToastDuration as Duration
+    from winrt.windows.ui.notifications import NotificationSetting
 else:
 
-    class Duration(Enum):
+    class Duration(enum.Enum):
         """
         Possible values for duration to display toast for
         """
@@ -34,37 +35,35 @@ else:
         Short = "short"
         Long = "long"
 
+    class NotificationSetting(enum.IntEnum):
+        ENABLED = 0
+        DISABLED_FOR_APPLICATION = 1
+        DISABLED_FOR_USER = 2
+        DISABLED_BY_GROUP_POLICY = 3
+        DISABLED_BY_MANIFEST = 4
+
 
 # windows_toasts is a Windows-only optional dependency; import is guarded below.
 _wt = None
-_interactive_toast_available = False
 
 if sys.platform == "win32":
 
     def _load_windows_toasts() -> None:
-        global _wt, Duration, _interactive_toast_available
+        global _wt, Duration, NotificationSetting
 
         try:
             import windows_toasts as wt
-            from winrt.windows.ui.notifications import NotificationSetting
+            from winrt.windows.ui.notifications import NotificationSetting as Setting
         except ImportError:
             logger.debug("windows_toasts is not available; toast notifications will be disabled")
             return
 
-        if wt.WindowsToaster(APP_NAME).toastNotifier.setting != NotificationSetting.ENABLED:
-            logger.debug("Notifications are disabled in Windows settings; toast notifications will be disabled")
-            return
-
         logger.debug("windows_toasts is available")
-        if wt.InteractableWindowsToaster(APP_NAME).toastNotifier.setting == NotificationSetting.ENABLED:
-            _interactive_toast_available = True
-        else:
-            logger.debug("Interacitve toasts are not available; action buttons and click callbacks will not work")
-
         _wt = wt
         if not TYPE_CHECKING:
             # type checker complains about using variable in type annotations
             Duration = wt.ToastDuration
+            NotificationSetting = Setting
 
     _load_windows_toasts()
 
@@ -104,11 +103,19 @@ def _build_toast(title: str, body: str, duration: Duration = Duration.Default) -
     return toast
 
 
-def _is_disabled() -> bool:
+def _get_notification_setting(interactive: bool = False) -> NotificationSetting:
+    if not _available(_wt):
+        return NotificationSetting.DISABLED_BY_MANIFEST
+
+    toaster = _wt.InteractableWindowsToaster(APP_NAME) if interactive else _wt.WindowsToaster(APP_NAME)
+    return toaster.toastNotifier.setting
+
+
+def _is_disabled(interactive: bool = False) -> bool:
     """Return ``True`` if notifications are disabled."""
     from app.config import Config
 
-    return Config.load().disable_notifications
+    return Config.load().disable_notifications or _get_notification_setting(interactive) != NotificationSetting.ENABLED
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -156,7 +163,7 @@ async def toast_async(
 
     try:
         toast = _build_toast(title, body, duration)
-        if on_click is not None and _interactive_toast_available:
+        if on_click is not None and not _is_disabled(interactive=True):
             toast.on_activated = lambda _args: on_click()
             toaster = _wt.InteractableWindowsToaster(APP_NAME)
         else:
@@ -184,7 +191,7 @@ def notify_with_button(
     if not _available(_wt) or _is_disabled():
         return False
 
-    if not _interactive_toast_available:
+    if _is_disabled(interactive=True):
         notify(title, body, duration=duration)
         return False
 
