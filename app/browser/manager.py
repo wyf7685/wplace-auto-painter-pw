@@ -24,6 +24,7 @@ Idle shutdown
 
 import asyncio
 import contextlib
+import dataclasses
 import functools
 import re
 import time
@@ -42,20 +43,42 @@ if TYPE_CHECKING:
     from playwright.async_api import Browser, BrowserType, Playwright, ProxySettings
 
 # ---------------------------------------------------------------------------
-# Module-level state
+# Loop bounded state
 # ---------------------------------------------------------------------------
 
-_playwright: Playwright | None = None
-_playwright_lock = asyncio.Lock()
 
-# Number of currently open get_browser() contexts.
-_in_use: int = 0
+@dataclasses.dataclass
+class _PlaywrightState:
+    instance: Playwright | None = None
+    in_use: int = 0
+    last_use_ended: float = 0.0
+    instance_lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock)
+    idle_event: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
 
-# Monotonic timestamp recorded when _in_use last dropped to 0.
-_last_use_ended: float = 0.0
 
-# Set whenever _in_use drops to 0, consumed by shutdown_idle_playwright_loop.
-_idle_event: asyncio.Event = asyncio.Event()
+_pw_states: dict[asyncio.AbstractEventLoop, _PlaywrightState] = {}
+
+
+def _cleanup_states() -> None:
+    """Clean up _PlaywrightState entries for event loops that have been closed."""
+    alive_loops = {loop for loop in _pw_states if not loop.is_closed()}
+    for loop in list(_pw_states):
+        if loop not in alive_loops:
+            logger.debug(f"Cleaning up Playwright state for dead loop {loop}")
+            del _pw_states[loop]
+
+
+def _get_state() -> _PlaywrightState:
+    _cleanup_states()
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        raise RuntimeError("Playwright state can only be accessed from an async context") from None
+
+    if loop not in _pw_states:
+        _pw_states[loop] = _PlaywrightState()
+    return _pw_states[loop]
 
 
 # ---------------------------------------------------------------------------
@@ -66,11 +89,10 @@ _idle_event: asyncio.Event = asyncio.Event()
 async def _ensure_playwright() -> Playwright:
     """Return the shared Playwright instance, starting it (and optionally
     installing the browser) if necessary.  Thread-safe via asyncio Lock."""
-    global _playwright
-
-    async with _playwright_lock:
-        if _playwright is not None:
-            return _playwright
+    state = _get_state()
+    async with state.instance_lock:
+        if state.instance is not None:
+            return state.instance
 
         from playwright.async_api import async_playwright
 
@@ -96,8 +118,8 @@ async def _ensure_playwright() -> Playwright:
             pw = await async_playwright().start()
             logger.debug(f"Playwright restarted after installing {browser_name!r}.")
 
-        _playwright = pw
-        return _playwright
+        state.instance = pw
+        return pw
 
 
 def _resolve_browser_type() -> tuple[str, str | None]:
@@ -142,8 +164,7 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
     The Playwright instance is shared and reused; only the browser process is
     created and destroyed per invocation.
     """
-    global _in_use, _last_use_ended
-
+    state = _get_state()
     pw = await _ensure_playwright()
     name, channel = _resolve_browser_type()
 
@@ -156,25 +177,24 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
         headless=headless,
         proxy=_proxy_settings(),
     )
-    _in_use += 1
+    state.in_use += 1
     try:
         async with browser:
             yield browser
     finally:
-        _in_use -= 1
-        _last_use_ended = time.monotonic()
-        if _in_use == 0:
-            _idle_event.set()
+        state.in_use -= 1
+        state.last_use_ended = time.monotonic()
+        if state.in_use == 0:
+            state.idle_event.set()
 
 
 async def shutdown_playwright() -> None:
     """Stop the shared Playwright instance.  Safe to call even if not running."""
-    global _playwright
-
-    async with _playwright_lock:
-        if _playwright is None:
+    state = _get_state()
+    async with state.instance_lock:
+        if state.instance is None:
             return
-        pw, _playwright = _playwright, None
+        pw, state.instance = state.instance, None
 
     logger.debug("Shutting down Playwright...")
     with contextlib.suppress(Exception):
@@ -201,29 +221,30 @@ async def shutdown_idle_playwright_loop() -> None:
        Playwright.  Otherwise restart from step 1.
     """
     logger.debug("Idle Playwright shutdown loop started.")
+    state = _get_state()
     while True:
         # Wait until someone signals that there are no active browsers.
-        await _idle_event.wait()
-        _idle_event.clear()
+        await state.idle_event.wait()
+        state.idle_event.clear()
 
         # Sleep until the idle deadline.  _last_use_ended may advance while we
         # sleep (if the browser is used again and released), which is fine — we
         # will simply find _in_use > 0 or the deadline has not yet passed.
-        deadline = _last_use_ended + PLAYWRIGHT_IDLE_TIMEOUT
+        deadline = state.last_use_ended + PLAYWRIGHT_IDLE_TIMEOUT
         remaining = deadline - time.monotonic()
         if remaining > 0:
             logger.debug(f"Playwright became idle; will shut down in {remaining:.0f}s if no new requests arrive.")
             await asyncio.sleep(remaining)
 
         # Guard: the browser may have been used again while we were sleeping.
-        if _in_use > 0:
+        if state.in_use > 0:
             continue
 
         # Guard: _last_use_ended may have been updated (another idle cycle
         # started and our sleep did not cover the new deadline).
-        if time.monotonic() < _last_use_ended + PLAYWRIGHT_IDLE_TIMEOUT:
+        if time.monotonic() < state.last_use_ended + PLAYWRIGHT_IDLE_TIMEOUT:
             continue
 
-        if _playwright is not None:
+        if state.instance is not None:
             logger.debug(f"Playwright has been idle for {PLAYWRIGHT_IDLE_TIMEOUT}s; shutting down.")
             await shutdown_playwright()

@@ -2,7 +2,7 @@ import functools
 from typing import TYPE_CHECKING, Literal
 
 from bot7685_ext.wplace.consts import COLORS_ID, ColorName
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 from .template import TemplateConfig
 
@@ -76,6 +76,34 @@ class UserConfig(BaseModel):
         default=None,
         description="Maximum number of charges to use for single paint loop, null means no limit",
     )
+
+    @field_validator("identifier")
+    @classmethod
+    def validate_identifier(cls, value: str) -> str:
+        identifier = value.strip()
+        if not identifier:
+            raise ValueError("identifier cannot be empty")
+        return identifier
+
+    @field_validator("selected_area")
+    @classmethod
+    def validate_selected_area(cls, value: tuple[int, int, int, int] | None) -> tuple[int, int, int, int] | None:
+        if value is None:
+            return value
+        x, y, w, h = value
+        if x < 0 or y < 0:
+            raise ValueError("selected_area x/y must be >= 0")
+        if w <= 0 or h <= 0:
+            raise ValueError("selected_area width/height must be > 0")
+        return value
+
+    @model_validator(mode="after")
+    def validate_charges(self) -> UserConfig:
+        if self.min_paint_charges <= 0:
+            raise ValueError("min_paint_charges must be > 0")
+        if self.max_paint_charges is not None and self.max_paint_charges <= 0:
+            raise ValueError("max_paint_charges must be > 0")
+        return self
 
     @functools.cached_property
     def preferred_colors_rank(self) -> list[int]:

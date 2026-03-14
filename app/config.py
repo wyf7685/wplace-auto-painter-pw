@@ -1,7 +1,7 @@
 import json
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.const import CONFIG_FILE, CONFIG_SCHEMA_FILE
 from app.schemas import UserConfig
@@ -39,6 +39,25 @@ class Config(BaseModel):
         default=False,
         description="Whether to disable desktop notifications (not recommended)",
     )
+
+    @model_validator(mode="after")
+    def validate_users(self) -> Config:
+        if not self.users:
+            raise ValueError("users cannot be empty")
+
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for user in self.users:
+            identifier = user.identifier
+            if identifier in seen:
+                duplicates.add(identifier)
+            seen.add(identifier)
+
+        if duplicates:
+            dup_text = ", ".join(sorted(duplicates))
+            raise ValueError(f"duplicate user identifier(s): {dup_text}")
+
+        return self
 
     @classmethod
     def load(cls) -> Config:

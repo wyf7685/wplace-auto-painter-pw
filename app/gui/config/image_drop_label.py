@@ -1,5 +1,6 @@
-# ruff: noqa:N802
+# ruff: noqa: N802
 # pyright: reportIncompatibleMethodOverride=false
+
 import contextlib
 from pathlib import Path
 
