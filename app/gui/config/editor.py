@@ -81,7 +81,6 @@ class ConfigEditorWidget(QWidget):
         self.proxy_edit.setPlaceholderText(tr("config.placeholder.proxy"))
 
         self.check_update_cb = CheckBox(tr("config.flag.check_update"))
-        self.tray_mode_cb = CheckBox(tr("config.flag.tray_mode"))
         self.disable_notifications_cb = CheckBox(tr("config.flag.disable_notifications"))
 
         self.users_list = ListWidget()
@@ -208,9 +207,7 @@ class ConfigEditorWidget(QWidget):
 
         flags_row = QHBoxLayout()
         flags_row.setSpacing(10)
-        flags_row.addWidget(BodyLabel(tr("config.global.flags")))
         flags_row.addWidget(self.check_update_cb)
-        flags_row.addWidget(self.tray_mode_cb)
         flags_row.addWidget(self.disable_notifications_cb)
         flags_row.addStretch()
         layout.addLayout(flags_row)
@@ -382,8 +379,9 @@ class ConfigEditorWidget(QWidget):
         self.log_level_cb.setCurrentText(str(raw.get("log_level") or "DEBUG"))
         self.proxy_edit.setText(str(raw.get("proxy") or ""))
         self.check_update_cb.setChecked(bool(raw.get("check_update", True)))
-        self.tray_mode_cb.setChecked(bool(raw.get("tray_mode", False)))
+        self.check_update_cb.setToolTip(tr("config.flag.check_update.tooltip"))
         self.disable_notifications_cb.setChecked(bool(raw.get("disable_notifications", False)))
+        self.disable_notifications_cb.setToolTip(tr("config.flag.disable_notifications.tooltip"))
 
         users = raw.get("users")
         if not isinstance(users, list):
@@ -630,7 +628,6 @@ class ConfigEditorWidget(QWidget):
                 "proxy": self.proxy_edit.text().strip() or None,
                 "log_level": self.log_level_cb.currentText(),
                 "check_update": self.check_update_cb.isChecked(),
-                "tray_mode": self.tray_mode_cb.isChecked(),
                 "disable_notifications": self.disable_notifications_cb.isChecked(),
                 "language": selected_language,
             }

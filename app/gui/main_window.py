@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import override
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import QPoint, pyqtSignal
 from PyQt6.QtGui import QCloseEvent, QIcon
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CaptionLabel, FluentIcon, FluentWindow, PrimaryPushButton, PushButton
@@ -11,6 +11,7 @@ from app.const import APP_NAME
 from .config import ConfigEditorWidget
 from .i18n import tr
 from .logging import AnsiLogViewer
+from .state import GUIState
 
 
 class ToolRowWidget(QWidget):
@@ -95,33 +96,12 @@ class MainWindow(FluentWindow):
         return page
 
     def _create_tool_row(self) -> ToolRowWidget:
-        def handle_start() -> None:
-            if self._on_start is None:
-                return
-            self._on_start()
-            self.switchTo(self.logs_page)
-
-        def handle_stop() -> None:
-            if self._on_stop is None:
-                return
-            self._on_stop()
-
-        def handle_save() -> None:
-            if self._on_save is None:
-                return
-            self._on_save()
-
-        def handle_exit() -> None:
-            if self._on_exit is None:
-                return
-            self._on_exit()
-
         tool_row = ToolRowWidget(
             self,
-            on_start=handle_start,
-            on_stop=handle_stop,
-            on_save=handle_save,
-            on_exit=handle_exit,
+            on_start=self._handle_start,
+            on_stop=self._handle_stop,
+            on_save=self._handle_save,
+            on_exit=self._handle_exit,
         )
         self._tool_rows.append(tool_row)
         return tool_row
@@ -139,8 +119,26 @@ class MainWindow(FluentWindow):
         self._on_save = on_save
         self._on_exit = on_exit
 
-    def _format_runtime_state(self, state: str) -> str:
-        return tr("main.status", state=tr(f"runtime.state.{state}", state=state))
+    def _handle_start(self) -> None:
+        if self._on_start is None:
+            return
+        self._on_start()
+        self.switchTo(self.logs_page)
+
+    def _handle_stop(self) -> None:
+        if self._on_stop is None:
+            return
+        self._on_stop()
+
+    def _handle_save(self) -> None:
+        if self._on_save is None:
+            return
+        self._on_save()
+
+    def _handle_exit(self) -> None:
+        if self._on_exit is None:
+            return
+        self._on_exit()
 
     def set_runtime_state(self, state: str) -> None:
         for tool_row in self._tool_rows:
@@ -158,15 +156,34 @@ class MainWindow(FluentWindow):
         frame.moveCenter(geometry.center())
         self.move(frame.topLeft())
 
-    def show_main_window(self, *, center: bool = False) -> None:
-        self.show()
-        if center:
+    @staticmethod
+    def _point_on_visible_screen(point: QPoint) -> bool:
+        return any(screen.availableGeometry().contains(point) for screen in QApplication.screens())
+
+    def _load_window_properties(self) -> None:
+        state = GUIState.load().main_window
+
+        if (window_size := state.size_value) is not None and window_size.width() > 200 and window_size.height() > 120:
+            self.resize(window_size)
+
+        if (point := state.top_left_point) is not None and self._point_on_visible_screen(point):
+            self.move(point)
+        else:
             self._move_to_screen_center()
+
+    def show_main_window(self) -> None:
+        self._load_window_properties()
+        self.show()
         self.raise_()
         self.activateWindow()
 
     def allow_exit(self) -> None:
         self._allow_close = True
+
+    def update_state(self) -> None:
+        state = GUIState.load().main_window
+        state.top_left_point = self.pos()
+        state.size_value = self.size()
 
     @override
     def closeEvent(self, event: QCloseEvent) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]

@@ -16,6 +16,7 @@ from .i18n import lang, tr
 from .logging import LogBridge
 from .main_window import MainWindow
 from .runtime import RuntimeSignals, TaskRuntime
+from .state import GUIState
 from .tray_icon import AppTrayIcon
 
 
@@ -97,6 +98,12 @@ def run_gui() -> None:
         window.allow_exit()
         app.quit()
 
+    def save_gui_state() -> None:
+        window.update_state()
+        GUIState.save()
+
+    app.aboutToQuit.connect(save_gui_state)
+
     window.set_handlers(
         on_start=start_runtime,
         on_stop=stop_runtime,
@@ -115,7 +122,7 @@ def run_gui() -> None:
     tray.setToolTip(APP_NAME)
     tray.show()
 
-    window.show_main_window(center=True)
+    window.show_main_window()
 
     exit_code = app.exec()
 

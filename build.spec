@@ -21,7 +21,11 @@ def write_git_commit_hash() -> None:
         check=True,
     )
     commit_hash = p.stdout.strip()
-    ROOT.joinpath("app", "assets", ".git_commit_hash").write_text(commit_hash, encoding="utf-8")
+
+    path = ROOT.joinpath("app", "assets", ".git_commit_hash")
+    existing_hash = path.read_text("utf-8").strip() if path.is_file() else None
+    if existing_hash != commit_hash:
+        path.write_text(commit_hash, encoding="utf-8")
 
 
 def build_main_app() -> None:
