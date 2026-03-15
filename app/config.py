@@ -40,6 +40,10 @@ class Config(BaseModel):
         default=False,
         description="Whether to disable desktop notifications (not recommended)",
     )
+    language: Literal["zh_CN", "en_US"] = Field(
+        default="zh_CN",
+        description="GUI language code",
+    )
 
     @model_validator(mode="after")
     def validate_users(self) -> Config:

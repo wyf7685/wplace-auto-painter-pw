@@ -33,6 +33,7 @@ from qfluentwidgets import (
 
 from app.config import Config, export_config_schema
 from app.const import CONFIG_FILE, TEMPLATES_DIR
+from app.gui.i18n import get_language, tr
 from app.schemas import WplacePixelCoords
 
 from .area_editor_dialog import AreaEditorDialog
@@ -62,7 +63,7 @@ class ConfigEditorWidget(QWidget):
         self.load_from_disk()
 
     def _build_widgets(self) -> None:
-        self.title_label = SubtitleLabel("Configuration")
+        self.title_label = SubtitleLabel(tr("config.title"))
         # self.subtitle_label = BodyLabel("Manage runtime, users and template settings")
 
         self.browser_cb = ComboBox()
@@ -71,47 +72,52 @@ class ConfigEditorWidget(QWidget):
         self.log_level_cb = ComboBox()
         self.log_level_cb.addItems(LOG_LEVELS)
 
-        self.proxy_edit = LineEdit()
-        self.proxy_edit.setPlaceholderText("http://127.0.0.1:7890")
+        self.language_cb = ComboBox()
+        self._language_codes = ["zh_CN", "en_US"]
+        self._language_index = {code: index for index, code in enumerate(self._language_codes)}
+        self.language_cb.addItems([tr("language.zh_cn"), tr("language.en_us")])
 
-        self.check_update_cb = CheckBox("Check update")
-        self.tray_mode_cb = CheckBox("Tray mode")
-        self.disable_notifications_cb = CheckBox("Disable notifications")
+        self.proxy_edit = LineEdit()
+        self.proxy_edit.setPlaceholderText(tr("config.placeholder.proxy"))
+
+        self.check_update_cb = CheckBox(tr("config.flag.check_update"))
+        self.tray_mode_cb = CheckBox(tr("config.flag.tray_mode"))
+        self.disable_notifications_cb = CheckBox(tr("config.flag.disable_notifications"))
 
         self.users_list = ListWidget()
         self.users_list.currentRowChanged.connect(self._on_user_changed)
 
-        self.add_user_btn = PrimaryPushButton("Add User")
+        self.add_user_btn = PrimaryPushButton(tr("config.user.add"))
         self.add_user_btn.clicked.connect(self._add_user)
 
-        self.remove_user_btn = PushButton("Remove User")
+        self.remove_user_btn = PushButton(tr("config.user.remove"))
         self.remove_user_btn.clicked.connect(self._remove_user)
 
         self.identifier_edit = LineEdit()
-        self.identifier_edit.setPlaceholderText("unique user identifier")
+        self.identifier_edit.setPlaceholderText(tr("config.placeholder.identifier"))
 
         self.token_edit = TextEdit()
-        self.token_edit.setPlaceholderText("Cookie j token")
+        self.token_edit.setPlaceholderText(tr("config.placeholder.token"))
         self.token_edit.setFixedHeight(80)
 
         self.cf_clearance_edit = TextEdit()
-        self.cf_clearance_edit.setPlaceholderText("Cookie cf_clearance")
+        self.cf_clearance_edit.setPlaceholderText(tr("config.placeholder.cf_clearance"))
         self.cf_clearance_edit.setFixedHeight(60)
 
         self.file_id_edit = LineEdit()
-        self.file_id_edit.setPlaceholderText("template file id")
+        self.file_id_edit.setPlaceholderText(tr("config.placeholder.file_id"))
 
         self.coords_edit = LineEdit()
-        self.coords_edit.setPlaceholderText("(Tl X: 1, Tl Y: 2, Px X: 3, Px Y: 4)")
+        self.coords_edit.setPlaceholderText(tr("config.placeholder.coords"))
 
         self.template_source_edit = LineEdit()
-        self.template_source_edit.setPlaceholderText("optional local image path for template copy")
-        self.template_source_btn = PushButton("Browse")
+        self.template_source_edit.setPlaceholderText(tr("config.placeholder.template_source"))
+        self.template_source_btn = PushButton(tr("config.template_source.browse"))
         self.template_source_btn.clicked.connect(self._pick_template_source)
 
         self.selected_area_edit = LineEdit()
-        self.selected_area_edit.setPlaceholderText("x,y,w,h or empty")
-        self.edit_area_btn = PushButton("Edit")
+        self.selected_area_edit.setPlaceholderText(tr("config.placeholder.selected_area"))
+        self.edit_area_btn = PushButton(tr("config.selected_area.edit"))
         self.edit_area_btn.clicked.connect(self._open_area_editor)
 
         self.preferred_colors_editor = PreferredColorsEditor()
@@ -121,13 +127,21 @@ class ConfigEditorWidget(QWidget):
         self.min_charges_spin.setValue(30)
 
         self.max_charges_spin = SpinBox()
-        self.max_enable_cb = CheckBox("Enable max paint charges")
+        self.max_enable_cb = CheckBox(tr("config.max_enable"))
         self.max_enable_cb.toggled.connect(self.max_charges_spin.setEnabled)
         self.max_charges_spin.setRange(1, 1_000_000)
         self.max_charges_spin.setEnabled(False)
 
         self.auto_purchase_cb = ComboBox()
-        self.auto_purchase_cb.addItems(["none", "max_charges", "charges"])
+        self._auto_purchase_values = ["none", "max_charges", "charges"]
+        self._auto_purchase_index = {value: index for index, value in enumerate(self._auto_purchase_values)}
+        self.auto_purchase_cb.addItems(
+            [
+                tr("config.auto_purchase.none"),
+                tr("config.auto_purchase.max_charges"),
+                tr("config.auto_purchase.charges"),
+            ]
+        )
         self.auto_purchase_cb.currentIndexChanged.connect(self._sync_auto_purchase_fields)
 
         self.auto_target_spin = SpinBox()
@@ -161,34 +175,40 @@ class ConfigEditorWidget(QWidget):
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(10)
 
-        layout.addWidget(StrongBodyLabel("Global Settings"))
+        layout.addWidget(StrongBodyLabel(tr("config.global.title")))
 
         top_row = QHBoxLayout()
         top_row.setSpacing(12)
 
         browser_col = QVBoxLayout()
         browser_col.setSpacing(4)
-        browser_col.addWidget(BodyLabel("Browser"))
+        browser_col.addWidget(BodyLabel(tr("config.global.browser")))
         browser_col.addWidget(self.browser_cb)
 
         log_level_col = QVBoxLayout()
         log_level_col.setSpacing(4)
-        log_level_col.addWidget(BodyLabel("Log Level"))
+        log_level_col.addWidget(BodyLabel(tr("config.global.log_level")))
         log_level_col.addWidget(self.log_level_cb)
+
+        language_col = QVBoxLayout()
+        language_col.setSpacing(4)
+        language_col.addWidget(BodyLabel(tr("config.global.language")))
+        language_col.addWidget(self.language_cb)
 
         proxy_col = QVBoxLayout()
         proxy_col.setSpacing(4)
-        proxy_col.addWidget(BodyLabel("Proxy"))
+        proxy_col.addWidget(BodyLabel(tr("config.global.proxy")))
         proxy_col.addWidget(self.proxy_edit)
 
         top_row.addLayout(browser_col, 2)
         top_row.addLayout(log_level_col, 2)
+        top_row.addLayout(language_col, 2)
         top_row.addLayout(proxy_col, 4)
         layout.addLayout(top_row)
 
         flags_row = QHBoxLayout()
         flags_row.setSpacing(10)
-        flags_row.addWidget(BodyLabel("Flags"))
+        flags_row.addWidget(BodyLabel(tr("config.global.flags")))
         flags_row.addWidget(self.check_update_cb)
         flags_row.addWidget(self.tray_mode_cb)
         flags_row.addWidget(self.disable_notifications_cb)
@@ -201,7 +221,7 @@ class ConfigEditorWidget(QWidget):
         layout = QVBoxLayout(card)
         layout.setContentsMargins(14, 12, 14, 12)
 
-        layout.addWidget(StrongBodyLabel("Users"))
+        layout.addWidget(StrongBodyLabel(tr("config.users.title")))
         layout.addWidget(self.users_list, stretch=1)
 
         actions = QHBoxLayout()
@@ -217,7 +237,7 @@ class ConfigEditorWidget(QWidget):
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(10)
 
-        layout.addWidget(StrongBodyLabel("User Profile"))
+        layout.addWidget(StrongBodyLabel(tr("config.user_profile.title")))
 
         form_host = QWidget(card)
         form_host.setObjectName("userProfileFormHost")
@@ -228,34 +248,34 @@ class ConfigEditorWidget(QWidget):
         form.setVerticalSpacing(12)
         form.setContentsMargins(4, 4, 8, 8)
 
-        form.addRow("Identifier", self.identifier_edit)
-        form.addRow("Token", self.token_edit)
-        form.addRow("cf_clearance", self.cf_clearance_edit)
-        form.addRow("Template File ID", self.file_id_edit)
-        form.addRow("Template Coords", self.coords_edit)
+        form.addRow(tr("config.field.identifier"), self.identifier_edit)
+        form.addRow(tr("config.field.token"), self.token_edit)
+        form.addRow(tr("config.field.cf_clearance"), self.cf_clearance_edit)
+        form.addRow(tr("config.field.template_file_id"), self.file_id_edit)
+        form.addRow(tr("config.field.template_coords"), self.coords_edit)
 
         source_row = QHBoxLayout()
         source_row.addWidget(self.template_source_edit)
         source_row.addWidget(self.template_source_btn)
-        form.addRow("Template Source", source_row)
+        form.addRow(tr("config.field.template_source"), source_row)
 
         selected_area_row = QHBoxLayout()
         selected_area_row.addWidget(self.selected_area_edit)
         selected_area_row.addWidget(self.edit_area_btn)
-        form.addRow("Selected Area", selected_area_row)
+        form.addRow(tr("config.field.selected_area"), selected_area_row)
 
-        form.addRow("Preferred Colors", self.preferred_colors_editor)
-        form.addRow("Min Paint Charges", self.min_charges_spin)
+        form.addRow(tr("config.field.preferred_colors"), self.preferred_colors_editor)
+        form.addRow(tr("config.field.min_paint_charges"), self.min_charges_spin)
 
         max_row = QHBoxLayout()
         max_row.addWidget(self.max_enable_cb)
         max_row.addWidget(self.max_charges_spin)
         max_row.addStretch()
-        form.addRow("Max Paint Charges", max_row)
+        form.addRow(tr("config.field.max_paint_charges"), max_row)
 
-        form.addRow("Auto Purchase", self.auto_purchase_cb)
-        form.addRow("Auto Target Max", self.auto_target_spin)
-        form.addRow("Auto Retain Droplets", self.auto_retain_spin)
+        form.addRow(tr("config.field.auto_purchase"), self.auto_purchase_cb)
+        form.addRow(tr("config.field.auto_target_max"), self.auto_target_spin)
+        form.addRow(tr("config.field.auto_retain_droplets"), self.auto_retain_spin)
 
         scroll = SmoothScrollArea(card)
         scroll.setObjectName("userProfileScroll")
@@ -282,8 +302,20 @@ class ConfigEditorWidget(QWidget):
             "parent": self,
         }
 
+    def _current_language_code(self) -> str:
+        index = self.language_cb.currentIndex()
+        if 0 <= index < len(self._language_codes):
+            return self._language_codes[index]
+        return "zh_CN"
+
+    def _current_auto_purchase_value(self) -> str:
+        index = self.auto_purchase_cb.currentIndex()
+        if 0 <= index < len(self._auto_purchase_values):
+            return self._auto_purchase_values[index]
+        return "none"
+
     def _sync_auto_purchase_fields(self) -> None:
-        choice = self.auto_purchase_cb.currentText()
+        choice = self._current_auto_purchase_value()
         is_max = choice == "max_charges"
         is_none = choice == "none"
 
@@ -308,8 +340,8 @@ class ConfigEditorWidget(QWidget):
             selected_area = parse_selected_area(self.selected_area_edit.text())
         except Exception as exc:
             InfoBar.warning(
-                title="Selected Area",
-                content=str(exc),
+                title=tr("config.selected_area.title"),
+                content=tr("config.selected_area.parse_failed", detail=str(exc)),
                 **self._infobar_options(duration=5000),
             )
             return
@@ -317,11 +349,8 @@ class ConfigEditorWidget(QWidget):
         image_path = self._get_current_editor_image_path()
         if image_path is None:
             InfoBar.warning(
-                title="Selected Area",
-                content=(
-                    "No template image found. "
-                    "Please choose Template Source or ensure data/templates/<file_id>.png exists."
-                ),
+                title=tr("config.selected_area.title"),
+                content=tr("config.selected_area.no_template_image"),
                 **self._infobar_options(),
             )
             return
@@ -341,10 +370,13 @@ class ConfigEditorWidget(QWidget):
                 raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             except Exception as exc:
                 InfoBar.warning(
-                    title="Config",
-                    content=f"Cannot parse config.json: {exc}",
+                    title=tr("config.title"),
+                    content=tr("config.load.parse_failed", detail=str(exc)),
                     **self._infobar_options(),
                 )
+
+        language = str(raw.get("language") or "zh_CN")
+        self.language_cb.setCurrentIndex(self._language_index.get(language, 0))
 
         self.browser_cb.setCurrentText(str(raw.get("browser") or "chromium"))
         self.log_level_cb.setCurrentText(str(raw.get("log_level") or "DEBUG"))
@@ -373,8 +405,8 @@ class ConfigEditorWidget(QWidget):
                 self._store_current_user()
             except Exception as exc:
                 InfoBar.warning(
-                    title="Config",
-                    content=f"Cannot switch user: {exc}",
+                    title=tr("config.title"),
+                    content=tr("config.user.switch_failed", detail=str(exc)),
                     **self._infobar_options(),
                 )
                 self.users_list.blockSignals(True)
@@ -418,12 +450,12 @@ class ConfigEditorWidget(QWidget):
 
         auto_purchase = user.get("auto_purchase")
         if not isinstance(auto_purchase, dict):
-            self.auto_purchase_cb.setCurrentText("none")
+            self.auto_purchase_cb.setCurrentIndex(self._auto_purchase_index["none"])
             self.auto_target_spin.setValue(0)
             self.auto_retain_spin.setValue(0)
         else:
             choice = str(auto_purchase.get("type") or "none")
-            self.auto_purchase_cb.setCurrentText(choice)
+            self.auto_purchase_cb.setCurrentIndex(self._auto_purchase_index.get(choice, 0))
             self.auto_target_spin.setValue(int(auto_purchase.get("target_max") or 0))
             self.auto_retain_spin.setValue(int(auto_purchase.get("retain_droplets") or 0))
 
@@ -441,7 +473,7 @@ class ConfigEditorWidget(QWidget):
         selected_area = parse_selected_area(self.selected_area_edit.text())
         self.selected_area_edit.setText(format_selected_area(selected_area))
 
-        auto_choice = self.auto_purchase_cb.currentText()
+        auto_choice = self._current_auto_purchase_value()
         auto_purchase: dict[str, Any] | None
         if auto_choice == "none":
             auto_purchase = None
@@ -487,8 +519,8 @@ class ConfigEditorWidget(QWidget):
                 self._store_current_user()
             except Exception as exc:
                 InfoBar.warning(
-                    title="Config",
-                    content=f"Cannot add user: {exc}",
+                    title=tr("config.title"),
+                    content=tr("config.user.add_failed", detail=str(exc)),
                     **self._infobar_options(duration=0),
                 )
                 return
@@ -511,8 +543,8 @@ class ConfigEditorWidget(QWidget):
 
         if len(self._users) == 1:
             InfoBar.warning(
-                title="Config",
-                content="At least one user is required.",
+                title=tr("config.title"),
+                content=tr("config.user.at_least_one"),
                 **self._infobar_options(),
             )
             return
@@ -526,14 +558,15 @@ class ConfigEditorWidget(QWidget):
     def _pick_template_source(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select template image",
+            tr("config.template_dialog.title"),
             "",
-            "Images (*.png *.jpg *.jpeg *.bmp)",
+            tr("config.template_dialog.filter"),
         )
         if file_path:
             self.template_source_edit.setText(file_path)
 
     def save_to_disk(self, show_message: bool = True) -> bool:
+        selected_language = self._current_language_code()
         try:
             self._store_current_user()
 
@@ -563,19 +596,23 @@ class ConfigEditorWidget(QWidget):
                 }
 
                 if not str(user_payload["identifier"]).strip():
-                    raise ValueError("identifier cannot be empty")
+                    raise ValueError(tr("config.validation.identifier_empty"))
                 if not str(user_payload["credentials"]["token"] or "").strip():
-                    raise ValueError(f"token cannot be empty for user: {user_payload['identifier']}")
+                    raise ValueError(tr("config.validation.token_empty", identifier=user_payload["identifier"]))
                 if not str(user_payload["template"]["file_id"] or "").strip():
-                    raise ValueError(f"template.file_id cannot be empty for user: {user_payload['identifier']}")
+                    raise ValueError(
+                        tr("config.validation.template_file_id_empty", identifier=user_payload["identifier"])
+                    )
                 if not str(user_payload["template"]["coords"] or "").strip():
-                    raise ValueError(f"template.coords cannot be empty for user: {user_payload['identifier']}")
+                    raise ValueError(
+                        tr("config.validation.template_coords_empty", identifier=user_payload["identifier"])
+                    )
 
                 source = str(user.get("_template_source") or "").strip()
                 if source:
                     src = Path(source)
                     if not src.is_file():
-                        raise ValueError(f"template source does not exist: {source}")
+                        raise ValueError(tr("config.validation.template_source_missing", path=source))
                     dest = TEMPLATES_DIR / f"{user_payload['template']['file_id']}.png"
                     TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
                     if src.resolve() != dest.resolve():
@@ -583,9 +620,7 @@ class ConfigEditorWidget(QWidget):
                 else:
                     dest = TEMPLATES_DIR / f"{user_payload['template']['file_id']}.png"
                     if not dest.is_file() or dest.stat().st_size == 0:
-                        raise ValueError(
-                            f"template image not found, please provide Template Source or place the image in {dest}"
-                        )
+                        raise ValueError(tr("config.validation.template_image_missing", path=dest))
 
                 users_payload.append(user_payload)
 
@@ -597,6 +632,7 @@ class ConfigEditorWidget(QWidget):
                 "check_update": self.check_update_cb.isChecked(),
                 "tray_mode": self.tray_mode_cb.isChecked(),
                 "disable_notifications": self.disable_notifications_cb.isChecked(),
+                "language": selected_language,
             }
 
             config = Config.model_validate(payload)
@@ -607,7 +643,7 @@ class ConfigEditorWidget(QWidget):
         except ValidationError as exc:
             if show_message:
                 InfoBar.error(
-                    title="Config validation error",
+                    title=tr("config.save.validation_error.title"),
                     content=str(exc),
                     **self._infobar_options(duration=0),
                 )
@@ -615,7 +651,7 @@ class ConfigEditorWidget(QWidget):
         except Exception as exc:
             if show_message:
                 InfoBar.error(
-                    title="Config save failed",
+                    title=tr("config.save.failed.title"),
                     content=str(exc),
                     **self._infobar_options(duration=0),
                 )
@@ -623,8 +659,14 @@ class ConfigEditorWidget(QWidget):
         else:
             if show_message:
                 InfoBar.success(
-                    title="Config",
-                    content=f"Saved to {CONFIG_FILE}",
+                    title=tr("config.save.success.title"),
+                    content=tr("config.save.success.content", path=CONFIG_FILE),
                     **self._infobar_options(),
                 )
+                if selected_language != get_language():
+                    InfoBar.info(
+                        title=tr("config.language.change_pending.title"),
+                        content=tr("config.language.change_pending.content"),
+                        **self._infobar_options(),
+                    )
             return True

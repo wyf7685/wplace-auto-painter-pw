@@ -6,6 +6,8 @@ from qfluentwidgets import CheckBox, PushButton, TextEdit
 
 from app.utils.ansi_qt import LOG_BG, iter_segments
 
+from .i18n import tr
+
 
 class AnsiLogViewer(QWidget):
     """QTextEdit-based ANSI log viewer used by the integrated GUI."""
@@ -24,10 +26,10 @@ class AnsiLogViewer(QWidget):
         self._text.setFont(font)
         self._first_line = True
 
-        self._auto_scroll = CheckBox("Auto Scroll")
+        self._auto_scroll = CheckBox(tr("log.auto_scroll"))
         self._auto_scroll.setChecked(True)
 
-        clear_btn = PushButton("Clear")
+        clear_btn = PushButton(tr("log.clear"))
         clear_btn.clicked.connect(self.clear)
 
         toolbar = QHBoxLayout()

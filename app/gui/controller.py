@@ -1,3 +1,4 @@
+import contextlib
 import sys
 
 from PyQt6.QtCore import Qt
@@ -10,6 +11,7 @@ from app.const import APP_NAME, assets
 from app.exception import ConfigError
 from app.log import logger
 
+from .i18n import set_language, tr
 from .logging_bridge import LogBridge
 from .main_window import MainWindow
 from .runtime import RuntimeSignals, TaskRuntime
@@ -32,6 +34,9 @@ def run_gui() -> None:
     setTheme(Theme.AUTO)
 
     Config.set_background_mode()
+    set_language(None)
+    with contextlib.suppress(Exception):
+        set_language(Config.load().language)
 
     bridge = LogBridge()
     bridge.start()
@@ -50,8 +55,8 @@ def run_gui() -> None:
         logger.opt(exception=exc).error(f"Configuration error: {exc!r}")
         logger.info("Please turn to Config tab to fix the error and save before restart.")
         InfoBar.error(
-            "Config Error",
-            f"Configuration error:\n{exc}\n\nPlease fix the error in Config tab and save before restart.",
+            tr("controller.config_error.title"),
+            tr("controller.config_error.content", detail=str(exc)),
             orient=Qt.Orientation.Horizontal,
             position=InfoBarPosition.TOP,
             duration=10000,
@@ -64,8 +69,8 @@ def run_gui() -> None:
     def start_runtime() -> None:
         if not window.config_editor.save_to_disk(show_message=False):
             InfoBar.warning(
-                "Invalid Config",
-                "Config is invalid, please fix fields before start.",
+                tr("controller.invalid_config.title"),
+                tr("controller.invalid_config.content"),
                 orient=Qt.Orientation.Horizontal,
                 position=InfoBarPosition.TOP,
                 duration=5000,
@@ -74,8 +79,8 @@ def run_gui() -> None:
             return
         if not runtime.start():
             InfoBar.info(
-                "Runtime",
-                "Runtime is already running.",
+                tr("controller.runtime.title"),
+                tr("controller.runtime.already_running"),
                 orient=Qt.Orientation.Horizontal,
                 position=InfoBarPosition.TOP,
                 duration=5000,

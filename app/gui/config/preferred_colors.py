@@ -4,6 +4,8 @@ from PyQt6.QtGui import QColor, QIcon, QPixmap
 from PyQt6.QtWidgets import QAbstractItemView, QHBoxLayout, QListWidgetItem, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, ElevatedCardWidget, LineEdit, ListWidget, PushButton
 
+from app.gui.i18n import tr
+
 
 class PreferredColorsEditor(QWidget):
     """Fluent editor for preferred colors based on ALL_COLORS mapping."""
@@ -12,10 +14,10 @@ class PreferredColorsEditor(QWidget):
         super().__init__()
         self._color_map: dict[ColorName, tuple[int, int, int]] = dict(ALL_COLORS)
 
-        self._hint_label = BodyLabel("Pick colors from the left list, then reorder priority on the right")
+        self._hint_label = BodyLabel(tr("preferred.hint"))
 
         self._filter_edit = LineEdit()
-        self._filter_edit.setPlaceholderText("Filter by name or hex (#RRGGBB)")
+        self._filter_edit.setPlaceholderText(tr("preferred.filter.placeholder"))
         self._filter_edit.textChanged.connect(self._refresh_available_list)
 
         self._available_list = ListWidget()
@@ -30,20 +32,20 @@ class PreferredColorsEditor(QWidget):
         self._selected_list.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._selected_list.itemDoubleClicked.connect(self._on_remove_clicked)
 
-        self._add_btn = PushButton("Add ->")
+        self._add_btn = PushButton(tr("preferred.add"))
         self._add_btn.clicked.connect(self._on_add_clicked)
 
-        self._remove_btn = PushButton("<- Remove")
+        self._remove_btn = PushButton(tr("preferred.remove"))
         self._remove_btn.clicked.connect(self._on_remove_clicked)
 
-        self._clear_btn = PushButton("Clear")
+        self._clear_btn = PushButton(tr("preferred.clear"))
         self._clear_btn.clicked.connect(self._on_clear_clicked)
 
         left_card = ElevatedCardWidget(self)
         left_layout = QVBoxLayout(left_card)
         left_layout.setContentsMargins(10, 10, 10, 10)
         left_layout.setSpacing(6)
-        left_layout.addWidget(BodyLabel("Available Colors"))
+        left_layout.addWidget(BodyLabel(tr("preferred.available")))
         left_layout.addWidget(self._filter_edit)
         left_layout.addWidget(self._available_list)
 
@@ -51,7 +53,7 @@ class PreferredColorsEditor(QWidget):
         right_layout = QVBoxLayout(right_card)
         right_layout.setContentsMargins(10, 10, 10, 10)
         right_layout.setSpacing(6)
-        right_layout.addWidget(BodyLabel("Priority (Top = Highest)"))
+        right_layout.addWidget(BodyLabel(tr("preferred.priority")))
         right_layout.addWidget(self._selected_list)
 
         ops_layout = QVBoxLayout()
@@ -91,7 +93,7 @@ class PreferredColorsEditor(QWidget):
         rgb = self._color_map[name]
         item = QListWidgetItem(f"{name}  {self._hex_of(rgb)}")
         item.setData(Qt.ItemDataRole.UserRole, name)
-        item.setToolTip(f"RGB: {rgb[0]}, {rgb[1]}, {rgb[2]}")
+        item.setToolTip(tr("preferred.rgb_tooltip", r=rgb[0], g=rgb[1], b=rgb[2]))
         item.setIcon(self._swatch_icon(rgb))
         return item
 

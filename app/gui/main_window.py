@@ -8,6 +8,7 @@ from qfluentwidgets import CaptionLabel, FluentIcon, FluentWindow, PrimaryPushBu
 from app.const import APP_NAME
 
 from .config import ConfigEditorWidget
+from .i18n import tr
 from .log_viewer import AnsiLogViewer
 
 
@@ -27,7 +28,7 @@ class MainWindow(FluentWindow):
         self._save_buttons: list[PushButton] = []
         self._exit_buttons: list[PushButton] = []
 
-        self.setWindowTitle(f"{APP_NAME} GUI")
+        self.setWindowTitle(tr("main.window_title", app_name=APP_NAME))
         self.setWindowIcon(icon)
         self.resize(1160, 760)
 
@@ -37,8 +38,8 @@ class MainWindow(FluentWindow):
         self.config_page = self._build_page(self.config_editor, "ConfigPage")
         self.logs_page = self._build_page(self.log_viewer, "LogsPage")
 
-        self.addSubInterface(self.config_page, FluentIcon.SETTING, "Config")
-        self.addSubInterface(self.logs_page, FluentIcon.DOCUMENT, "Logs")
+        self.addSubInterface(self.config_page, FluentIcon.SETTING, tr("main.nav.config"))
+        self.addSubInterface(self.logs_page, FluentIcon.DOCUMENT, tr("main.nav.logs"))
         self.switchTo(self.config_page)
 
     def _build_page(self, content: QWidget, name: str) -> QWidget:
@@ -57,20 +58,20 @@ class MainWindow(FluentWindow):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
 
-        start_btn = PrimaryPushButton("Start")
+        start_btn = PrimaryPushButton(tr("main.action.start"))
         start_btn.clicked.connect(self._handle_start)
 
-        stop_btn = PushButton("Stop")
+        stop_btn = PushButton(tr("main.action.stop"))
         stop_btn.clicked.connect(self._handle_stop)
         stop_btn.setEnabled(False)
 
-        save_btn = PushButton("Save Config")
+        save_btn = PushButton(tr("main.action.save_config"))
         save_btn.clicked.connect(self._handle_save)
 
-        exit_btn = PushButton("Exit")
+        exit_btn = PushButton(tr("main.action.exit"))
         exit_btn.clicked.connect(self._handle_exit)
 
-        status_label = CaptionLabel("Status: stopped")
+        status_label = CaptionLabel(self._format_runtime_state("stopped"))
 
         row.addWidget(start_btn)
         row.addWidget(stop_btn)
@@ -100,10 +101,18 @@ class MainWindow(FluentWindow):
         self._on_save = on_save
         self._on_exit = on_exit
 
+    def _format_runtime_state(self, state: str) -> str:
+        state_key = {
+            "running": "runtime.state.running",
+            "stopped": "runtime.state.stopped",
+            "error": "runtime.state.error",
+        }.get(state, "runtime.state.unknown")
+        return tr("main.status", state=tr(state_key, state=state))
+
     def set_runtime_state(self, state: str) -> None:
         is_running = state == "running"
         for label in self._status_labels:
-            label.setText(f"Status: {state}")
+            label.setText(self._format_runtime_state(state))
         for button in self._start_buttons:
             button.setEnabled(not is_running)
         for button in self._stop_buttons:

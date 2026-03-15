@@ -17,6 +17,8 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QLabel, QSizePolicy, QWidget
 from qfluentwidgets import isDarkTheme, qconfig, themeColor
 
+from app.gui.i18n import tr
+
 
 class ImageDropLabel(QLabel):
     """接受图片拖放并显示预览的 QLabel，支持鼠标绘制矩形并导出透明背景模板图。
@@ -27,7 +29,7 @@ class ImageDropLabel(QLabel):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setText("拖放图片到此处或点击上传")
+        self.setText(tr("image_drop.placeholder"))
         self._update_style()
         qconfig.themeChanged.connect(self._update_style)
         self.setAcceptDrops(True)
@@ -95,7 +97,7 @@ class ImageDropLabel(QLabel):
     def set_image(self, path: str) -> None:
         pix = QPixmap(path)
         if pix.isNull():
-            self.setText("无法打开该图片")
+            self.setText(tr("image_drop.invalid_image"))
             self.filepath = None
             self._orig_pixmap = None
             self._display_pixmap = None

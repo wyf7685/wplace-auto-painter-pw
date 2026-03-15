@@ -4,6 +4,8 @@ from PyQt6.QtCore import QRect, Qt
 from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, InfoBar, InfoBarPosition, MessageBoxBase, PushButton, SubtitleLabel
 
+from app.gui.i18n import tr
+
 from .image_drop_label import ImageDropLabel
 
 
@@ -18,25 +20,25 @@ class AreaEditorDialog(MessageBoxBase):
         selected_area: tuple[int, int, int, int] | None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Edit Selected Area")
+        self.setWindowTitle(tr("area_editor.title"))
         self.widget.setMinimumWidth(800)
 
         self._result_area: tuple[int, int, int, int] | None = selected_area
         self._result_image_path: str | None = image_path
 
-        title = SubtitleLabel("Edit Selected Area", self)
-        hint = BodyLabel("Left drag: select area | Right drag: pan | Wheel: zoom", self)
+        title = SubtitleLabel(tr("area_editor.title"), self)
+        hint = BodyLabel(tr("area_editor.hint"), self)
         # hint.setTextColor(Qt.GlobalColor.darkGray, Qt.GlobalColor.lightGray)
 
         self._image_label = ImageDropLabel()
 
-        browse_btn = PushButton("Browse")
+        browse_btn = PushButton(tr("area_editor.browse"))
         browse_btn.clicked.connect(self._pick_image)
 
-        sync_btn = PushButton("Use Current Selection")
+        sync_btn = PushButton(tr("area_editor.use_current_selection"))
         sync_btn.clicked.connect(self._sync_selection)
 
-        clear_btn = PushButton("Clear Selection")
+        clear_btn = PushButton(tr("area_editor.clear_selection"))
         clear_btn.clicked.connect(self._clear_selection)
 
         tools = QHBoxLayout()
@@ -51,8 +53,8 @@ class AreaEditorDialog(MessageBoxBase):
         self.viewLayout.addLayout(tools)
         self.viewLayout.addWidget(self._image_label, 1)
 
-        self.yesButton.setText("OK")
-        self.cancelButton.setText("Cancel")
+        self.yesButton.setText(tr("area_editor.ok"))
+        self.cancelButton.setText(tr("area_editor.cancel"))
 
         if image_path and Path(image_path).is_file():
             self._image_label.set_image(image_path)
@@ -70,9 +72,9 @@ class AreaEditorDialog(MessageBoxBase):
     def _pick_image(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select template image",
+            tr("area_editor.select_template_image"),
             "",
-            "Images (*.png *.jpg *.jpeg *.bmp)",
+            tr("area_editor.image_filter"),
         )
         if not file_path:
             return
@@ -95,8 +97,8 @@ class AreaEditorDialog(MessageBoxBase):
 
         if not self._result_image_path or not Path(self._result_image_path).is_file():
             InfoBar.warning(
-                title="Area Editor",
-                content="Please choose an image first.",
+                title=tr("area_editor.warning.title"),
+                content=tr("area_editor.warning.choose_image"),
                 orient=Qt.Orientation.Horizontal,
                 isClosable=True,
                 position=InfoBarPosition.TOP,
