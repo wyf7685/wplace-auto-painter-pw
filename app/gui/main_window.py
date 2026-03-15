@@ -72,6 +72,7 @@ class MainWindow(FluentWindow):
         self.setWindowTitle(tr("main.window_title", app_name=APP_NAME))
         self.setWindowIcon(icon)
         self.resize(1160, 760)
+        self.navigationInterface.setExpandWidth(160)
 
         self.config_editor = ConfigEditorWidget()
         self.log_viewer = AnsiLogViewer()
