@@ -3,14 +3,14 @@ from typing import override
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QCloseEvent, QIcon
-from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CaptionLabel, FluentIcon, FluentWindow, PrimaryPushButton, PushButton
 
 from app.const import APP_NAME
 
 from .config import ConfigEditorWidget
 from .i18n import tr
-from .log_viewer import AnsiLogViewer
+from .logging import AnsiLogViewer
 
 
 class ToolRowWidget(QWidget):
@@ -149,8 +149,19 @@ class MainWindow(FluentWindow):
     def append_log(self, line: str) -> None:
         self.log_viewer.append_line(line)
 
-    def show_main_window(self) -> None:
+    def _move_to_screen_center(self) -> None:
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is None:
+            return
+        geometry = screen.availableGeometry()
+        frame = self.frameGeometry()
+        frame.moveCenter(geometry.center())
+        self.move(frame.topLeft())
+
+    def show_main_window(self, *, center: bool = False) -> None:
         self.show()
+        if center:
+            self._move_to_screen_center()
         self.raise_()
         self.activateWindow()
 

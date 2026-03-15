@@ -13,7 +13,7 @@ from app.log import logger
 from app.painter import run_painter
 
 from .i18n import lang, tr
-from .logging_bridge import LogBridge
+from .logging import LogBridge
 from .main_window import MainWindow
 from .runtime import RuntimeSignals, TaskRuntime
 from .tray_icon import AppTrayIcon
@@ -115,7 +115,7 @@ def run_gui() -> None:
     tray.setToolTip(APP_NAME)
     tray.show()
 
-    window.show()
+    window.show_main_window(center=True)
 
     exit_code = app.exec()
 

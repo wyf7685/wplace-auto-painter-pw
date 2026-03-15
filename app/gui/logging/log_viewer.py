@@ -4,9 +4,8 @@ from PyQt6.QtGui import QCloseEvent, QFont, QTextCursor
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CheckBox, PushButton, TextEdit
 
+from app.gui.i18n import tr
 from app.utils.ansi_qt import LOG_BG, iter_segments
-
-from .i18n import tr
 
 
 class AnsiLogViewer(QWidget):
