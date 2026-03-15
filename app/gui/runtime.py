@@ -1,4 +1,5 @@
 import threading
+from collections.abc import Awaitable, Callable
 
 import anyio
 import anyio.to_thread
@@ -6,7 +7,6 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from app.exception import ConfigError
 from app.log import logger
-from app.painter import run_painter
 
 
 class RuntimeSignals(QObject):
@@ -17,9 +17,10 @@ class RuntimeSignals(QObject):
 
 
 class TaskRuntime:
-    """Run async_main in a background thread and control it with a stop event."""
+    """Run task in a background thread and control it with a stop event."""
 
-    def __init__(self, signals: RuntimeSignals) -> None:
+    def __init__(self, task: Callable[[], Awaitable[object]], signals: RuntimeSignals) -> None:
+        self._task = task
         self._signals = signals
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -56,7 +57,7 @@ class TaskRuntime:
             async with anyio.create_task_group() as tg:
                 tg.start_soon(_stop_waiter, tg.cancel_scope)
                 try:
-                    await run_painter()
+                    await self._task()
                 finally:
                     tg.cancel_scope.cancel()
 

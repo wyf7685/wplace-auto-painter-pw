@@ -10,8 +10,9 @@ from app.config import Config
 from app.const import APP_NAME, assets
 from app.exception import ConfigError
 from app.log import logger
+from app.painter import run_painter
 
-from .i18n import set_language, tr
+from .i18n import lang, tr
 from .logging_bridge import LogBridge
 from .main_window import MainWindow
 from .runtime import RuntimeSignals, TaskRuntime
@@ -32,17 +33,15 @@ def run_gui() -> None:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     setTheme(Theme.AUTO)
-
-    Config.set_background_mode()
-    set_language(None)
+    lang.set_language(None)
     with contextlib.suppress(Exception):
-        set_language(Config.load().language)
+        lang.set_language(Config.load().language)
 
     bridge = LogBridge()
     bridge.start()
 
     runtime_signals = RuntimeSignals()
-    runtime = TaskRuntime(runtime_signals)
+    runtime = TaskRuntime(run_painter, runtime_signals)
 
     window = MainWindow(_load_icon())
 
@@ -121,6 +120,7 @@ def run_gui() -> None:
     exit_code = app.exec()
 
     tray.hide()
+    tray.deleteLater()
     runtime.stop()
     runtime.join(timeout=10)
     bridge.stop()

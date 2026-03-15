@@ -33,7 +33,7 @@ from qfluentwidgets import (
 
 from app.config import Config, export_config_schema
 from app.const import CONFIG_FILE, TEMPLATES_DIR
-from app.gui.i18n import get_language, tr
+from app.gui.i18n import lang, tr
 from app.schemas import WplacePixelCoords
 
 from .area_editor_dialog import AreaEditorDialog
@@ -663,7 +663,7 @@ class ConfigEditorWidget(QWidget):
                     content=tr("config.save.success.content", path=CONFIG_FILE),
                     **self._infobar_options(),
                 )
-                if selected_language != get_language():
+                if selected_language != lang.get_language():
                     InfoBar.info(
                         title=tr("config.language.change_pending.title"),
                         content=tr("config.language.change_pending.content"),

@@ -1,20 +1,18 @@
-from __future__ import annotations
-
 import json
 from pathlib import Path
-from typing import Final, Literal
+from typing import ClassVar, Final, Literal
 
-LanguageCode = Literal["zh_CN", "en_US"]
+from app.const import ASSETS_DIR
+
+type LanguageCode = Literal["zh_CN", "en_US"]
+type Translations = dict[str, str]
 
 _DEFAULT_LANGUAGE: Final[LanguageCode] = "zh_CN"
 _SUPPORTED_LANGUAGES: Final[tuple[LanguageCode, ...]] = ("zh_CN", "en_US")
-_LOCALES_DIR: Final[Path] = Path(__file__).resolve().parent / "locales"
-
-_translations: dict[LanguageCode, dict[str, str]] = {}
-_current_language: LanguageCode = _DEFAULT_LANGUAGE
+_LOCALES_DIR: Final[Path] = ASSETS_DIR / "locales"
 
 
-def _load_language(language: LanguageCode) -> dict[str, str]:
+def _load_language(language: LanguageCode) -> Translations:
     locale_file = _LOCALES_DIR / f"{language}.json"
     if not locale_file.is_file():
         return {}
@@ -27,51 +25,56 @@ def _load_language(language: LanguageCode) -> dict[str, str]:
     if not isinstance(loaded, dict):
         return {}
 
-    return {
-        key: value
-        for key, value in loaded.items()
-        if isinstance(key, str) and isinstance(value, str)
-    }
+    return {key: value for key, value in loaded.items() if isinstance(key, str) and isinstance(value, str)}
 
 
-def _ensure_loaded(language: LanguageCode) -> None:
-    if language not in _translations:
-        _translations[language] = _load_language(language)
+class Lang:
+    _translations: ClassVar[dict[LanguageCode, Translations]] = {}
+
+    def __init__(self) -> None:
+        self._current_language: LanguageCode = _DEFAULT_LANGUAGE
+
+    @classmethod
+    def _ensure_loaded(cls, language: LanguageCode) -> None:
+        if language not in cls._translations:
+            cls._translations[language] = _load_language(language)
+
+    def _get_translations(self, language: LanguageCode) -> Translations:
+        self._ensure_loaded(language)
+        return self._translations.get(language, {})
+
+    def _ensure_key(self, key: str) -> str:
+        return (
+            self._get_translations(self._current_language).get(key)
+            or self._get_translations(_DEFAULT_LANGUAGE).get(key)
+            or key
+        )
+
+    def supported_languages(self) -> tuple[LanguageCode, ...]:
+        return _SUPPORTED_LANGUAGES
+
+    def get_language(self) -> LanguageCode:
+        return self._current_language
+
+    def set_language(self, language: str | None) -> LanguageCode:
+        target: LanguageCode = _DEFAULT_LANGUAGE
+        if language in self.supported_languages():
+            target = language
+
+        self._ensure_loaded(target)
+        self._current_language = target
+        return self._current_language
+
+    def translate(self, key: str, **kwargs: object) -> str:
+        text = self._ensure_key(key)
+        if not kwargs:
+            return text
+
+        try:
+            return text.format(**kwargs)
+        except Exception:
+            return text
 
 
-def set_language(language: str | None) -> LanguageCode:
-    global _current_language
-
-    target: LanguageCode = _DEFAULT_LANGUAGE
-    if language in _SUPPORTED_LANGUAGES:
-        target = language
-
-    _ensure_loaded(target)
-    _ensure_loaded("en_US")
-    _current_language = target
-    return _current_language
-
-
-def get_language() -> LanguageCode:
-    return _current_language
-
-
-def supported_languages() -> tuple[LanguageCode, ...]:
-    return _SUPPORTED_LANGUAGES
-
-
-def tr(key: str, **kwargs: object) -> str:
-    _ensure_loaded(_current_language)
-    _ensure_loaded("en_US")
-
-    text = _translations.get(_current_language, {}).get(key)
-    if text is None:
-        text = _translations.get("en_US", {}).get(key, key)
-
-    if not kwargs:
-        return text
-
-    try:
-        return text.format(**kwargs)
-    except Exception:
-        return text
+lang = Lang()
+tr = lang.translate

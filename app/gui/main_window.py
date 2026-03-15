@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import override
 
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QCloseEvent, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CaptionLabel, FluentIcon, FluentWindow, PrimaryPushButton, PushButton
@@ -10,6 +11,50 @@ from app.const import APP_NAME
 from .config import ConfigEditorWidget
 from .i18n import tr
 from .log_viewer import AnsiLogViewer
+
+
+class ToolRowWidget(QWidget):
+    state_changed = pyqtSignal(str)
+
+    def __init__(
+        self,
+        parent: MainWindow,
+        on_start: Callable[[], None],
+        on_stop: Callable[[], None],
+        on_save: Callable[[], None],
+        on_exit: Callable[[], None],
+    ) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        self.start_btn = PrimaryPushButton(tr("main.action.start"))
+        self.stop_btn = PushButton(tr("main.action.stop"))
+        self.stop_btn.setEnabled(False)
+        self.save_btn = PushButton(tr("main.action.save_config"))
+        self.exit_btn = PushButton(tr("main.action.exit"))
+        self.status_label = CaptionLabel(tr("main.status", state=tr("runtime.state.stopped")))
+
+        self.start_btn.clicked.connect(on_start)
+        self.stop_btn.clicked.connect(on_stop)
+        self.save_btn.clicked.connect(on_save)
+        self.exit_btn.clicked.connect(on_exit)
+
+        layout.addWidget(self.start_btn)
+        layout.addWidget(self.stop_btn)
+        layout.addWidget(self.save_btn)
+        layout.addWidget(self.exit_btn)
+        layout.addStretch()
+        layout.addWidget(self.status_label)
+
+        self.state_changed.connect(self.set_runtime_state)
+
+    def set_runtime_state(self, state: str) -> None:
+        is_running = state == "running"
+        self.start_btn.setEnabled(not is_running)
+        self.stop_btn.setEnabled(is_running)
+        self.status_label.setText(tr("main.status", state=tr(f"runtime.state.{state}", state=state)))
 
 
 class MainWindow(FluentWindow):
@@ -22,11 +67,7 @@ class MainWindow(FluentWindow):
         self._on_save: Callable[[], None] | None = None
         self._on_exit: Callable[[], None] | None = None
 
-        self._status_labels: list[CaptionLabel] = []
-        self._start_buttons: list[PrimaryPushButton] = []
-        self._stop_buttons: list[PushButton] = []
-        self._save_buttons: list[PushButton] = []
-        self._exit_buttons: list[PushButton] = []
+        self._tool_rows: list[ToolRowWidget] = []
 
         self.setWindowTitle(tr("main.window_title", app_name=APP_NAME))
         self.setWindowIcon(icon)
@@ -48,45 +89,41 @@ class MainWindow(FluentWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(16, 12, 16, 16)
         layout.setSpacing(10)
-        layout.addWidget(self._build_tool_row())
+        layout.addWidget(self._create_tool_row())
         layout.addWidget(content)
         return page
 
-    def _build_tool_row(self) -> QWidget:
-        row_widget = QWidget(self)
-        row = QHBoxLayout(row_widget)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
+    def _create_tool_row(self) -> ToolRowWidget:
+        def handle_start() -> None:
+            if self._on_start is None:
+                return
+            self._on_start()
+            self.switchTo(self.logs_page)
 
-        start_btn = PrimaryPushButton(tr("main.action.start"))
-        start_btn.clicked.connect(self._handle_start)
+        def handle_stop() -> None:
+            if self._on_stop is None:
+                return
+            self._on_stop()
 
-        stop_btn = PushButton(tr("main.action.stop"))
-        stop_btn.clicked.connect(self._handle_stop)
-        stop_btn.setEnabled(False)
+        def handle_save() -> None:
+            if self._on_save is None:
+                return
+            self._on_save()
 
-        save_btn = PushButton(tr("main.action.save_config"))
-        save_btn.clicked.connect(self._handle_save)
+        def handle_exit() -> None:
+            if self._on_exit is None:
+                return
+            self._on_exit()
 
-        exit_btn = PushButton(tr("main.action.exit"))
-        exit_btn.clicked.connect(self._handle_exit)
-
-        status_label = CaptionLabel(self._format_runtime_state("stopped"))
-
-        row.addWidget(start_btn)
-        row.addWidget(stop_btn)
-        row.addWidget(save_btn)
-        row.addWidget(exit_btn)
-        row.addStretch()
-        row.addWidget(status_label)
-
-        self._start_buttons.append(start_btn)
-        self._stop_buttons.append(stop_btn)
-        self._save_buttons.append(save_btn)
-        self._exit_buttons.append(exit_btn)
-        self._status_labels.append(status_label)
-
-        return row_widget
+        tool_row = ToolRowWidget(
+            self,
+            on_start=handle_start,
+            on_stop=handle_stop,
+            on_save=handle_save,
+            on_exit=handle_exit,
+        )
+        self._tool_rows.append(tool_row)
+        return tool_row
 
     def set_handlers(
         self,
@@ -102,21 +139,11 @@ class MainWindow(FluentWindow):
         self._on_exit = on_exit
 
     def _format_runtime_state(self, state: str) -> str:
-        state_key = {
-            "running": "runtime.state.running",
-            "stopped": "runtime.state.stopped",
-            "error": "runtime.state.error",
-        }.get(state, "runtime.state.unknown")
-        return tr("main.status", state=tr(state_key, state=state))
+        return tr("main.status", state=tr(f"runtime.state.{state}", state=state))
 
     def set_runtime_state(self, state: str) -> None:
-        is_running = state == "running"
-        for label in self._status_labels:
-            label.setText(self._format_runtime_state(state))
-        for button in self._start_buttons:
-            button.setEnabled(not is_running)
-        for button in self._stop_buttons:
-            button.setEnabled(is_running)
+        for tool_row in self._tool_rows:
+            tool_row.state_changed.emit(state)
 
     def append_log(self, line: str) -> None:
         self.log_viewer.append_line(line)
@@ -128,27 +155,6 @@ class MainWindow(FluentWindow):
 
     def allow_exit(self) -> None:
         self._allow_close = True
-
-    def _handle_start(self) -> None:
-        if self._on_start is None:
-            return
-        self._on_start()
-        self.switchTo(self.logs_page)
-
-    def _handle_stop(self) -> None:
-        if self._on_stop is None:
-            return
-        self._on_stop()
-
-    def _handle_save(self) -> None:
-        if self._on_save is None:
-            return
-        self._on_save()
-
-    def _handle_exit(self) -> None:
-        if self._on_exit is None:
-            return
-        self._on_exit()
 
     @override
     def closeEvent(self, event: QCloseEvent) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
