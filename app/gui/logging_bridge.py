@@ -41,6 +41,7 @@ class LogBridge(QObject):
     def stop(self) -> None:
         if self._sink_id is None:
             return
+
         from app.log import logger
 
         logger.remove(self._sink_id)

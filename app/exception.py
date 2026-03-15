@@ -2,6 +2,30 @@ class AppException(Exception):
     """Base class for application-specific exceptions."""
 
 
+class ConfigError(AppException):
+    """Exception raised for errors in the configuration."""
+
+
+class ConfigNotFound(FileNotFoundError, ConfigError):
+    """Exception raised when the configuration file is not found."""
+
+
+class ConfigParseFailed(AppException):
+    """Exception raised when parsing the configuration fails."""
+
+
+class UserConfigError(AppException):
+    """Exception raised for errors in user configuration."""
+
+
+class NoUsersConfigured(UserConfigError):
+    """Exception raised when no users are configured."""
+
+
+class UserTemplateInvalid(UserConfigError):
+    """Exception raised when a user's template configuration is invalid."""
+
+
 class FetchFailed(AppException):
     """Exception raised when fetching data fails."""
 

@@ -4,6 +4,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from app.const import CONFIG_FILE, CONFIG_SCHEMA_FILE
+from app.exception import ConfigNotFound, ConfigParseFailed, NoUsersConfigured, UserTemplateInvalid
 from app.schemas import UserConfig
 
 
@@ -83,3 +84,21 @@ class Config(BaseModel):
 
 def export_config_schema() -> None:
     CONFIG_SCHEMA_FILE.write_text(json.dumps(Config.model_json_schema()), encoding="utf-8")
+
+
+def ensure_config_ready() -> None:
+    if not CONFIG_FILE.is_file():
+        raise ConfigNotFound(f"Config file not found: {CONFIG_FILE}")
+
+    try:
+        cfg = Config.load()
+    except Exception as exc:
+        raise ConfigParseFailed("Failed to load config file") from exc
+
+    if len(cfg.users) == 0:
+        raise NoUsersConfigured("No users configured")
+
+    for user in cfg.users:
+        tp = user.template
+        if not tp.file_id or not tp.file.is_file() or tp.file.stat().st_size == 0:
+            raise UserTemplateInvalid(f"Template image is missing or invalid for user: {user.identifier}")

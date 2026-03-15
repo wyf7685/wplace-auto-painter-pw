@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
-    QMessageBox,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -19,6 +18,8 @@ from qfluentwidgets import (
     CheckBox,
     ComboBox,
     ElevatedCardWidget,
+    InfoBar,
+    InfoBarPosition,
     LineEdit,
     ListWidget,
     PrimaryPushButton,
@@ -272,6 +273,15 @@ class ConfigEditorWidget(QWidget):
         layout.addWidget(scroll, stretch=1)
         return card
 
+    def _infobar_options(self, *, duration: int = 3000) -> dict[str, Any]:
+        return {
+            "orient": Qt.Orientation.Horizontal,
+            "isClosable": True,
+            "position": InfoBarPosition.TOP_RIGHT,
+            "duration": duration,
+            "parent": self,
+        }
+
     def _sync_auto_purchase_fields(self) -> None:
         choice = self.auto_purchase_cb.currentText()
         is_max = choice == "max_charges"
@@ -297,15 +307,22 @@ class ConfigEditorWidget(QWidget):
         try:
             selected_area = parse_selected_area(self.selected_area_edit.text())
         except Exception as exc:
-            QMessageBox.warning(self, "Selected Area", str(exc))
+            InfoBar.warning(
+                title="Selected Area",
+                content=str(exc),
+                **self._infobar_options(duration=5000),
+            )
             return
 
         image_path = self._get_current_editor_image_path()
         if image_path is None:
-            QMessageBox.warning(
-                self,
-                "Selected Area",
-                "No template image found. Please choose Template Source or ensure data/templates/<file_id>.png exists.",
+            InfoBar.warning(
+                title="Selected Area",
+                content=(
+                    "No template image found. "
+                    "Please choose Template Source or ensure data/templates/<file_id>.png exists."
+                ),
+                **self._infobar_options(),
             )
             return
 
@@ -323,7 +340,11 @@ class ConfigEditorWidget(QWidget):
             try:
                 raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             except Exception as exc:
-                QMessageBox.warning(self, "Config", f"Cannot parse config.json: {exc}")
+                InfoBar.warning(
+                    title="Config",
+                    content=f"Cannot parse config.json: {exc}",
+                    **self._infobar_options(),
+                )
 
         self.browser_cb.setCurrentText(str(raw.get("browser") or "chromium"))
         self.log_level_cb.setCurrentText(str(raw.get("log_level") or "DEBUG"))
@@ -351,7 +372,11 @@ class ConfigEditorWidget(QWidget):
             try:
                 self._store_current_user()
             except Exception as exc:
-                QMessageBox.warning(self, "Config", f"Cannot switch user: {exc}")
+                InfoBar.warning(
+                    title="Config",
+                    content=f"Cannot switch user: {exc}",
+                    **self._infobar_options(),
+                )
                 self.users_list.blockSignals(True)
                 self.users_list.setCurrentRow(self._current_user_row)
                 self.users_list.blockSignals(False)
@@ -461,7 +486,11 @@ class ConfigEditorWidget(QWidget):
             try:
                 self._store_current_user()
             except Exception as exc:
-                QMessageBox.warning(self, "Config", f"Cannot add user: {exc}")
+                InfoBar.warning(
+                    title="Config",
+                    content=f"Cannot add user: {exc}",
+                    **self._infobar_options(duration=0),
+                )
                 return
 
         base = "user"
@@ -481,7 +510,11 @@ class ConfigEditorWidget(QWidget):
             return
 
         if len(self._users) == 1:
-            QMessageBox.warning(self, "Config", "At least one user is required.")
+            InfoBar.warning(
+                title="Config",
+                content="At least one user is required.",
+                **self._infobar_options(),
+            )
             return
 
         del self._users[row]
@@ -573,13 +606,25 @@ class ConfigEditorWidget(QWidget):
 
         except ValidationError as exc:
             if show_message:
-                QMessageBox.critical(self, "Config validation error", str(exc))
+                InfoBar.error(
+                    title="Config validation error",
+                    content=str(exc),
+                    **self._infobar_options(duration=0),
+                )
             return False
         except Exception as exc:
             if show_message:
-                QMessageBox.critical(self, "Config save failed", str(exc))
+                InfoBar.error(
+                    title="Config save failed",
+                    content=str(exc),
+                    **self._infobar_options(duration=0),
+                )
             return False
         else:
             if show_message:
-                QMessageBox.information(self, "Config", f"Saved to {CONFIG_FILE}")
+                InfoBar.success(
+                    title="Config",
+                    content=f"Saved to {CONFIG_FILE}",
+                    **self._infobar_options(),
+                )
             return True

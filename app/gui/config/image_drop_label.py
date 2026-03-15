@@ -6,7 +6,6 @@ from pathlib import Path
 
 from PyQt6.QtCore import QPoint, QRect, Qt
 from PyQt6.QtGui import (
-    QColor,
     QDragEnterEvent,
     QDropEvent,
     QMouseEvent,
@@ -16,6 +15,7 @@ from PyQt6.QtGui import (
     QWheelEvent,
 )
 from PyQt6.QtWidgets import QLabel, QSizePolicy, QWidget
+from qfluentwidgets import isDarkTheme, qconfig, themeColor
 
 
 class ImageDropLabel(QLabel):
@@ -28,7 +28,8 @@ class ImageDropLabel(QLabel):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setText("拖放图片到此处或点击上传")
-        self.setStyleSheet("border: 2px dashed #aaa; padding: 10px;")
+        self._update_style()
+        qconfig.themeChanged.connect(self._update_style)
         self.setAcceptDrops(True)
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -37,6 +38,7 @@ class ImageDropLabel(QLabel):
         self.setMouseTracking(True)
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMinimumSize(400, 300)
         self.filepath: str | None = None
 
         self._orig_pixmap: QPixmap | None = None
@@ -48,9 +50,29 @@ class ImageDropLabel(QLabel):
         self._panning = False
         self._pan_last_pos: QPoint | None = None
 
-        self._select_start: QPoint | None = None
-        self._select_end: QPoint | None = None
+        self.select_start: QPoint | None = None
+        self.select_end: QPoint | None = None
         self._is_drawing = False
+
+    def _update_style(self) -> None:
+        border_color = "rgba(255, 255, 255, 0.3)" if isDarkTheme() else "rgba(0, 0, 0, 0.2)"
+        text_color = "white" if isDarkTheme() else "black"
+        hover_bg = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "rgba(0, 0, 0, 0.03)"
+
+        self.setStyleSheet(f"""
+            ImageDropLabel {{
+                border: 2px dashed {border_color};
+                border-radius: 8px;
+                padding: 10px;
+                color: {text_color};
+                font-family: 'Segoe UI', 'Microsoft YaHei';
+                font-size: 16px;
+                background-color: transparent;
+            }}
+            ImageDropLabel:hover {{
+                background-color: {hover_bg};
+            }}
+        """)
 
     # --- Drag & drop ---
     def dragEnterEvent(self, ev: QDragEnterEvent) -> None:
@@ -101,19 +123,19 @@ class ImageDropLabel(QLabel):
         self.setPixmap(QPixmap())
         self.update()
         # 重置选择框
-        self._select_start = None
-        self._select_end = None
+        self.select_start = None
+        self.select_end = None
         self._is_drawing = False
         self.update()
 
     def has_selection(self) -> bool:
-        return self._select_start is not None and self._select_end is not None
+        return self.select_start is not None and self.select_end is not None
 
     def getSelectionDisplayRect(self) -> QRect | None:
         if not self.has_selection() or self._display_pixmap is None:
             return None
-        p1 = self._select_start
-        p2 = self._select_end
+        p1 = self.select_start
+        p2 = self.select_end
         if p1 is None or p2 is None:
             return None
         x1 = min(p1.x(), p2.x())
@@ -176,8 +198,8 @@ class ImageDropLabel(QLabel):
         x2 = int((rect.x() + rect.width()) * sx) + dx
         y2 = int((rect.y() + rect.height()) * sy) + dy
 
-        self._select_start = QPoint(x1, y1)
-        self._select_end = QPoint(x2, y2)
+        self.select_start = QPoint(x1, y1)
+        self.select_end = QPoint(x2, y2)
         self.update()
 
     # --- 鼠标绘制 ---
@@ -191,14 +213,14 @@ class ImageDropLabel(QLabel):
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
             return
         if ev.button() == Qt.MouseButton.LeftButton and self._display_pixmap is not None:
-            self._select_start = ev.pos()
-            self._select_end = ev.pos()
+            self.select_start = ev.pos()
+            self.select_end = ev.pos()
             self._is_drawing = True
             self.update()
 
     def mouseMoveEvent(self, ev: QMouseEvent) -> None:
         if self._is_drawing:
-            self._select_end = ev.pos()
+            self.select_end = ev.pos()
             self.update()
         # 平移逻辑优先
         if self._panning and self._pan_last_pos is not None and self._display_pixmap is not None:
@@ -225,10 +247,10 @@ class ImageDropLabel(QLabel):
                 self._offset_y = (label_h - disp.height()) // 2
 
             # 同步调整现有选区（选区以 widget 坐标系存储）
-            if self._select_start is not None:
-                self._select_start = QPoint(self._select_start.x() + dx, self._select_start.y() + dy)
-            if self._select_end is not None:
-                self._select_end = QPoint(self._select_end.x() + dx, self._select_end.y() + dy)
+            if self.select_start is not None:
+                self.select_start = QPoint(self.select_start.x() + dx, self.select_start.y() + dy)
+            if self.select_end is not None:
+                self.select_end = QPoint(self.select_end.x() + dx, self.select_end.y() + dy)
 
             self._pan_last_pos = ev.pos()
             self.update()
@@ -236,7 +258,7 @@ class ImageDropLabel(QLabel):
 
     def mouseReleaseEvent(self, ev: QMouseEvent) -> None:
         if ev.button() == Qt.MouseButton.LeftButton and self._is_drawing:
-            self._select_end = ev.pos()
+            self.select_end = ev.pos()
             self._is_drawing = False
             self.update()
         if ev.button() == Qt.MouseButton.RightButton and self._panning:
@@ -312,13 +334,21 @@ class ImageDropLabel(QLabel):
                 min_y = label_h - new_disp.height()
                 new_off_y = max(min_y, min(raw_new_off_y, 0))
 
-            # 偏移差：将选区一并移动
-            delta_x = new_off_x - old_off_x
-            delta_y = new_off_y - old_off_y
-            if self._select_start is not None:
-                self._select_start = QPoint(self._select_start.x() + delta_x, self._select_start.y() + delta_y)
-            if self._select_end is not None:
-                self._select_end = QPoint(self._select_end.x() + delta_x, self._select_end.y() + delta_y)
+            # 根据缩放比例计算选区新坐标
+            if self.has_selection() and old_disp.width() > 0 and old_disp.height() > 0:
+                s = self.select_start
+                e = self.select_end
+                if s is not None and e is not None:
+                    sx = (s.x() - old_off_x) / old_disp.width()
+                    sy = (s.y() - old_off_y) / old_disp.height()
+                    ex = (e.x() - old_off_x) / old_disp.width()
+                    ey = (e.y() - old_off_y) / old_disp.height()
+                    sxpos = int(new_off_x + sx * new_disp.width())
+                    sypos = int(new_off_y + sy * new_disp.height())
+                    self.select_start = QPoint(sxpos, sypos)
+                    expos = int(new_off_x + ex * new_disp.width())
+                    eypos = int(new_off_y + ey * new_disp.height())
+                    self.select_end = QPoint(expos, eypos)
 
             self._offset_x = new_off_x
             self._offset_y = new_off_y
@@ -327,8 +357,8 @@ class ImageDropLabel(QLabel):
             new_off_x = (label_w - new_disp.width()) // 2
             new_off_y = (label_h - new_disp.height()) // 2
             if self.has_selection() and old_disp is not None and old_disp.width() > 0 and old_disp.height() > 0:
-                s = self._select_start
-                e = self._select_end
+                s = self.select_start
+                e = self.select_end
                 if s is not None and e is not None:
                     sx = (s.x() - old_off_x) / old_disp.width()
                     sy = (s.y() - old_off_y) / old_disp.height()
@@ -336,10 +366,10 @@ class ImageDropLabel(QLabel):
                     ey = (e.y() - old_off_y) / old_disp.height()
                     sxpos = int(new_off_x + sx * new_disp.width())
                     sypos = int(new_off_y + sy * new_disp.height())
-                    self._select_start = QPoint(sxpos, sypos)
+                    self.select_start = QPoint(sxpos, sypos)
                     expos = int(new_off_x + ex * new_disp.width())
                     eypos = int(new_off_y + ey * new_disp.height())
-                    self._select_end = QPoint(expos, eypos)
+                    self.select_end = QPoint(expos, eypos)
 
             self._offset_x = new_off_x
             self._offset_y = new_off_y
@@ -362,8 +392,10 @@ class ImageDropLabel(QLabel):
             painter.drawPixmap(self._offset_x, self._offset_y, self._display_pixmap)
             # 绘制选区覆盖层
             if self.has_selection() and (rect := self.getSelectionDisplayRect()) is not None:
-                painter.setPen(QColor(255, 0, 0))
-                painter.setBrush(QColor(255, 0, 0, 50))
+                color = themeColor()
+                painter.setPen(color)
+                color.setAlpha(50)
+                painter.setBrush(color)
                 painter.drawRect(rect)
             painter.end()
 

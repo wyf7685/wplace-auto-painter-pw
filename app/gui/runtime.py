@@ -4,6 +4,7 @@ import anyio
 import anyio.to_thread
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from app.exception import ConfigError
 from app.log import logger
 from app.painter import run_painter
 
@@ -12,6 +13,7 @@ class RuntimeSignals(QObject):
     """Signals emitted by TaskRuntime."""
 
     state_changed = pyqtSignal(str)
+    config_error_occurred = pyqtSignal(ConfigError)
 
 
 class TaskRuntime:
@@ -61,6 +63,10 @@ class TaskRuntime:
         state = "stopped"
         try:
             anyio.run(_runner)
+        except ConfigError as e:
+            logger.exception("Configuration error occurred in runtime")
+            self._signals.config_error_occurred.emit(e)
+            state = "error"
         except BaseException:
             logger.exception("Background runtime crashed")
             state = "error"

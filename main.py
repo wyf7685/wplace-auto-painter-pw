@@ -3,8 +3,12 @@ import multiprocessing
 
 multiprocessing.freeze_support()
 
+from app.config import export_config_schema
+
 
 def main() -> None:
+    export_config_schema()
+
     with contextlib.suppress(KeyboardInterrupt):
         from app.gui import run_gui
 

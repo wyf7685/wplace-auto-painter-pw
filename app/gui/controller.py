@@ -1,11 +1,13 @@
 import sys
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIcon, QPixmap
-from PyQt6.QtWidgets import QApplication, QMessageBox
-from qfluentwidgets import Theme, setTheme
+from PyQt6.QtWidgets import QApplication
+from qfluentwidgets import InfoBar, InfoBarPosition, Theme, setTheme
 
 from app.config import Config
 from app.const import APP_NAME, assets
+from app.exception import ConfigError
 from app.log import logger
 
 from .logging_bridge import LogBridge
@@ -25,34 +27,60 @@ def _load_icon() -> QIcon:
 
 
 def run_gui() -> None:
-    argv = [arg for arg in sys.argv if arg != "--tray"]
-    app = QApplication(argv)
+    app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     setTheme(Theme.AUTO)
 
     Config.set_background_mode()
 
-    icon = _load_icon()
     bridge = LogBridge()
     bridge.start()
 
     runtime_signals = RuntimeSignals()
     runtime = TaskRuntime(runtime_signals)
 
-    window = MainWindow(icon)
+    window = MainWindow(_load_icon())
 
     for line in bridge.buffer:
         window.append_log(line)
 
     bridge.new_line.connect(window.append_log)
+
+    def handle_config_error(exc: ConfigError) -> None:
+        logger.opt(exception=exc).error(f"Configuration error: {exc!r}")
+        logger.info("Please turn to Config tab to fix the error and save before restart.")
+        InfoBar.error(
+            "Config Error",
+            f"Configuration error:\n{exc}\n\nPlease fix the error in Config tab and save before restart.",
+            orient=Qt.Orientation.Horizontal,
+            position=InfoBarPosition.TOP,
+            duration=10000,
+            parent=window,
+        )
+
     runtime_signals.state_changed.connect(window.set_runtime_state)
+    runtime_signals.config_error_occurred.connect(handle_config_error)
 
     def start_runtime() -> None:
         if not window.config_editor.save_to_disk(show_message=False):
-            QMessageBox.warning(window, "Config", "Config is invalid, please fix fields before start.")
+            InfoBar.warning(
+                "Invalid Config",
+                "Config is invalid, please fix fields before start.",
+                orient=Qt.Orientation.Horizontal,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+                parent=window,
+            )
             return
         if not runtime.start():
-            QMessageBox.information(window, "Runtime", "Runtime is already running.")
+            InfoBar.info(
+                "Runtime",
+                "Runtime is already running.",
+                orient=Qt.Orientation.Horizontal,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+                parent=window,
+            )
 
     def stop_runtime() -> None:
         runtime.stop()
@@ -73,7 +101,7 @@ def run_gui() -> None:
     )
 
     tray = AppTrayIcon(
-        icon,
+        _load_icon(),
         app,
         on_show=window.show_main_window,
         on_start=start_runtime,
