@@ -117,7 +117,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
         raise PaintFinished("No colors available to paint")
     template, entries = selected
 
-    if not Config.is_background_mode() and sys.stdout is not None:
+    if sys.stdout is not None:
         logger.info("Template preview:")
         draw_ansi(template.load_im(), file=sys.stdout)
 

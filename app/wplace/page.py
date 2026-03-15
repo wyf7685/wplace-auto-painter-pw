@@ -97,23 +97,17 @@ async def notify_open_browser() -> None:
     from app.utils import toast
 
     logger.debug("Sending notification for opening browser...")
-    if Config.is_background_mode():
-        # Block until the user acknowledges or the toast times out (10 s).
-        # notify_with_button is synchronous; run it off the async thread so
-        # it does not block the event loop during the wait.
-        clicked = await anyio.to_thread.run_sync(
-            functools.partial(
-                toast.notify_with_button,
-                APP_NAME,
-                "即将打开浏览器窗口进行绘制操作。",
-                button="确认",
-            ),
-            abandon_on_cancel=True,
-        )
-        if not clicked:
-            logger.info("Toast timed out or dismissed, proceeding to open browser.")
-    else:
-        toast.notify(APP_NAME, "即将打开浏览器窗口进行绘制操作。")
+    clicked = await anyio.to_thread.run_sync(
+        functools.partial(
+            toast.notify_with_button,
+            APP_NAME,
+            "即将打开浏览器窗口进行绘制操作。",
+            button="确认",
+        ),
+        abandon_on_cancel=True,
+    )
+    if not clicked:
+        logger.info("Toast timed out or dismissed, proceeding to open browser.")
 
 
 class WplacePage:
