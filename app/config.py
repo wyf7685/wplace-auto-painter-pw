@@ -1,4 +1,6 @@
+import contextlib
 import json
+from collections import Counter
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -34,17 +36,9 @@ class Config(BaseModel):
         if not self.users:
             raise ValueError("users cannot be empty")
 
-        seen: set[str] = set()
-        duplicates: set[str] = set()
-        for user in self.users:
-            identifier = user.identifier
-            if identifier in seen:
-                duplicates.add(identifier)
-            seen.add(identifier)
-
+        duplicates = {id for id, cnt in Counter(u.identifier for u in self.users).items() if cnt > 1}
         if duplicates:
-            dup_text = ", ".join(sorted(duplicates))
-            raise ValueError(f"duplicate user identifier(s): {dup_text}")
+            raise ValueError(f"duplicate user identifier(s): {', '.join(sorted(duplicates))}")
 
         return self
 
@@ -71,7 +65,9 @@ class Config(BaseModel):
 
 
 def export_config_schema() -> None:
-    CONFIG_SCHEMA_FILE.write_text(json.dumps(Config.model_json_schema()), encoding="utf-8")
+    with contextlib.suppress(Exception):
+        CONFIG_SCHEMA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_SCHEMA_FILE.write_text(json.dumps(Config.model_json_schema()), encoding="utf-8")
 
 
 def ensure_config_ready() -> None:
