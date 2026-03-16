@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,8 +21,6 @@ class TemplateConfig(BaseModel):
         file_id = value.strip()
         if not file_id:
             raise ValueError("template.file_id cannot be empty")
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", file_id):
-            raise ValueError("template.file_id must match [A-Za-z0-9_-]+")
         return file_id
 
     @property
