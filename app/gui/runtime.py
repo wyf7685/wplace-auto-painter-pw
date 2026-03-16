@@ -1,5 +1,4 @@
 import threading
-from collections.abc import Awaitable, Callable
 
 import anyio
 import anyio.to_thread
@@ -19,8 +18,7 @@ class RuntimeSignals(QObject):
 class TaskRuntime:
     """Run task in a background thread and control it with a stop event."""
 
-    def __init__(self, task: Callable[[], Awaitable[object]], signals: RuntimeSignals) -> None:
-        self._task = task
+    def __init__(self, signals: RuntimeSignals) -> None:
         self._signals = signals
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -49,6 +47,8 @@ class TaskRuntime:
             thread.join(timeout=timeout)
 
     def _thread_main(self) -> None:
+        from app.painter import run_painter
+
         async def _runner() -> None:
             async def _stop_waiter(scope: anyio.CancelScope) -> None:
                 await anyio.to_thread.run_sync(self._stop_event.wait, abandon_on_cancel=True)
@@ -57,7 +57,7 @@ class TaskRuntime:
             async with anyio.create_task_group() as tg:
                 tg.start_soon(_stop_waiter, tg.cancel_scope)
                 try:
-                    await self._task()
+                    await run_painter()
                 finally:
                     tg.cancel_scope.cancel()
 

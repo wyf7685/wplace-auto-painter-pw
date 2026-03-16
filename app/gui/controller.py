@@ -10,7 +10,6 @@ from app.config import Config
 from app.const import APP_NAME, assets
 from app.exception import ConfigError
 from app.log import logger
-from app.painter import run_painter
 
 from .i18n import lang, tr
 from .logging import LogBridge
@@ -42,7 +41,7 @@ def run_gui() -> None:
     bridge.start()
 
     runtime_signals = RuntimeSignals()
-    runtime = TaskRuntime(run_painter, runtime_signals)
+    runtime = TaskRuntime(runtime_signals)
 
     window = MainWindow(_load_icon())
 
