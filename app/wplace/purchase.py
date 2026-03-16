@@ -2,11 +2,10 @@ from typing import Literal, assert_never
 
 import cloudscraper
 
-from app.config import Config
 from app.exception import FetchFailed
 from app.log import logger
 from app.schemas import PurchaseChargeConfig, PurchaseMaxChargeConfig, UserConfig, WplaceCredentials, WplaceUserInfo
-from app.utils import run_sync
+from app.utils import requests_proxies, run_sync
 
 WPLACE_PURCHASE_API_URL = "https://backend.wplace.live/purchase"
 _SCRAPER_HEADERS = {
@@ -22,13 +21,6 @@ _SCRAPER_HEADERS = {
 }
 
 
-def _proxy_config() -> dict[str, str] | None:
-    proxy = Config.load().proxy
-    return {"http": proxy, "https": proxy} if proxy is not None else None
-
-
-_proxies = _proxy_config()
-
 
 @run_sync
 def _post_purchase(credentials: WplaceCredentials, type: Literal["max_charges", "charges"], amount: int) -> None:  # noqa: A002
@@ -37,7 +29,7 @@ def _post_purchase(credentials: WplaceCredentials, type: Literal["max_charges", 
             WPLACE_PURCHASE_API_URL,
             headers=_SCRAPER_HEADERS,
             cookies=credentials.to_requests_cookies(),
-            proxies=_proxies,
+            proxies=requests_proxies(),
             json={"product": {"id": {"max_charges": 70, "charges": 80}[type], "amount": amount}},
             timeout=20,
         )
