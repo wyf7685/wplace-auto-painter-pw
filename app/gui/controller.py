@@ -1,5 +1,6 @@
 import contextlib
 import sys
+from typing import NoReturn
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIcon, QPixmap
@@ -14,43 +15,71 @@ from app.log import logger
 from .i18n import lang, tr
 from .logging import LogBridge
 from .main_window import MainWindow
-from .runtime import RuntimeSignals, TaskRuntime
+from .runtime import TaskRuntime
 from .state import GUIState
 from .tray_icon import AppTrayIcon
 
 
-def _load_icon() -> QIcon:
-    if assets.icon.is_file():
-        return QIcon(str(assets.icon))
+class Controller:
+    def __init__(self) -> None:
+        self.app = QApplication(sys.argv)
+        self.app.setQuitOnLastWindowClosed(False)
+        setTheme(Theme.AUTO)
+        lang.set_language(None)
+        with contextlib.suppress(Exception):
+            lang.set_language(Config.load().language)
 
-    # Fallback to a simple colored square if the icon file is missing
-    pixmap = QPixmap(16, 16)
-    pixmap.fill(QColor(0, 120, 215))
-    return QIcon(pixmap)
+        self.icon = self._load_icon()
+        self.bridge = LogBridge()
+        self.bridge.start()
+        self.runtime = TaskRuntime()
+        self.window = MainWindow(self.icon)
+        self.tray = AppTrayIcon(self.icon, parent=self.app)
 
+        for line in self.bridge.buffer:
+            self.window.append_log(line)
+        self.bridge.new_line.connect(self.window.append_log)
+        self.runtime.signals.state_changed.connect(self.window.set_runtime_state)
+        self.runtime.signals.config_error_occurred.connect(self.handle_config_error)
+        self.app.aboutToQuit.connect(self.save_gui_state)
+        self.window.set_handlers(
+            on_start=self.start_runtime,
+            on_stop=self.stop_runtime,
+            on_save=self.save_config,
+            on_exit=self.exit_app,
+        )
+        self.tray.setToolTip(APP_NAME)
+        self.tray.setup_menu(
+            on_show=self.window.show_main_window,
+            on_start=self.start_runtime,
+            on_stop=self.stop_runtime,
+            on_exit=self.exit_app,
+        )
 
-def run_gui() -> None:
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
-    setTheme(Theme.AUTO)
-    lang.set_language(None)
-    with contextlib.suppress(Exception):
-        lang.set_language(Config.load().language)
+    def run(self) -> NoReturn:
+        logger.info("Starting GUI")
+        self.tray.show()
+        self.window.show_main_window()
+        exit_code = self.app.exec()
+        self.tray.hide()
+        self.tray.deleteLater()
+        self.runtime.stop()
+        self.runtime.join(timeout=10)
+        self.bridge.stop()
+        logger.info("GUI exited")
+        sys.exit(exit_code)
 
-    bridge = LogBridge()
-    bridge.start()
+    @staticmethod
+    def _load_icon() -> QIcon:
+        if assets.icon.is_file():
+            return QIcon(str(assets.icon))
 
-    runtime_signals = RuntimeSignals()
-    runtime = TaskRuntime(runtime_signals)
+        # Fallback to a simple colored square if the icon file is missing
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(QColor(0, 120, 215))
+        return QIcon(pixmap)
 
-    window = MainWindow(_load_icon())
-
-    for line in bridge.buffer:
-        window.append_log(line)
-
-    bridge.new_line.connect(window.append_log)
-
-    def handle_config_error(exc: ConfigError) -> None:
+    def handle_config_error(self, exc: ConfigError) -> None:
         logger.opt(exception=exc).error(f"Configuration error: {exc!r}")
         logger.info("Please turn to Config tab to fix the error and save before restart.")
         InfoBar.error(
@@ -59,77 +88,50 @@ def run_gui() -> None:
             orient=Qt.Orientation.Horizontal,
             position=InfoBarPosition.TOP,
             duration=10000,
-            parent=window,
+            parent=self.window,
         )
 
-    runtime_signals.state_changed.connect(window.set_runtime_state)
-    runtime_signals.config_error_occurred.connect(handle_config_error)
-
-    def start_runtime() -> None:
-        if not window.config_editor.save_to_disk(show_message=False):
+    def start_runtime(self) -> None:
+        if not self.window.config_editor.save_to_disk(show_message=False):
             InfoBar.warning(
                 tr("controller.invalid_config.title"),
                 tr("controller.invalid_config.content"),
                 orient=Qt.Orientation.Horizontal,
                 position=InfoBarPosition.TOP,
                 duration=5000,
-                parent=window,
+                parent=self.window,
             )
             return
-        if not runtime.start():
+        if not self.runtime.start():
             InfoBar.info(
                 tr("controller.runtime.title"),
                 tr("controller.runtime.already_running"),
                 orient=Qt.Orientation.Horizontal,
                 position=InfoBarPosition.TOP,
                 duration=5000,
-                parent=window,
+                parent=self.window,
             )
+        self.window.goto_logs_page()
 
-    def stop_runtime() -> None:
-        runtime.stop()
+    def stop_runtime(self) -> None:
+        self.runtime.stop()
 
-    def save_config() -> None:
-        window.config_editor.save_to_disk(show_message=True)
+    def save_config(self) -> None:
+        self.window.config_editor.save_to_disk(show_message=True)
 
-    def exit_app() -> None:
-        runtime.stop()
-        window.allow_exit()
-        app.quit()
+    def exit_app(self) -> None:
+        self.runtime.stop()
+        self.window.allow_exit()
+        self.app.quit()
 
-    def save_gui_state() -> None:
-        window.update_state()
+    def save_gui_state(self) -> None:
+        self.window.update_state()
         GUIState.save()
 
-    app.aboutToQuit.connect(save_gui_state)
 
-    window.set_handlers(
-        on_start=start_runtime,
-        on_stop=stop_runtime,
-        on_save=save_config,
-        on_exit=exit_app,
-    )
-
-    tray = AppTrayIcon(
-        _load_icon(),
-        app,
-        on_show=window.show_main_window,
-        on_start=start_runtime,
-        on_stop=stop_runtime,
-        on_exit=exit_app,
-    )
-    tray.setToolTip(APP_NAME)
-    tray.show()
-
-    window.show_main_window()
-
-    exit_code = app.exec()
-
-    tray.hide()
-    tray.deleteLater()
-    runtime.stop()
-    runtime.join(timeout=10)
-    bridge.stop()
-
-    logger.info("GUI exited")
-    sys.exit(exit_code)
+def run_gui() -> NoReturn:
+    try:
+        Controller().run()
+    except Exception:
+        logger.opt(exception=True).critical("Unhandled exception in GUI")
+        sys.exit(1)

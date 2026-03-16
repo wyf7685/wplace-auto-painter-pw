@@ -3,6 +3,8 @@ from collections import deque
 import loguru
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from app.log import log_format, log_level_filter, logger
+
 
 class LogBridge(QObject):
     """Bridge loguru output to Qt signal with a bounded replay buffer."""
@@ -18,19 +20,17 @@ class LogBridge(QObject):
     def buffer(self) -> tuple[str, ...]:
         return tuple(self._buffer)
 
+    def _log_sink(self, message: loguru.Message) -> None:
+        text = str(message).rstrip("\n")
+        self._buffer.append(text)
+        self.new_line.emit(text)
+
     def start(self) -> None:
         if self._sink_id is not None:
             return
 
-        from app.log import log_format, log_level_filter, logger
-
-        def _sink(message: loguru.Message) -> None:
-            text = str(message).rstrip("\n")
-            self._buffer.append(text)
-            self.new_line.emit(text)
-
         self._sink_id = logger.add(
-            _sink,
+            self._log_sink,
             format=log_format,
             filter=log_level_filter(),
             level="DEBUG",
@@ -41,8 +41,6 @@ class LogBridge(QObject):
     def stop(self) -> None:
         if self._sink_id is None:
             return
-
-        from app.log import logger
 
         logger.remove(self._sink_id)
         self._sink_id = None

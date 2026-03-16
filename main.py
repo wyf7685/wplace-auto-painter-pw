@@ -1,12 +1,13 @@
-import contextlib
 import multiprocessing
 
 multiprocessing.freeze_support()
 
-from app.config import export_config_schema
-
 
 def main() -> None:
+    import contextlib
+
+    from app.config import export_config_schema
+
     export_config_schema()
 
     with contextlib.suppress(KeyboardInterrupt):

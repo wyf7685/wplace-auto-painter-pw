@@ -18,8 +18,8 @@ class RuntimeSignals(QObject):
 class TaskRuntime:
     """Run task in a background thread and control it with a stop event."""
 
-    def __init__(self, signals: RuntimeSignals) -> None:
-        self._signals = signals
+    def __init__(self) -> None:
+        self._signals = RuntimeSignals()
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
@@ -27,6 +27,10 @@ class TaskRuntime:
     @property
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
+
+    @property
+    def signals(self) -> RuntimeSignals:
+        return self._signals
 
     def start(self) -> bool:
         with self._lock:
