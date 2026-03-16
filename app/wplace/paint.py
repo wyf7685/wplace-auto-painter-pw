@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import anyio
+import httpx
 from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
@@ -230,17 +231,22 @@ async def paint_loop(user: UserConfig) -> None:
             wakeup_at = datetime.now() + timedelta(seconds=wait_secs)
             logger.info(f"{prefix} Sleeping for <y>{wait_secs / 60:.2f}</> minutes...")
             logger.info(f"{prefix} Next paint cycle at <g>{wakeup_at:%Y-%m-%d %H:%M:%S}</>.")
-            await anyio.sleep(wait_secs)
 
         except ShouldQuit:
             logger.opt(colors=True, exception=True).warning(f"{prefix} Received shutdown signal, exiting paint loop.")
             break
-
+        except httpx.RequestError:
+            logger.exception(f"{prefix} Request error occurred")
+            wait_secs = random.uniform(0.5, 1.5) * 60
+            logger.info(
+                f"{prefix} Maybe network issue? Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying..."
+            )
         except Exception:
             logger.exception(f"{prefix} An error occurred")
-            delay = random.uniform(1 * 60, 3 * 60)
-            logger.info(f"{prefix} Sleeping for <y>{delay / 60:.2f}</> minutes before retrying...")
-            await anyio.sleep(delay)
+            wait_secs = random.uniform(1, 3) * 60
+            logger.info(f"{prefix} Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
+
+        await anyio.sleep(max(wait_secs, 0))
 
 
 async def setup_paint() -> None:
