@@ -12,6 +12,7 @@ to cmd.exe, which is enough for our purposes.
 
 import contextlib
 import enum
+import functools
 import sys
 import threading
 from collections.abc import Callable
@@ -103,12 +104,25 @@ def _build_toast(title: str, body: str, duration: Duration = Duration.Default) -
     return toast
 
 
+@functools.cache
+def _warn_failed_get_setting(interactive: bool) -> None:
+    exc = sys.exception()
+    toaster_type = "InteractableWindowsToaster" if interactive else "WindowsToaster"
+    logger.warning(f"Failed to get notification setting using {toaster_type}: {exc!r}")
+
+
 def _get_notification_setting(interactive: bool = False) -> NotificationSetting:
     if not _available(_wt):
         return NotificationSetting.DISABLED_BY_MANIFEST
 
-    toaster = _wt.InteractableWindowsToaster(APP_NAME) if interactive else _wt.WindowsToaster(APP_NAME)
-    return toaster.toastNotifier.setting
+    try:
+        toaster = _wt.InteractableWindowsToaster(APP_NAME) if interactive else _wt.WindowsToaster(APP_NAME)
+        setting = toaster.toastNotifier.setting
+    except Exception:
+        _warn_failed_get_setting(interactive)
+        setting = NotificationSetting.DISABLED_BY_MANIFEST
+
+    return setting
 
 
 def _is_disabled(interactive: bool = False) -> bool:
