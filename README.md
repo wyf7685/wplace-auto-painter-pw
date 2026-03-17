@@ -10,11 +10,9 @@
 
 Paint on wplace with playwright
 
-> [!tip]
->
-> Prebuilt binaries are available on [GitHub Actions](https://github.com/wyf7685/wplace-auto-painter-pw/actions) for Windows and Linux.
->
-> Note that prebuilt versions have limited support. Running from source is recommended for better compatibility.
+## Getting Started
+
+Download prebuilt binaries from [GitHub Actions](https://github.com/wyf7685/wplace-auto-painter-pw/actions) for Windows and Linux.
 
 ## Develop
 
@@ -22,8 +20,6 @@ Before setting up this project, ensure you have the following installed:
 
 - **uv** - A fast Python package installer. See [`astral-sh/uv`](https://github.com/astral-sh/uv)
 - **Python 3.14+** - Download from [python.org](https://www.python.org/downloads/) or using `uv`: `uv python install 3.14`
-
-## Setup
 
 1. Clone the repository:
 
@@ -38,33 +34,11 @@ cd wplace-auto-painter-pw
 uv sync
 ```
 
-3. ~~Install Playwright browsers~~ 
-
-No longer needed
-
-Playwright browsers will be automatically downloaded into `data/` when running the app for the first time.
-
-## Configuration
-
-Execute the following command to open the config GUI:
-
-```bash
-uv run main.py config
-```
-
-This will help you to create `data/config.json` and `data/templates/` to store your credentials and templates.
-
-## Usage
-
-Simply run:
+3. Run the app:
 
 ```bash
 uv run main.py
 ```
-
-> [!note]
->
-> If your configuration is not set up or broken, this will open the config GUI first.
 
 ## See Also
 
