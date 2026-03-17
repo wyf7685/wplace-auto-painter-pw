@@ -20,23 +20,23 @@ APP_DIR = (
     Path(sys._MEIPASS)  # noqa: SLF001  # type: ignore[attr-defined]
     if getattr(sys, "frozen", False)
     else Path(__file__).parent
-)
+).resolve()
 ASSETS_DIR = APP_DIR / "assets"
 
 
 class _Assets:
-    icon: ClassVar[Path] = ASSETS_DIR.joinpath("gui.ico").resolve()
+    icon: ClassVar[Path] = ASSETS_DIR.joinpath("icon", "gui.ico")
 
     @staticmethod
     @functools.cache
-    def _read(name: str) -> str:
-        return ASSETS_DIR.joinpath(name).read_text("utf-8")
+    def _read(*path: str) -> str:
+        return ASSETS_DIR.joinpath(*path).read_text("utf-8")
 
     def page_init(self) -> str:
-        return self._read("page_init.js")
+        return self._read("js", "page_init.js")
 
     def paint_btn(self, script_data: dict[str, str]) -> str:
-        return self._read("paint_btn.js").replace(
+        return self._read("js", "paint_btn.js").replace(
             "{{script_data}}", base64.b64encode(json.dumps(script_data).encode()).decode()
         )
 
