@@ -77,7 +77,7 @@ async def check_update() -> None:
     logger.opt(colors=True).warning(f"检测到有新版本可用: <y>{local_hash[:7]}</> -> <g>{latest_hash[:7]}</>")
     if IS_FROZEN:
         logger.opt(colors=True).warning("请前往项目 <y>Actions</> 页面下载最新构建并替换当前程序")
-        logger.opt(colors=True).warning(f"<y>{ACTIONS_URL}</>")
+        logger.opt(colors=True).warning(f"<c><i>{ACTIONS_URL}</></>")
     else:
         logger.opt(colors=True).warning("请使用命令 <y>git pull</> 拉取最新代码并重新运行程序")
     logger.warning("=" * 60)
