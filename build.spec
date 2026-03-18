@@ -6,7 +6,7 @@ from PyInstaller.building.api import EXE, PYZ
 from PyInstaller.building.build_main import Analysis
 
 ROOT = Path.cwd()
-ICON = ROOT.joinpath("app", "assets", "gui.ico")
+ICON = ROOT.joinpath("app", "assets", "icon", "gui.ico")
 
 
 def write_git_commit_hash() -> None:
