@@ -61,11 +61,10 @@ _pw_states: dict[asyncio.AbstractEventLoop, _PlaywrightState] = {}
 
 def _cleanup_states() -> None:
     """Clean up _PlaywrightState entries for event loops that have been closed."""
-    alive_loops = {loop for loop in _pw_states if not loop.is_closed()}
-    for loop in list(_pw_states):
-        if loop not in alive_loops:
-            logger.debug(f"Cleaning up Playwright state for dead loop {loop}")
-            del _pw_states[loop]
+    dead_loops = {loop for loop in _pw_states if loop.is_closed()}
+    for loop in dead_loops:
+        logger.debug(f"Cleaning up Playwright state for dead loop {loop}")
+        del _pw_states[loop]
 
 
 def _get_state() -> _PlaywrightState:

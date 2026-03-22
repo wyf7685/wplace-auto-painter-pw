@@ -51,7 +51,7 @@ class TaskRuntime:
             thread.join(timeout=timeout)
 
     def _thread_main(self) -> None:
-        from app.painter import run_painter
+        from app.wplace import run_painter
 
         async def _runner() -> None:
             async def _stop_waiter(scope: anyio.CancelScope) -> None:
