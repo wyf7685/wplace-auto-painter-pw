@@ -49,6 +49,7 @@ class Config(BaseModel):
         return cls._cache
 
     def save(self) -> None:
+        from app.log import get_log_level
         from app.utils import SecretStrEncoder
 
         CONFIG_FILE.write_text(
@@ -62,6 +63,7 @@ class Config(BaseModel):
             encoding="utf-8",
         )
         Config._cache = self
+        get_log_level.cache_clear()
 
 
 def export_config_schema() -> None:

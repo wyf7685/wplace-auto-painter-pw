@@ -65,6 +65,7 @@ async def claim_painting_color(names: Iterable[ColorName]) -> AsyncGenerator[Non
     async with contextlib.AsyncExitStack() as stack:
         async with COLORS_CLAIMER_LOCK:
             for name in names:
+                logger.debug(f"Attempting to claim color: <g>{name}</>")
                 await stack.enter_async_context(COLORS_LOCK[name])
         yield
 
@@ -123,7 +124,9 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
         draw_ansi(template.load_im(), file=sys.stdout)
 
     async with claim_painting_color(entry.name for entry in entries):
+        logger.info("Grouping pixels...")
         groups = await group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])
+        logger.info(f"Found <y>{len(groups)}</> groups of adjacent pixels to paint.")
         pixels = sorted((p for g in groups for p in g), key=lambda p: user.preferred_colors_rank[p[2]])
         pixels_to_paint = min(int(user_info.charges.count), len(pixels))
         if user.max_paint_charges is not None:

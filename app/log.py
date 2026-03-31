@@ -43,16 +43,17 @@ log_format = "<g>{time:HH:mm:ss}</g> [<lvl>{level}</lvl>] <c><u>{name}</u></c> |
 logger.remove()
 
 
+@functools.cache
+def get_log_level() -> int:
+    from app.config import Config
+
+    return logger.level(Config.load().log_level).no
+
+
 def log_level_filter() -> Callable[[loguru.Record], bool]:
-    @functools.cache
-    def _level() -> int:
-        from app.config import Config
-
-        return logger.level(Config.load().log_level).no
-
     def filter_func(record: loguru.Record) -> bool:
         try:
-            return record["level"].no >= _level()
+            return record["level"].no >= get_log_level()
         except Exception:
             return True
 
