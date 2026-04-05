@@ -1,9 +1,13 @@
+import contextlib
+import os
 import shutil
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 
-from PyInstaller.building.api import EXE, PYZ
+from PyInstaller.building.api import COLLECT, EXE, PYZ
 from PyInstaller.building.build_main import Analysis
+from PyInstaller.building.datastruct import Target
 
 ROOT = Path.cwd()
 ICON = ROOT.joinpath("app", "assets", "icon", "gui.ico")
@@ -28,28 +32,38 @@ def write_git_commit_hash() -> None:
         path.write_text(commit_hash, encoding="utf-8")
 
 
-def build_main_app() -> None:
-    a = Analysis(
-        ["main.py"],
-        pathex=[],
-        binaries=[],
-        datas=[("app/assets", "assets")],
-        hiddenimports=[],
-        hookspath=[],
-        hooksconfig={},
-        runtime_hooks=[],
-        excludes=[],
-        noarchive=False,
-        optimize=0,
-    )
-    pyz = PYZ(a.pure)
+@contextlib.contextmanager
+def ignore_env_path() -> Iterator[None]:
+    env_path = os.environ.pop("PATH", "")
+    os.environ["PATH"] = ""
+    try:
+        yield
+    finally:
+        os.environ["PATH"] = env_path
 
-    EXE(
+
+def build_main_app() -> Target:
+    with ignore_env_path():
+        a = Analysis(
+            ["main.py"],
+            pathex=[],
+            binaries=[],
+            datas=[("app/assets", "assets")],
+            hiddenimports=[],
+            hookspath=[],
+            hooksconfig={},
+            runtime_hooks=[],
+            excludes=[],
+            noarchive=False,
+            optimize=0,
+        )
+
+    pyz = PYZ(a.pure)
+    exe = EXE(
         pyz,
         a.scripts,
-        a.binaries,
-        a.datas,
         [],
+        exclude_binaries=True,
         name="wplace-auto-painter",
         icon=ICON,
         debug=False,
@@ -65,6 +79,18 @@ def build_main_app() -> None:
         codesign_identity=None,
         entitlements_file=None,
     )
+
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name="wplace-auto-painter",
+    )
+
+    return coll  # noqa: RET504
 
 
 write_git_commit_hash()

@@ -8,12 +8,12 @@
       "justMyCode": false
     },
     {
-      "name": "调试 - GUI",
+      "name": "调试 - 构建",
       "type": "debugpy",
       "request": "launch",
-      "program": "main.py",
-      "args": ["config"],
-      "justMyCode": true
+      "module": "PyInstaller",
+      "args": ["build.spec"],
+      "justMyCode": false
     }
   ]
 }

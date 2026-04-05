@@ -9,7 +9,6 @@ on:
       - "build.spec"
       - "app/**"
       - "main.py"
-      - "gui_main.py"
       - "uv.lock"
   workflow_dispatch:
 
@@ -38,8 +37,15 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Install UPX
+        uses: crazy-max/ghaction-upx@v4
+        with:
+          install-only: true
+
       - name: Build
-        run: uv run pyinstaller build.spec
+        run: |
+          upx --version
+          uv run pyinstaller build.spec
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
