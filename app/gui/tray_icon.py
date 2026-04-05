@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from PyQt6.QtWidgets import QSystemTrayIcon
+from PySide6.QtWidgets import QSystemTrayIcon
 from qfluentwidgets import Action, FluentIcon, SystemTrayMenu
 
 from .i18n import tr

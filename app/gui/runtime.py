@@ -2,7 +2,7 @@ import threading
 
 import anyio
 import anyio.to_thread
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from app.exception import ConfigError
 from app.log import logger
@@ -11,8 +11,8 @@ from app.log import logger
 class RuntimeSignals(QObject):
     """Signals emitted by TaskRuntime."""
 
-    state_changed = pyqtSignal(str)
-    config_error_occurred = pyqtSignal(ConfigError)
+    state_changed = Signal(str)
+    config_error_occurred = Signal(ConfigError)
 
 
 class TaskRuntime:

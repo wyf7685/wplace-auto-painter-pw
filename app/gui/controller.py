@@ -2,9 +2,9 @@ import contextlib
 import sys
 from typing import NoReturn
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QIcon, QPixmap
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QIcon, QPixmap
+from PySide6.QtWidgets import QApplication
 from qfluentwidgets import InfoBar, InfoBarPosition, Theme, setTheme
 
 from app.config import Config

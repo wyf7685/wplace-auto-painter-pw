@@ -1,7 +1,7 @@
 from collections import deque
 
 import loguru
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from app.log import log_format, log_level_filter, logger
 
@@ -9,7 +9,7 @@ from app.log import log_format, log_level_filter, logger
 class LogBridge(QObject):
     """Bridge loguru output to Qt signal with a bounded replay buffer."""
 
-    new_line = pyqtSignal(str)
+    new_line = Signal(str)
 
     def __init__(self, max_lines: int = 2000) -> None:
         super().__init__()

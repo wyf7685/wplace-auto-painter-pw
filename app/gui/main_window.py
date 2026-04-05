@@ -1,9 +1,9 @@
 from collections.abc import Callable
 from typing import override
 
-from PyQt6.QtCore import QPoint
-from PyQt6.QtGui import QCloseEvent, QIcon
-from PyQt6.QtWidgets import QApplication, QVBoxLayout, QWidget
+from PySide6.QtCore import QPoint
+from PySide6.QtGui import QCloseEvent, QIcon
+from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, FluentWindow
 
 from app.const import APP_NAME
@@ -107,10 +107,7 @@ class MainWindow(FluentWindow):
         self.switchTo(self.logs_page)
 
     def _move_to_screen_center(self) -> None:
-        screen = self.screen() or QApplication.primaryScreen()
-        if screen is None:
-            return
-        geometry = screen.availableGeometry()
+        geometry = self.screen().availableGeometry()
         frame = self.frameGeometry()
         frame.moveCenter(geometry.center())
         self.move(frame.topLeft())
@@ -145,7 +142,7 @@ class MainWindow(FluentWindow):
         state.size_value = self.size()
 
     @override
-    def closeEvent(self, event: QCloseEvent) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+    def closeEvent(self, event: QCloseEvent) -> None:
         if self._allow_close:
             super().closeEvent(event)
             return

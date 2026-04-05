@@ -2,7 +2,7 @@ import dataclasses
 from typing import ClassVar
 
 from pydantic import TypeAdapter
-from PyQt6.QtCore import QPoint, QSize
+from PySide6.QtCore import QPoint, QSize
 
 from app.const import DATA_DIR
 

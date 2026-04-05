@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -51,7 +51,7 @@ from .user_draft import (
 class ConfigEditorWidget(QWidget):
     """Fluent configuration editor with modular widgets and pydantic validation."""
 
-    saved = pyqtSignal()
+    saved = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -508,8 +508,7 @@ class ConfigEditorWidget(QWidget):
         }
 
         item = self.users_list.item(row)
-        if item is not None:
-            item.setText(identifier)
+        item.setText(identifier)
 
     def _add_user(self) -> None:
         if self._current_user_row >= 0:

@@ -28,7 +28,7 @@ import re
 from collections.abc import Iterable, Iterator
 from typing import Final
 
-from PyQt6.QtGui import QColor, QTextCharFormat
+from PySide6.QtGui import QColor, QTextCharFormat
 
 
 class Style:

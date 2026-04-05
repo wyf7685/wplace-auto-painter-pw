@@ -1,14 +1,14 @@
 from collections.abc import Callable
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QWidget
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QHBoxLayout, QWidget
 from qfluentwidgets import CaptionLabel, PrimaryPushButton, PushButton
 
 from .i18n import tr
 
 
 class ToolRowWidget(QWidget):
-    state_changed = pyqtSignal(str)
+    state_changed = Signal(str)
 
     def __init__(
         self,

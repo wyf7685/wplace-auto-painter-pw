@@ -1,7 +1,7 @@
 from bot7685_ext.wplace.consts import ALL_COLORS, ColorName
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QIcon, QPixmap
-from PyQt6.QtWidgets import QAbstractItemView, QHBoxLayout, QListWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QIcon, QPixmap
+from PySide6.QtWidgets import QAbstractItemView, QHBoxLayout, QListWidgetItem, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, ElevatedCardWidget, LineEdit, ListWidget, PushButton
 
 from app.gui.i18n import tr
@@ -113,8 +113,6 @@ class PreferredColorsEditor(QWidget):
         seen: set[str] = set()
         for idx in range(self._selected_list.count()):
             item = self._selected_list.item(idx)
-            if item is None:
-                continue
             raw = item.data(Qt.ItemDataRole.UserRole)
             value = str(raw).strip() if raw is not None else ""
             if not value or value in seen:
@@ -139,11 +137,7 @@ class PreferredColorsEditor(QWidget):
             self._available_list.addItem(self._make_item(name))
 
     def _on_add_clicked(self) -> None:
-        item = self._available_list.currentItem()
-        if item is None:
-            return
-
-        raw = item.data(Qt.ItemDataRole.UserRole)
+        raw = self._available_list.currentItem().data(Qt.ItemDataRole.UserRole)
         name = str(raw).strip() if raw is not None else ""
         if not name or name in set(self.colors()):
             return

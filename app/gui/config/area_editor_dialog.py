@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from PyQt6.QtCore import QRect, Qt
-from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QWidget
+from PySide6.QtCore import QRect, Qt
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, InfoBar, InfoBarPosition, MessageBoxBase, PushButton, SubtitleLabel
 
 from app.gui.i18n import tr
@@ -59,7 +59,7 @@ class AreaEditorDialog(MessageBoxBase):
         if image_path and Path(image_path).is_file():
             self._image_label.set_image(image_path)
             if selected_area is not None:
-                self._image_label.setSelectionFromOriginalRect(QRect(*selected_area))
+                self._image_label.set_selection_from_original_rect(QRect(*selected_area))
 
     @property
     def result_area(self) -> tuple[int, int, int, int] | None:

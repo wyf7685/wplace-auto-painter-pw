@@ -1,7 +1,7 @@
 from typing import override
 
-from PyQt6.QtGui import QCloseEvent, QFont, QTextCursor
-from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtGui import QCloseEvent, QFont, QTextCursor
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CheckBox, PushButton, TextEdit
 
 from app.gui.i18n import tr
@@ -58,7 +58,7 @@ class AnsiLogViewer(QWidget):
         self._first_line = True
 
     @override
-    def closeEvent(self, event: QCloseEvent) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+    def closeEvent(self, event: QCloseEvent) -> None:
         if self._closable:
             super().closeEvent(event)
             return
