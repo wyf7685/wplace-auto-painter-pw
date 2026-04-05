@@ -34,6 +34,10 @@ def write_git_commit_hash() -> None:
 
 @contextlib.contextmanager
 def ignore_env_path() -> Iterator[None]:
+    if os.getenv("BUILD_CI") == "true":
+        yield
+        return
+
     env_path = os.environ.pop("PATH", "")
     os.environ["PATH"] = ""
     try:
