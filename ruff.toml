@@ -89,3 +89,6 @@ extra-standard-library = ["typing_extensions"]
 
 [lint.pyupgrade]
 keep-runtime-typing = true
+
+[lint.extend-per-file-ignores]
+"test_*.py" = ["T201"] # print
