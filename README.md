@@ -32,6 +32,7 @@ cd wplace-auto-painter-pw
 
 ```bash
 uv sync
+uv run prek install
 ```
 
 3. Run the app:

@@ -19,7 +19,11 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pyinstaller>=6.16.0"]
+dev = [
+    "prek>=0.3.8",
+    "pyinstaller>=6.16.0",
+    "ruff>=0.15.9",
+]
 
 [tool.uv]
 package = false

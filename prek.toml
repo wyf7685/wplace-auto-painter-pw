@@ -1,0 +1,14 @@
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.15.9"
+hooks = [
+  { id = "ruff-check", args = ["--fix"], types_or = ["python", "pyi"] },
+  { id = "ruff-format", types_or = ["python", "pyi"] },
+]
+
+[[repos]]
+repo = "https://github.com/DetachHead/basedpyright-prek-mirror"
+rev = "1.38.2"
+hooks = [
+    { id = "basedpyright"}
+]
