@@ -1,6 +1,10 @@
 import contextlib
+import importlib
 import sys
 from typing import NoReturn
+
+with contextlib.redirect_stdout(None):
+    importlib.import_module("qfluentwidgets")
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QIcon, QPixmap
