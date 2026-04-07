@@ -24,6 +24,7 @@ class Controller:
     def __init__(self) -> None:
         self.app = QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
+        self.app.setStyle("Fusion")
         setTheme(Theme.AUTO)
         lang.set_language(None)
         with contextlib.suppress(Exception):
