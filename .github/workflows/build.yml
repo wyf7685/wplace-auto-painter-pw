@@ -45,6 +45,7 @@ jobs:
       - name: Build
         env:
           BUILD_CI: "true"
+          BUILD_ONEFILE: "true"
         run: |
           upx --version
           uv run pyinstaller build.spec

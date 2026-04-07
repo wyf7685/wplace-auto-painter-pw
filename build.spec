@@ -1,3 +1,4 @@
+# ruff: noqa: T201
 import contextlib
 import os
 import shutil
@@ -11,6 +12,7 @@ from PyInstaller.building.datastruct import Target
 
 ROOT = Path.cwd()
 ICON = ROOT.joinpath("app", "assets", "icon", "gui.ico")
+BUILD_ONEFILE = os.getenv("BUILD_ONEFILE", "true") == "true"
 
 
 def write_git_commit_hash() -> None:
@@ -49,7 +51,7 @@ def ignore_env_path() -> Iterator[None]:
 def build_main_app() -> Target:
     with ignore_env_path():
         a = Analysis(
-            ["main.py"],
+            scripts=["main.py"],
             pathex=[],
             binaries=[],
             datas=[("app/assets", "assets")],
@@ -62,12 +64,17 @@ def build_main_app() -> Target:
             optimize=0,
         )
 
-    pyz = PYZ(a.pure)
+    exe_inputs = (PYZ(a.pure), a.scripts)
+    if BUILD_ONEFILE:
+        print("Building in one-file mode")
+        exe_inputs += (a.binaries, a.datas)
+    else:
+        print("Building in one-folder mode")
+
     exe = EXE(
-        pyz,
-        a.scripts,
+        *exe_inputs,
         [],
-        exclude_binaries=True,
+        exclude_binaries=not BUILD_ONEFILE,
         name="wplace-auto-painter",
         icon=ICON,
         debug=False,
@@ -84,17 +91,20 @@ def build_main_app() -> Target:
         entitlements_file=None,
     )
 
-    coll = COLLECT(
-        exe,
-        a.binaries,
-        a.datas,
-        strip=False,
-        upx=True,
-        upx_exclude=[],
-        name="wplace-auto-painter",
-    )
+    if BUILD_ONEFILE:
+        result = exe
+    else:
+        result = COLLECT(
+            exe,
+            a.binaries,
+            a.datas,
+            strip=False,
+            upx=True,
+            upx_exclude=[],
+            name="wplace-auto-painter",
+        )
 
-    return coll  # noqa: RET504
+    return result
 
 
 write_git_commit_hash()
