@@ -23,7 +23,6 @@ dev = ["pyinstaller>=6.16.0"]
 
 [tool.uv]
 package = false
-python-downloads = "automatic"
 
 [tool.pyright]
 pythonVersion = "3.14"
