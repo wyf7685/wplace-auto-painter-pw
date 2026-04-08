@@ -248,7 +248,7 @@ class PaintPanel(BasePanel):
 
     @override
     async def close(self) -> None:
-        btns = await self.page.query_selector_all(".w-full .items-center > .btn.btn-circle.btn-sm")
+        btns = await self.page.query_selector_all(".w-full > .relative > .items-center > .btn.btn-circle.btn-sm")
         if not btns:
             logger.warning("No close button found on the paint panel")
             return
