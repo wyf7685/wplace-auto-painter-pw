@@ -16,9 +16,9 @@ from app.utils import requests_proxies, with_semaphore
 CHUNKS_DIR = DATA_DIR / "js_chunks"
 CHUNK_ETAG_FILE = CHUNKS_DIR / "etag.json"
 
-PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(.+?)\.js")
-PATTERN_PAINT_FN = re.compile(r"await\s+([a-zA-Z0-9_$]+)\.paint\s*\(")
-PATTERN_WORKER = re.compile(r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)")
+PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(?P<path>.+?)\.js")
+PATTERN_PAINT_FN = re.compile(r"await\s+(?P<name>[a-zA-Z0-9_$]+)\.paint\s*\(")
+PATTERN_WORKER = re.compile(r"function (?P<name>[a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)")
 
 
 def load_chunk_etags() -> dict[str, str]:
@@ -44,7 +44,7 @@ async def prepare_chunks() -> None:
     resp.raise_for_status()
 
     CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
-    chunks = {f"{match.group(1)}.js" for match in PATTERN_CHUNK_NAME.finditer(resp.text)}
+    chunks = {f"{match.group('path')}.js" for match in PATTERN_CHUNK_NAME.finditer(resp.text)}
     etags = load_chunk_etags()
     for chunk_name in set(etags.keys()) - chunks:
         # Remove obsolete chunks
@@ -81,21 +81,24 @@ async def prepare_chunks() -> None:
 def find_paint_fn() -> tuple[str, str]:
     for file in CHUNKS_DIR.joinpath("nodes").glob("*.js"):
         if match := PATTERN_PAINT_FN.search(file.read_text(encoding="utf-8")):
-            obj_name = match.group(1)
+            obj_name = match.group("name")
             break
     else:
         raise ResolveFailed("paint function object not found")
 
     pattern = (
-        r"import\s*\{[^}]*?\b([a-zA-Z0-9_$]+)\s+as\s+" + re.escape(obj_name) + r"[^}]*?\}\s*from\s*[\"']([^\"']+)[\"'];"
+        r"import\s*\{[^}]*?\b(?P<source>[a-zA-Z0-9_$]+)\s+as\s+"
+        + re.escape(obj_name)
+        + r"[^}]*?\}\s*from\s*[\"'](?P<chunk>[^\"']+)[\"'];"
     )
     match = re.search(pattern, file.read_text(encoding="utf-8"))
     if match is None:
         raise ResolveFailed("import source for paint function object not found")
 
-    source_name = match.group(1)
-    chunk_name = file.parent.joinpath(match.group(2)).resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
-    chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
+    source_name = match.group("source")
+    chunk_name = match.group("chunk")
+    chunk_path = file.parent.joinpath(chunk_name).resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
+    chunk_url = f"https://wplace.live/_app/immutable/{chunk_path}"
     return source_name, chunk_url
 
 
@@ -103,29 +106,29 @@ def find_worker_fn() -> tuple[str, str]:
     for file in CHUNKS_DIR.glob("*/*.js"):
         content = file.read_text("utf-8")
         if ("navigator.serviceWorker.controller" in content) and (match := PATTERN_WORKER.search(content)):
-            func_name = match.group(1)
+            func_name = match.group("name")
             break
     else:
         raise ResolveFailed("service worker function not found")
 
     pattern = (
-        r"function ([a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\s*\{return "
+        r"function (?P<name>[a-zA-Z0-9_$]+)\((?P<arg>[a-zA-Z0-9_$]+)\)\s*\{return "
         + re.escape(func_name)
-        + r"\(\{type:\s*['\"]paintPixels['\"],data:\s*[a-zA-Z0-9_$]+\}\)\}"
+        + r"\(\{type:\s*(?P<quote>['\"])paintPixels(?P=quote),data:\s*(?P=arg)\}\)\}"
     )
     match = re.search(pattern, content)
     if match is None:
         raise ResolveFailed("wrapper function not found")
-    wrapper_name = match.group(1)
+    wrapper_name = match.group("name")
 
-    pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"(?:\s+as\s+([a-zA-Z0-9_$]+))?[^}]*?\};"
+    pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"(?:\s+as\s+(?P<name>[a-zA-Z0-9_$]+))?[^}]*?\};"
     match = re.search(pattern, content)
     if match is None:
         raise ResolveFailed("exported name for wrapper not found")
-    export_name = match.group(1) if match.group(1) else wrapper_name
+    export_name = match.group("name") or wrapper_name
 
-    chunk_name = file.resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
-    chunk_url = f"https://wplace.live/_app/immutable/{chunk_name}"
+    chunk_path = file.resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
+    chunk_url = f"https://wplace.live/_app/immutable/{chunk_path}"
     return (export_name, chunk_url)
 
 
