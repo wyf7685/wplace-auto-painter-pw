@@ -16,10 +16,6 @@ from app.utils import requests_proxies, with_semaphore
 CHUNKS_DIR = DATA_DIR / "js_chunks"
 CHUNK_ETAG_FILE = CHUNKS_DIR / "etag.json"
 
-PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(?P<path>.+?)\.js")
-PATTERN_PAINT_FN = re.compile(r"await\s+(?P<name>[a-zA-Z0-9_$]+)\.paint\s*\(")
-PATTERN_WORKER = re.compile(r"function (?P<name>[a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)")
-
 
 def load_chunk_etags() -> dict[str, str]:
     if not CHUNK_ETAG_FILE.exists():
@@ -30,6 +26,9 @@ def load_chunk_etags() -> dict[str, str]:
 
 def save_chunk_etags(etags: dict[str, str]) -> None:
     CHUNK_ETAG_FILE.write_text(json.dumps(etags), encoding="utf-8")
+
+
+PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(?P<path>.+?)\.js")
 
 
 @with_semaphore(1)
@@ -78,6 +77,9 @@ async def prepare_chunks() -> None:
     save_chunk_etags(etags)
 
 
+PATTERN_PAINT_FN = re.compile(r"await\s+(?P<name>[a-zA-Z0-9_$]+)\.paint\s*\(")
+
+
 def find_paint_fn() -> tuple[str, str]:
     for file in CHUNKS_DIR.joinpath("nodes").glob("*.js"):
         if match := PATTERN_PAINT_FN.search(file.read_text(encoding="utf-8")):
@@ -100,6 +102,9 @@ def find_paint_fn() -> tuple[str, str]:
     chunk_path = file.parent.joinpath(chunk_name).resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
     chunk_url = f"https://wplace.live/_app/immutable/{chunk_path}"
     return source_name, chunk_url
+
+
+PATTERN_WORKER = re.compile(r"function (?P<name>[a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)")
 
 
 def find_worker_fn() -> tuple[str, str]:
@@ -132,7 +137,30 @@ def find_worker_fn() -> tuple[str, str]:
     return (export_name, chunk_url)
 
 
+SEASON_NUM_ASSIGN_PATTERN = re.compile(r",(?P<name>[a-zA-Z0-9_$]+)=[a-zA-Z0-9_$]+.seasons.length-1")
+
+
+def find_season_num() -> tuple[str, str]:
+    for file in CHUNKS_DIR.glob("*/*.js"):
+        content = file.read_text("utf-8")
+        if match := SEASON_NUM_ASSIGN_PATTERN.search(content):
+            obj_name = match.group("name")
+            break
+    else:
+        raise ResolveFailed("season number assignment not found")
+
+    pattern = r"export\s*\{[^}]*?\b,?" + re.escape(obj_name) + r"(?:\s+as\s+(?P<name>[a-zA-Z0-9_$]+))?[^}]*?\};"
+    match = re.search(pattern, content)
+    if match is None:
+        raise ResolveFailed("exported name for season number not found")
+    export_name = match.group("name") or obj_name
+
+    chunk_path = file.resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
+    chunk_url = f"https://wplace.live/_app/immutable/{chunk_path}"
+    return (export_name, chunk_url)
+
+
 async def resolve_js() -> list[str]:
     CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
     await prepare_chunks()
-    return [*find_paint_fn(), *find_worker_fn()]
+    return [*find_paint_fn(), *find_worker_fn(), *find_season_num()]

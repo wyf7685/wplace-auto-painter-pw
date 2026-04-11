@@ -36,12 +36,7 @@ def pixels_to_paint_arg(template: TemplateConfig, pixels: list[tuple[int, int, i
     result = []
     for x, y, color_id in pixels:
         coord = base.offset(x, y)
-        item = {
-            "tile": [coord.tlx, coord.tly],
-            "season": 0,
-            "colorIdx": color_id,
-            "pixel": [coord.pxx, coord.pxy],
-        }
+        item = {"tile": [coord.tlx, coord.tly], "colorIdx": color_id, "pixel": [coord.pxx, coord.pxy]}
         result.append(item)
     return result
 
