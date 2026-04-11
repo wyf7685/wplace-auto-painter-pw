@@ -1,6 +1,8 @@
 import functools
 import json
 import re
+from collections.abc import Iterable
+from pathlib import Path
 
 import anyio
 import anyio.to_thread
@@ -28,11 +30,35 @@ def save_chunk_etags(etags: dict[str, str]) -> None:
     CHUNK_ETAG_FILE.write_text(json.dumps(etags), encoding="utf-8")
 
 
+class Chunks:
+    def __init__(self, root: Path) -> None:
+        self.root = root.resolve()
+        self._cached: dict[str, str] = {}
+
+    def read(self, chunk_path: str) -> str:
+        if chunk_path in self._cached:
+            return self._cached[chunk_path]
+
+        file = self.root / chunk_path
+        content = file.read_text(encoding="utf-8")
+        self._cached[chunk_path] = content
+        return content
+
+    def iter_chunks(self) -> Iterable[str]:
+        for file in self.root.glob("*/*.js"):
+            yield file.relative_to(self.root).as_posix()
+
+    def path(self, chunk_path: str) -> Path:
+        return self.root / chunk_path
+
+    def url(self, chunk_path: str) -> str:
+        return f"https://wplace.live/_app/immutable/{chunk_path}"
+
+
 PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(?P<path>.+?)\.js")
 
 
-@with_semaphore(1)
-async def prepare_chunks() -> None:
+async def prepare_chunks() -> Chunks:
     resp = await anyio.to_thread.run_sync(
         functools.partial(
             cloudscraper.create_scraper().get,
@@ -50,7 +76,11 @@ async def prepare_chunks() -> None:
         del etags[chunk_name]
         CHUNKS_DIR.joinpath(chunk_name).unlink(missing_ok=True)
 
+    downloaded = 0
+
     async def download_js_chunk(chunk_name: str) -> None:
+        nonlocal downloaded
+
         file = CHUNKS_DIR / chunk_name
         file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -69,20 +99,30 @@ async def prepare_chunks() -> None:
             etags[chunk_name] = etag
         logger.opt(colors=True).debug(f"Downloaded JS chunk: <c>{escape_tag(chunk_name)}</>")
         file.write_text(response.text, encoding="utf-8")
+        downloaded += 1
 
-    async with httpx.AsyncClient(proxy=Config.load().proxy, timeout=30) as client, anyio.create_task_group() as tg:
+    async with (
+        httpx.AsyncClient(proxy=Config.load().proxy, timeout=30) as client,
+        anyio.create_task_group() as tg,
+    ):
         for chunk_name in chunks:
             tg.start_soon(download_js_chunk, chunk_name)
 
     save_chunk_etags(etags)
+    logger.opt(colors=True).debug(
+        f"Prepared JS chunks, <y>{downloaded}</> downloaded, <y>{len(chunks) - downloaded}</> cached"
+    )
+
+    return Chunks(CHUNKS_DIR)
 
 
 PATTERN_PAINT_FN = re.compile(r"await\s+(?P<name>[a-zA-Z0-9_$]+)\.paint\s*\(")
 
 
-def find_paint_fn() -> tuple[str, str]:
-    for file in CHUNKS_DIR.joinpath("nodes").glob("*.js"):
-        if match := PATTERN_PAINT_FN.search(file.read_text(encoding="utf-8")):
+def find_paint_fn(chunks: Chunks) -> tuple[str, str]:
+    for chunk_path in chunks.iter_chunks():
+        content = chunks.read(chunk_path)
+        if match := PATTERN_PAINT_FN.search(content):
             obj_name = match.group("name")
             break
     else:
@@ -93,23 +133,23 @@ def find_paint_fn() -> tuple[str, str]:
         + re.escape(obj_name)
         + r"[^}]*?\}\s*from\s*[\"'](?P<chunk>[^\"']+)[\"'];"
     )
-    match = re.search(pattern, file.read_text(encoding="utf-8"))
+    match = re.search(pattern, content)
     if match is None:
         raise ResolveFailed("import source for paint function object not found")
 
     source_name = match.group("source")
-    chunk_name = match.group("chunk")
-    chunk_path = file.parent.joinpath(chunk_name).resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
-    chunk_url = f"https://wplace.live/_app/immutable/{chunk_path}"
-    return source_name, chunk_url
+    source_chunk = match.group("chunk")
+    source_chunk_path = chunks.path(chunk_path).parent.joinpath(source_chunk).relative_to(chunks.root).as_posix()
+
+    return source_name, chunks.url(source_chunk_path)
 
 
 PATTERN_WORKER = re.compile(r"function (?P<name>[a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)")
 
 
-def find_worker_fn() -> tuple[str, str]:
-    for file in CHUNKS_DIR.glob("*/*.js"):
-        content = file.read_text("utf-8")
+def find_worker_fn(chunks: Chunks) -> tuple[str, str]:
+    for chunk_path in chunks.iter_chunks():
+        content = chunks.read(chunk_path)
         if ("navigator.serviceWorker.controller" in content) and (match := PATTERN_WORKER.search(content)):
             func_name = match.group("name")
             break
@@ -132,17 +172,15 @@ def find_worker_fn() -> tuple[str, str]:
         raise ResolveFailed("exported name for wrapper not found")
     export_name = match.group("name") or wrapper_name
 
-    chunk_path = file.resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
-    chunk_url = f"https://wplace.live/_app/immutable/{chunk_path}"
-    return (export_name, chunk_url)
+    return export_name, chunks.url(chunk_path)
 
 
 SEASON_NUM_ASSIGN_PATTERN = re.compile(r",(?P<name>[a-zA-Z0-9_$]+)=[a-zA-Z0-9_$]+.seasons.length-1")
 
 
-def find_season_num() -> tuple[str, str]:
-    for file in CHUNKS_DIR.glob("*/*.js"):
-        content = file.read_text("utf-8")
+def find_season_num(chunks: Chunks) -> tuple[str, str]:
+    for chunk_path in chunks.iter_chunks():
+        content = chunks.read(chunk_path)
         if match := SEASON_NUM_ASSIGN_PATTERN.search(content):
             obj_name = match.group("name")
             break
@@ -155,12 +193,11 @@ def find_season_num() -> tuple[str, str]:
         raise ResolveFailed("exported name for season number not found")
     export_name = match.group("name") or obj_name
 
-    chunk_path = file.resolve().relative_to(CHUNKS_DIR.resolve()).as_posix()
-    chunk_url = f"https://wplace.live/_app/immutable/{chunk_path}"
-    return (export_name, chunk_url)
+    return export_name, chunks.url(chunk_path)
 
 
+@with_semaphore(1)
 async def resolve_js() -> list[str]:
     CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
-    await prepare_chunks()
-    return [*find_paint_fn(), *find_worker_fn(), *find_season_num()]
+    chunks = await prepare_chunks()
+    return [*find_paint_fn(chunks), *find_worker_fn(chunks), *find_season_num(chunks)]
