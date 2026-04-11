@@ -1,4 +1,3 @@
-import functools
 from typing import TYPE_CHECKING, Literal
 
 from bot7685_ext.wplace.consts import COLORS_ID, ColorName
@@ -105,7 +104,6 @@ class UserConfig(BaseModel):
             raise ValueError("max_paint_charges must be > 0")
         return self
 
-    @functools.cached_property
     def preferred_colors_rank(self) -> list[int]:
         ranks = [len(COLORS_ID)] * (len(COLORS_ID) + 1)
         for r, name in enumerate[ColorName](self.preferred_colors):

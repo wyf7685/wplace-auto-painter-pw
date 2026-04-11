@@ -1,7 +1,6 @@
 import contextlib
 import hashlib
 import random
-import sys
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -119,15 +118,15 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
         raise PaintFinished("No colors available to paint")
     template, entries = selected
 
-    if sys.stdout is not None:
-        logger.info("Template preview:")
-        draw_ansi(template.load_im(), file=sys.stdout)
+    logger.info("Template preview:")
+    draw_ansi(template.load_im(), write_line=logger.info)
 
     async with claim_painting_color(entry.name for entry in entries):
         logger.info("Grouping pixels...")
         groups = await group_adjacent([(x, y, e.id) for e in entries for x, y in e.pixels])
         logger.info(f"Found <y>{len(groups)}</> groups of adjacent pixels to paint.")
-        pixels = sorted((p for g in groups for p in g), key=lambda p: user.preferred_colors_rank[p[2]])
+        colors_rank = user.preferred_colors_rank()
+        pixels = sorted((p for g in groups for p in g), key=lambda p: colors_rank[p[2]])
         pixels_to_paint = min(int(user_info.charges.count), len(pixels))
         if user.max_paint_charges is not None:
             pixels_to_paint = min(pixels_to_paint, user.max_paint_charges)
