@@ -49,12 +49,14 @@ def ignore_env_path() -> Iterator[None]:
 
 
 def build_main_app() -> Target:
+    print(f"Building in {'one-file' if BUILD_ONEFILE else 'one-folder'} mode")
+
     with ignore_env_path():
         a = Analysis(
             scripts=["main.py"],
             pathex=[],
             binaries=[],
-            datas=[("app/assets", "assets")],
+            datas=[("app/assets", "app/assets")],
             hiddenimports=[],
             hookspath=[],
             hooksconfig={},
@@ -66,10 +68,7 @@ def build_main_app() -> Target:
 
     exe_inputs = (PYZ(a.pure), a.scripts)
     if BUILD_ONEFILE:
-        print("Building in one-file mode")
         exe_inputs += (a.binaries, a.datas)
-    else:
-        print("Building in one-folder mode")
 
     exe = EXE(
         *exe_inputs,
@@ -92,19 +91,17 @@ def build_main_app() -> Target:
     )
 
     if BUILD_ONEFILE:
-        result = exe
-    else:
-        result = COLLECT(
-            exe,
-            a.binaries,
-            a.datas,
-            strip=False,
-            upx=True,
-            upx_exclude=[],
-            name="wplace-auto-painter",
-        )
+        return exe
 
-    return result
+    return COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name="wplace-auto-painter",
+    )
 
 
 write_git_commit_hash()

@@ -16,11 +16,7 @@ TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = DATA_DIR / "config.json"
 CONFIG_SCHEMA_FILE = DATA_DIR / ".config.schema.json"
 
-APP_DIR = (
-    Path(sys._MEIPASS)  # noqa: SLF001  # type: ignore[attr-defined]
-    if getattr(sys, "frozen", False)
-    else Path(__file__).parent
-).resolve()
+APP_DIR = Path(__file__).parent.resolve()
 ASSETS_DIR = APP_DIR / "assets"
 
 
