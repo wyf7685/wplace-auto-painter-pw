@@ -123,12 +123,15 @@ class WplacePage:
         self._pixel_size = _ZOOM_PIXEL_SIZE[zoom]
 
     @contextlib.asynccontextmanager
-    async def begin(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
+    async def open(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
         await notify_open_browser()
 
         async with (
             get_browser(headless=False) as browser,
-            await browser.new_context(viewport={"width": 1280, "height": 720}, java_script_enabled=True) as context,
+            await browser.new_context(
+                viewport={"width": 1280, "height": 720},
+                java_script_enabled=True,
+            ) as context,
         ):
             await context.add_init_script(assets.page_init())
             await context.add_init_script(assets.paint_btn(script_data))

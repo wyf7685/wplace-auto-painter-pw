@@ -4,7 +4,7 @@ import random
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import anyio
 import httpx
@@ -31,14 +31,9 @@ COLORS_CLAIMER_LOCK = anyio.Lock()
 COLORS_LOCK: dict[ColorName, anyio.Lock] = {name: anyio.Lock() for name in COLORS_NAME.values()}
 
 
-def pixels_to_paint_arg(template: TemplateConfig, pixels: list[tuple[int, int, int]]) -> list[dict[str, Any]]:
+def pixels_to_paint_arg(template: TemplateConfig, pixels: list[tuple[int, int, int]]) -> list[list[int]]:
     base, _ = template.get_coords()
-    result = []
-    for x, y, color_id in pixels:
-        coord = base.offset(x, y)
-        item = {"tile": [coord.tlx, coord.tly], "colorIdx": color_id, "pixel": [coord.pxx, coord.pxy]}
-        result.append(item)
-    return result
+    return [[*base.offset(x, y).tuple(), color_id] for x, y, color_id in pixels]
 
 
 async def get_user_info(user: UserConfig) -> WplaceUserInfo:
@@ -140,7 +135,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
         }
 
         coord = template.get_coords()[0].offset(*pixels[0][:2])
-        async with WplacePage(user.credentials, coord).begin(script_data) as page:
+        async with WplacePage(user.credentials, coord).open(script_data) as page:
             delay = random.uniform(3, 7)
             logger.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
             await anyio.sleep(delay)
