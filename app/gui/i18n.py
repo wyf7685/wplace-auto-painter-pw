@@ -1,19 +1,17 @@
 import json
-from pathlib import Path
 from typing import ClassVar, Final, Literal
 
-from app.const import ASSETS_DIR
+from app.const import assets
 
 type LanguageCode = Literal["zh_CN", "en_US"]
 type Translations = dict[str, str]
 
 _DEFAULT_LANGUAGE: Final[LanguageCode] = "zh_CN"
 _SUPPORTED_LANGUAGES: Final[tuple[LanguageCode, ...]] = ("zh_CN", "en_US")
-_LOCALES_DIR: Final[Path] = ASSETS_DIR / "locales"
 
 
 def _load_language(language: LanguageCode) -> Translations:
-    locale_file = _LOCALES_DIR / f"{language}.json"
+    locale_file = assets.locales / f"{language}.json"
     if not locale_file.is_file():
         return {}
 

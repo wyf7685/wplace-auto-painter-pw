@@ -16,12 +16,12 @@ TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = DATA_DIR / "config.json"
 CONFIG_SCHEMA_FILE = DATA_DIR / ".config.schema.json"
 
-APP_DIR = Path(__file__).parent.resolve()
-ASSETS_DIR = APP_DIR / "assets"
+ASSETS_DIR = Path(__file__).parent.resolve() / "assets"
 
 
 class _Assets:
     icon: ClassVar[Path] = ASSETS_DIR.joinpath("icon", "gui.ico")
+    locales: ClassVar[Path] = ASSETS_DIR.joinpath("locales")
 
     @staticmethod
     @functools.cache
