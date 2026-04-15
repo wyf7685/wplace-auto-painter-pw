@@ -188,7 +188,7 @@ def with_semaphore[T: Callable](initial_value: int) -> Callable[[T], T]:
 
             wrapper = wrapper_sync
 
-        return cast("T", functools.update_wrapper(wrapper, func))
+        return cast("T", wrapper)
 
     return decorator
 

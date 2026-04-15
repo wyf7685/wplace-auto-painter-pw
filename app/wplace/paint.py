@@ -102,7 +102,7 @@ async def select_paint_color(
 
 async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
     resolved_js = await resolve_js()
-    logger.info(f"Resolved paint functions: <c>{escape_tag(repr(resolved_js))}</>")
+    logger.info(f"Resolved paint functions: {Highlight.apply(resolved_js)}")
 
     if (selected := await select_paint_color(user, user_info)) is None:
         raise PaintFinished("No colors available to paint")

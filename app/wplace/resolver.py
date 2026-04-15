@@ -13,7 +13,7 @@ from app.config import Config
 from app.const import DATA_DIR
 from app.exception import ResolveFailed
 from app.log import escape_tag, logger
-from app.utils import requests_proxies, with_semaphore
+from app.utils import requests_proxies, with_retry, with_semaphore
 
 CHUNKS_DIR = DATA_DIR / "js_chunks"
 CHUNK_ETAG_FILE = CHUNKS_DIR / "etag.json"
@@ -59,6 +59,8 @@ PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(?P<path>.+?)\.js")
 
 
 async def prepare_chunks() -> Chunks:
+    logger.debug("Preparing JS chunks...")
+
     resp = await anyio.to_thread.run_sync(
         functools.partial(
             cloudscraper.create_scraper().get,
@@ -75,9 +77,11 @@ async def prepare_chunks() -> Chunks:
         # Remove obsolete chunks
         del etags[chunk_name]
         CHUNKS_DIR.joinpath(chunk_name).unlink(missing_ok=True)
+    logger.opt(colors=True).debug(f"Found <y>{len(chunks)}</> JS chunks")
 
     downloaded = 0
 
+    @with_retry(httpx.RequestError, retries=3, delay=1)
     async def download_js_chunk(chunk_name: str) -> None:
         nonlocal downloaded
 
