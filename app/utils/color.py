@@ -1,13 +1,9 @@
-import datetime as dt
 from typing import TYPE_CHECKING
 
 from bot7685_ext.wplace.consts import ALL_COLORS
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-
-UTC8 = dt.timezone(dt.timedelta(hours=8))
 
 
 def find_color_name(rgba: tuple[int, int, int, int]) -> str:

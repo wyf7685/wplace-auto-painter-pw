@@ -7,14 +7,18 @@ import sys
 import threading
 import time
 import types
+from collections.abc import Callable, Coroutine
 from json import JSONEncoder
-from typing import TYPE_CHECKING, Any, NotRequired, Self, TypedDict, cast
+from typing import Any, NotRequired, Self, TypedDict, cast
 
 import anyio
 import anyio.to_thread
 from pydantic import BaseModel, SecretStr
+from tzlocal import get_localzone
 
 from app.log import escape_tag, logger
+
+type AsyncCallable[**P, R] = Callable[P, Coroutine[None, None, R]]
 
 
 class _SubprocessOptions(TypedDict):
@@ -33,15 +37,6 @@ def subprocess_options() -> _SubprocessOptions:
     startupinfo.wShowWindow = subprocess.SW_HIDE
     creationflags = subprocess.CREATE_NO_WINDOW
     return {"startupinfo": startupinfo, "creationflags": creationflags}
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
-
-    type AsyncCallable[**P, R] = Callable[P, Coroutine[None, None, R]]
-
-
-UTC8 = dt.timezone(dt.timedelta(hours=8))
 
 
 def with_retry[**P, R](
@@ -209,7 +204,7 @@ class _TokenPayload(BaseModel):
 
     @property
     def expires_at(self) -> dt.datetime:
-        return dt.datetime.fromtimestamp(self.exp, dt.UTC).astimezone(UTC8).replace(tzinfo=None)
+        return dt.datetime.fromtimestamp(self.exp, dt.UTC).astimezone(get_localzone()).replace(tzinfo=None)
 
 
 def is_token_expired(token: str, ahead_secs: int = 60) -> bool:
