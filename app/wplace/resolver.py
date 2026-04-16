@@ -143,7 +143,9 @@ def find_paint_fn(chunks: Chunks) -> tuple[str, str]:
 
     source_name = match.group("source")
     source_chunk = match.group("chunk")
-    source_chunk_path = chunks.path(chunk_path).parent.joinpath(source_chunk).relative_to(chunks.root).as_posix()
+    source_chunk_path = (
+        chunks.path(chunk_path).parent.joinpath(source_chunk).resolve().relative_to(chunks.root).as_posix()
+    )
 
     return source_name, chunks.url(source_chunk_path)
 
