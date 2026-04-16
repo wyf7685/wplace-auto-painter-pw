@@ -1,84 +1,55 @@
-# ruff: noqa: N815
 import base64
-import datetime as dt
 import functools
 import math
-from datetime import datetime
-from typing import Any
+import re
+from datetime import UTC, datetime
 
 from bot7685_ext.wplace.consts import FREE_COLORS, PAID_COLORS
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from .coords import WplacePixelCoords
 
-UTC8 = dt.timezone(dt.timedelta(hours=8))
+def alias_generator(name: str) -> str:
+    return re.sub(r"_([a-z])", lambda m: m[1].upper(), name)
 
 
 class Charges(BaseModel):
-    cooldownMs: int
+    model_config = ConfigDict(frozen=True, alias_generator=alias_generator)
+
+    cooldown_ms: int
     count: float
     max: int
 
     def remaining_secs(self) -> float:
-        return (self.max - self.count) * (self.cooldownMs / 1000.0)
-
-
-class FavoriteLocation(BaseModel):
-    id: int
-    name: str = ""
-    latitude: float
-    longitude: float
-
-    def as_coords(self) -> WplacePixelCoords:
-        return WplacePixelCoords.from_lat_lon(self.latitude, self.longitude)
-
-
-class Badge(BaseModel):
-    id: int
-    imageUrl: str
-    name: str
-    rarity: str
+        return (self.max - self.count) * (self.cooldown_ms / 1000.0)
 
 
 class WplaceUserInfo(BaseModel):
-    allianceId: int | None = None
-    allianceRole: str | None = None
+    model_config = ConfigDict(frozen=True, extra="ignore", alias_generator=alias_generator)
+
     charges: Charges
-    country: str
-    discord: str = ""
-    discordId: str = ""
     droplets: int
-    equippedBadges: list[Badge | None]  # len() == 3, None when not equipped
-    equippedFlag: int = 0  # 0 when not equipped
-    equippedFrameId: int = 0  # 0 when not equipped
-    equippedFrameUrl: str = ""  # "" when not equipped
-    equippedNameCosmetic: dict[str, Any] | None = None
-    experiments: dict[str, Any]
-    extraColorsBitmap: int
-    favoriteLocations: list[FavoriteLocation]
-    flagsBitmap: str
+    extra_colors_bitmap: int
+    flags_bitmap: str
     id: int
-    isCustomer: bool
     level: float
-    maxFavoriteLocations: int
     name: str
-    needsPhoneVerification: bool
-    picture: str
-    pixelsPainted: int
-    role: str  # maybe enum?
-    showLastPixel: bool
-    timeoutUntil: datetime
+    pixels_painted: int
+    timeout_until: datetime  # in UTC
 
     def next_level_pixels(self) -> int:
-        return math.ceil(math.pow(math.floor(self.level) * math.pow(30, 0.65), (1 / 0.65)) - self.pixelsPainted)
+        return math.ceil(math.pow(math.floor(self.level) * math.pow(30, 0.65), (1 / 0.65)) - self.pixels_painted)
 
     @functools.cached_property
     def own_flags(self) -> frozenset[int]:
-        b = base64.b64decode(self.flagsBitmap.encode("ascii"))
+        b = base64.b64decode(self.flags_bitmap.encode("ascii"))
         return frozenset(i for i in range(len(b) * 8) if b[-(i // 8) - 1] & (1 << (i % 8)))
 
     @functools.cached_property
     def own_colors(self) -> frozenset[str]:
-        bitmap = self.extraColorsBitmap
+        bitmap = self.extra_colors_bitmap
         paid = {color for idx, color in enumerate(PAID_COLORS) if bitmap & (1 << idx)}
         return frozenset({"Transparent"} | set(FREE_COLORS) | paid)
+
+    @functools.cached_property
+    def is_timed_out(self) -> bool:
+        return self.timeout_until > datetime.now(UTC)
