@@ -1,5 +1,4 @@
 import contextlib
-import hashlib
 import random
 import time
 import uuid
@@ -17,6 +16,7 @@ from app.log import escape_tag, logger
 from app.schemas import TemplateConfig, WplaceUserInfo
 from app.utils import Highlight, is_token_expired
 from app.utils.ansi_image import draw_ansi
+from app.wplace.fingerprint import generate_fingerprint
 from app.wplace.page import WplacePage, fetch_user_info
 from app.wplace.purchase import do_purchase
 from app.wplace.resolver import resolve_js
@@ -129,7 +129,7 @@ async def paint_pixels(user: UserConfig, user_info: WplaceUserInfo) -> None:
         script_data = {
             "btn": f"paint-button-{int(time.time())}",
             "a": pixels_to_paint_arg(template, pixels),
-            "f": hashlib.sha256(str(user_info.id).encode()).hexdigest()[:32],
+            "f": generate_fingerprint(user.identifier, pixels_to_paint),
             "r": resolved_js,
             "t": f"data-{uuid.uuid4().hex[:8]}",
         }

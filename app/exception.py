@@ -52,3 +52,7 @@ class ElementNotFound(ShouldQuit):
 
 class PaintFinished(ShouldQuit):
     """Exception raised when painting is finished."""
+
+
+class CaptchaDetected(ShouldQuit):
+    """Exception raised when a captcha is detected, indicating manual intervention may be required."""

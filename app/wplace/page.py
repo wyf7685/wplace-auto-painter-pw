@@ -2,6 +2,7 @@ import abc
 import contextlib
 import functools
 import json
+import math
 import random
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Self, override
@@ -14,7 +15,7 @@ from pydantic import SecretStr
 from app.browser import get_browser
 from app.config import Config
 from app.const import APP_NAME, assets
-from app.exception import ElementNotFound, FetchFailed
+from app.exception import CaptchaDetected, ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
 from app.schemas import WplaceCredentials, WplacePixelCoords, WplaceUserInfo
 from app.utils import Highlight
@@ -188,32 +189,123 @@ class WplacePage:
 
     async def _move_by_pixel(self, dx: int, dy: int) -> None:
         """Move the page by pixel offsets."""
-        x, y = self.current_center_px
+        if dx == 0 and dy == 0:
+            await anyio.sleep(random.uniform(0.01, 0.03))
+            return
+
+        center_x, center_y = self.current_center_px
+        start_x = center_x + random.uniform(-2.5, 2.5)
+        start_y = center_y + random.uniform(-2.5, 2.5)
+        target_x = center_x - dx * self._pixel_size
+        target_y = center_y - dy * self._pixel_size
+        vec_x = target_x - start_x
+        vec_y = target_y - start_y
+        distance = math.hypot(vec_x, vec_y)
+
+        if distance < 1:
+            return
+
+        dir_x = vec_x / distance
+        dir_y = vec_y / distance
+        normal_x = -dir_y
+        normal_y = dir_x
+
         await self.page.mouse.up(button="left")
-        await self.page.mouse.move(x, y)
+        await self.page.mouse.move(start_x, start_y, steps=random.randint(3, 7))
+        await anyio.sleep(random.uniform(0.02, 0.08))
         await self.page.mouse.down(button="left")
-        await self.page.mouse.move(
-            x - dx * self._pixel_size,
-            y - dy * self._pixel_size,
-            steps=random.randint(7, 15),
-        )
-        await anyio.sleep(random.uniform(0.1, 0.3))
+        await anyio.sleep(random.uniform(0.02, 0.07))
+
+        arc_amplitude = random.uniform(0.6, 2.8)
+        if distance > 120:
+            arc_amplitude += random.uniform(0.4, 1.6)
+        if random.random() < 0.45:
+            arc_amplitude *= -1
+
+        steps = max(8, min(40, int(distance / random.uniform(16.0, 24.0))))
+        for idx in range(1, steps + 1):
+            progress = idx / steps
+            # Ease-in/out to avoid perfectly constant velocity.
+            eased = 0.5 - 0.5 * math.cos(progress * math.pi)
+            curve = math.sin(progress * math.pi) * arc_amplitude
+            jitter_scale = 1 - abs(0.5 - progress) * 1.8
+            jitter_x = random.uniform(-0.6, 0.6) * max(0.0, jitter_scale)
+            jitter_y = random.uniform(-0.6, 0.6) * max(0.0, jitter_scale)
+
+            point_x = start_x + vec_x * eased + normal_x * curve + jitter_x
+            point_y = start_y + vec_y * eased + normal_y * curve + jitter_y
+            await self.page.mouse.move(point_x, point_y)
+
+            if idx < steps and random.random() < 0.12:
+                await anyio.sleep(random.uniform(0.004, 0.018))
+
+        if random.random() < 0.35:
+            await self.page.mouse.move(
+                target_x + random.uniform(-1.0, 1.0),
+                target_y + random.uniform(-1.0, 1.0),
+                steps=random.randint(2, 4),
+            )
+            await anyio.sleep(random.uniform(0.01, 0.04))
+            await self.page.mouse.move(target_x, target_y, steps=random.randint(2, 4))
+
+        await anyio.sleep(random.uniform(0.03, 0.11))
         await self.page.mouse.up(button="left")
+        await anyio.sleep(random.uniform(0.05, 0.16))
 
     async def move_by_pixel(self, dx: int, dy: int, max_step: int = 30) -> None:
-        while dx:
-            step = max(-max_step, min(max_step, dx))
-            await self._move_by_pixel(step, 0)
-            dx -= step
-        while dy:
-            step = max(-max_step, min(max_step, dy))
-            await self._move_by_pixel(0, step)
-            dy -= step
+        if max_step <= 0:
+            raise ValueError("max_step must be greater than 0")
+
+        remaining_x, remaining_y = dx, dy
+        while remaining_x or remaining_y:
+            if abs(remaining_x) <= max_step and abs(remaining_y) <= max_step:
+                step_x, step_y = remaining_x, remaining_y
+            else:
+                ratio = random.uniform(0.45, 0.8)
+                step_x = round(max(-max_step, min(max_step, remaining_x * ratio)))
+                step_y = round(max(-max_step, min(max_step, remaining_y * ratio)))
+
+                if step_x == 0 and remaining_x != 0:
+                    step_x = 1 if remaining_x > 0 else -1
+                if step_y == 0 and remaining_y != 0:
+                    step_y = 1 if remaining_y > 0 else -1
+
+            await self._move_by_pixel(step_x, step_y)
+            remaining_x -= step_x
+            remaining_y -= step_y
+
+            if remaining_x or remaining_y:
+                await anyio.sleep(random.uniform(0.03, 0.12))
+                if random.random() < 0.12:
+                    await anyio.sleep(random.uniform(0.08, 0.25))
 
     async def click_current_pixel(self) -> None:
         """Click the current pixel on the page."""
+        center_x, center_y = self.current_center_px
+        target_x = center_x + random.uniform(-0.6, 0.6)
+        target_y = center_y + random.uniform(-0.6, 0.6)
+        approach_x = target_x + random.uniform(-6.0, 6.0)
+        approach_y = target_y + random.uniform(-6.0, 6.0)
+
         await self.page.mouse.up(button="left")
-        await self.page.mouse.click(*self.current_center_px, delay=0.05, button="left")
+        await self.page.mouse.move(approach_x, approach_y, steps=random.randint(4, 10))
+        await anyio.sleep(random.uniform(0.02, 0.09))
+        await self.page.mouse.move(target_x, target_y, steps=random.randint(2, 6))
+
+        if random.random() < 0.35:
+            await anyio.sleep(random.uniform(0.01, 0.04))
+            await self.page.mouse.move(
+                target_x + random.uniform(-0.8, 0.8),
+                target_y + random.uniform(-0.8, 0.8),
+                steps=random.randint(1, 3),
+            )
+            await self.page.mouse.move(target_x, target_y, steps=random.randint(1, 3))
+
+        await anyio.sleep(random.uniform(0.015, 0.07))
+        await self.page.mouse.down(button="left")
+        await anyio.sleep(random.uniform(0.03, 0.11))
+        await self.page.mouse.up(button="left")
+        await anyio.sleep(random.uniform(0.01, 0.05))
 
 
 class BasePanel(abc.ABC):
@@ -279,12 +371,29 @@ class PaintPanel(BasePanel):
         await btn.click()
         logger.info("Clicked submit button")
 
+        captcha = await self.page.query_selector("h-captcha")
+        if captcha is not None:
+            logger.warning("Captcha detected after clicking submit, manual intervention is required")
+            await self.wait_for_captcha_resolved()
+
         logger.debug("Waiting for submit to complete...")
         try:
             await self.page.wait_for_selector(selector, timeout=30 * 1000, state="detached")
             logger.info("Submit completed")
         except _pw_timeout_error():
             logger.warning("Submit button still present after timeout")
+
+    async def wait_for_captcha_resolved(self) -> None:
+        from app.utils import toast
+
+        toast.notify(APP_NAME, "检测到验证码，请打开浏览器完成验证后继续。", duration=toast.Duration.Long)
+        with anyio.move_on_after(60) as scope:
+            while await self.page.query_selector("h-captcha"):
+                logger.warning("Captcha still present, waiting...")
+                await anyio.sleep(5)
+        if scope.cancel_called:
+            logger.error("Captcha still present after timeout")
+            raise CaptchaDetected("Captcha still present after timeout, manual intervention is required")
 
 
 @functools.cache
