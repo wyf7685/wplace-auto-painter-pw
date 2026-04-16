@@ -35,6 +35,7 @@ class LogBridge(QObject):
             filter=log_level_filter(),
             level="DEBUG",
             colorize=True,
+            diagnose=False,
             enqueue=True,
         )
 
