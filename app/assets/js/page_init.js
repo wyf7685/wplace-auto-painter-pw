@@ -8,4 +8,5 @@
     localStorage.setItem('selected-color', '1');
     localStorage.setItem('show-all-colors', 'true');
     localStorage.setItem('wplace_last_seen_event_notification_id', 'r-wplaced-1\nbadge-event-1')
+    localStorage.setItem('lastSeenRulesVersion', '1.3.0');
 })();
