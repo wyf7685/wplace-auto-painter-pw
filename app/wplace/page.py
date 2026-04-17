@@ -145,9 +145,9 @@ class WplacePage:
                 await page.goto(url, wait_until="domcontentloaded")
 
                 try:
-                    await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10000, state="visible")
-                    await page.wait_for_selector(f"#{self._btn_id}", timeout=5000, state="attached")
-                except Exception as e:
+                    await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10_000, state="visible")
+                    await page.wait_for_selector(f"#{self._btn_id}", timeout=10_000, state="attached")
+                except _pw_timeout_error() as e:
                     raise ElementNotFound(
                         "Required buttons not found on the page, is the injected script broken?"
                     ) from e
@@ -353,7 +353,7 @@ class PaintPanel(BasePanel):
         logger.info("Closed paint panel")
 
     async def select_color(self, color_id: int) -> None:
-        color_btn = await self.page.wait_for_selector(f"#color-{color_id}", timeout=5000, state="visible")
+        color_btn = await self.page.wait_for_selector(f"#color-{color_id}", timeout=5_000, state="visible")
         if color_btn is None:
             raise ElementNotFound(f"Color button with ID {color_id} not found on the page")
 
@@ -376,7 +376,7 @@ class PaintPanel(BasePanel):
 
         logger.debug("Waiting for submit to complete...")
         try:
-            await self.page.wait_for_selector(selector, timeout=10 * 1000, state="detached")
+            await self.page.wait_for_selector(selector, timeout=10_000, state="detached")
         except _pw_timeout_error():
             logger.warning("Submit button still present after timeout")
         else:
@@ -389,7 +389,7 @@ class PaintPanel(BasePanel):
 
         logger.debug("Waiting for submit to complete after captcha resolution...")
         try:
-            await self.page.wait_for_selector(selector, timeout=10 * 1000, state="detached")
+            await self.page.wait_for_selector(selector, timeout=10_000, state="detached")
         except _pw_timeout_error():
             logger.warning("Submit button still present after captcha resolution")
         else:

@@ -9,7 +9,7 @@ import time
 import types
 from collections.abc import Callable, Coroutine
 from json import JSONEncoder
-from typing import Any, NotRequired, Self, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Literal, NotRequired, Self, TypedDict, cast
 
 import anyio
 import anyio.to_thread
@@ -243,3 +243,60 @@ class SecretStrEncoder(JSONEncoder):
         if isinstance(o, SecretStr):
             return o.get_secret_value()
         return super().default(o)
+
+
+type _ValidLogLevel = Literal["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
+_valid_log_levels: set[_ValidLogLevel] = {
+    "TRACE",
+    "DEBUG",
+    "INFO",
+    "SUCCESS",
+    "WARNING",
+    "ERROR",
+    "CRITICAL",
+}
+
+
+class LoggerWrapper:
+    def __init__(self, logger_name: str) -> None:
+        self.logger_name = escape_tag(logger_name)
+
+    def log(
+        self,
+        level: _ValidLogLevel,
+        message: str,
+        exception: Exception | bool | None = None,
+        depth: int = 1,
+    ) -> None:
+        logger.opt(colors=True, exception=exception, depth=depth).log(level, f"<lm>{self.logger_name}</lm> | {message}")
+
+    def exception(self, message: str, /) -> None:
+        self.log("ERROR", message, exception=True, depth=2)
+
+    __call__ = log
+
+    if TYPE_CHECKING:
+
+        def trace(self, message: str, /, exception: Exception | bool | None = None) -> None: ...
+        def debug(self, message: str, /, exception: Exception | bool | None = None) -> None: ...
+        def info(self, message: str, /, exception: Exception | bool | None = None) -> None: ...
+        def success(self, message: str, /, exception: Exception | bool | None = None) -> None: ...
+        def warning(self, message: str, /, exception: Exception | bool | None = None) -> None: ...
+        def error(self, message: str, /, exception: Exception | bool | None = None) -> None: ...
+        def critical(self, message: str, /, exception: Exception | bool | None = None) -> None: ...
+    else:
+
+        def __getattr__(self, item: str) -> Callable[[str, Exception | None], None]:
+            level = item.upper()
+            if level not in _valid_log_levels:
+                raise AttributeError(f"Invalid log level: {item}")
+
+            def method(message: str, exception: Exception | None = None) -> None:
+                self.log(level, message, exception=exception, depth=2)
+
+            setattr(self, item, method)
+            return method
+
+
+def logger_wrapper(logger_name: str, /) -> LoggerWrapper:
+    return LoggerWrapper(logger_name)
