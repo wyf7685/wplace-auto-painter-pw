@@ -15,7 +15,7 @@ from pydantic import SecretStr
 from app.browser import get_browser
 from app.config import Config
 from app.const import APP_NAME, assets
-from app.exception import CaptchaDetected, ElementNotFound, FetchFailed
+from app.exception import ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
 from app.schemas import WplaceCredentials, WplacePixelCoords, WplaceUserInfo
 from app.utils import Highlight
@@ -361,6 +361,9 @@ class PaintPanel(BasePanel):
         await color_btn.click()
         logger.opt(colors=True).debug(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
 
+    async def captcha_exists(self) -> bool:
+        return await self.page.query_selector("h-captcha") is not None
+
     async def submit(self) -> None:
         selector = f"#{self._btn_id}"
         btn = await self.page.query_selector(selector)
@@ -371,29 +374,34 @@ class PaintPanel(BasePanel):
         await btn.click()
         logger.info("Clicked submit button")
 
-        captcha = await self.page.query_selector("h-captcha")
-        if captcha is not None:
+        logger.debug("Waiting for submit to complete...")
+        try:
+            await self.page.wait_for_selector(selector, timeout=10 * 1000, state="detached")
+        except _pw_timeout_error():
+            logger.warning("Submit button still present after timeout")
+        else:
+            logger.info("Submit completed")
+            return
+
+        if await self.captcha_exists():
             logger.warning("Captcha detected after clicking submit, manual intervention is required")
             await self.wait_for_captcha_resolved()
 
-        logger.debug("Waiting for submit to complete...")
+        logger.debug("Waiting for submit to complete after captcha resolution...")
         try:
-            await self.page.wait_for_selector(selector, timeout=30 * 1000, state="detached")
-            logger.info("Submit completed")
+            await self.page.wait_for_selector(selector, timeout=10 * 1000, state="detached")
         except _pw_timeout_error():
-            logger.warning("Submit button still present after timeout")
+            logger.warning("Submit button still present after captcha resolution")
+        else:
+            logger.info("Submit completed after captcha resolution")
 
     async def wait_for_captcha_resolved(self) -> None:
         from app.utils import toast
 
         toast.notify(APP_NAME, "检测到验证码，请打开浏览器完成验证后继续。", duration=toast.Duration.Long)
-        with anyio.move_on_after(60) as scope:
-            while await self.page.query_selector("h-captcha"):
-                logger.warning("Captcha still present, waiting...")
-                await anyio.sleep(5)
-        if scope.cancel_called:
-            logger.error("Captcha still present after timeout")
-            raise CaptchaDetected("Captcha still present after timeout, manual intervention is required")
+        while await self.captcha_exists():
+            logger.warning("Captcha still present, waiting...")
+            await anyio.sleep(5)
 
 
 @functools.cache

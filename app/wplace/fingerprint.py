@@ -132,7 +132,13 @@ def _fp(identity: object) -> str:
     return hashlib.sha256(str(identity).encode()).hexdigest()[:32]
 
 
-def generate_fingerprint(identity: object, count: int) -> dict[str, str]:
-    data = {"t": _t(count), "fp": _fp(identity)}
+def generate_fingerprint(
+    identity: object,
+    count: int,  # noqa: ARG001
+) -> dict[str, str]:
+    data = {
+        # "t": _t(count),
+        "fp": _fp(identity),
+    }
     logger.opt(colors=True).debug(f"Generated fingerprint: {Highlight.apply(data)}")
     return data
