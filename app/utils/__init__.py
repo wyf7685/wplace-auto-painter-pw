@@ -30,17 +30,13 @@ __all__ = [*_LOCATION.keys(), "toast"]  # pyright: ignore[reportUnsupportedDunde
 
 
 def __load(name: str) -> object:
+    import importlib
+
     if name == "toast":
-        from . import toast
-
-        return toast
-
+        return importlib.import_module(".toast", package=__package__)
     if name in _LOCATION:
-        import importlib
-
         module = importlib.import_module(f".{_LOCATION[name]}", package=__package__)
         return getattr(module, name)
-
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
