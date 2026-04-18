@@ -1,10 +1,12 @@
 import abc
 import contextlib
 import functools
+import hashlib
 import json
 import math
 import random
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, override
 
 import anyio
@@ -12,12 +14,12 @@ import anyio.to_thread
 from bot7685_ext.wplace.consts import COLORS_NAME
 from pydantic import SecretStr
 
-from app.browser import get_browser
+from app.browser import get_browser, get_persistent_context
 from app.config import Config
-from app.const import APP_NAME, assets
+from app.const import APP_NAME, USER_CONTEXT_DIR, assets
 from app.exception import ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
-from app.schemas import WplaceCredentials, WplacePixelCoords, WplaceUserInfo
+from app.schemas import UserConfig, WplaceCredentials, WplaceUserInfo
 from app.utils import Highlight
 
 if TYPE_CHECKING:
@@ -113,40 +115,43 @@ async def notify_open_browser() -> None:
 
 
 class WplacePage:
+    page: Page
+
     def __init__(
         self,
-        credentials: WplaceCredentials,
-        coord: WplacePixelCoords,
-        zoom: ZoomLevel = ZoomLevel.Z_15,
+        user: UserConfig,
+        script_data: dict[str, Any],
     ) -> None:
-        self.credentials = credentials
-        self.coord = coord
-        self.zoom = zoom
-        self._pixel_size = _ZOOM_PIXEL_SIZE[zoom]
+        self.user = user
+        self._s = script_data["s"]
+        self._btn_id = f"btn-{self._s}"
 
+    @property
+    def user_data_dir(self) -> Path:
+        return USER_CONTEXT_DIR / hashlib.sha256(self.user.identifier.encode()).hexdigest()[:16]
+
+    @classmethod
     @contextlib.asynccontextmanager
-    async def open(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
-        self._btn_id = script_data["btn"]
-        self._log_prefix = script_data["p"]
+    async def create(cls, user: UserConfig, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
+        self = cls(user, script_data)
+
         await notify_open_browser()
 
-        async with (
-            get_browser(headless=False) as browser,
-            await browser.new_context(
-                viewport={"width": 1280, "height": 720},
-                java_script_enabled=True,
-            ) as context,
-        ):
+        async with get_persistent_context(
+            user_data_dir=self.user_data_dir,
+            viewport={"width": 1280, "height": 720},
+        ) as context:
             context.on("console", self._on_console_log)
             await context.add_init_script(assets.page_init())
             await context.add_init_script(assets.paint_btn(script_data))
-            await context.add_cookies(self.credentials.to_pw_cookies())
+            await context.add_cookies(self.user.credentials.to_pw_cookies())
             logger.opt(colors=True).debug(f"Using paint button ID: <c>{escape_tag(self._btn_id)}</>")
 
             async with await context.new_page() as page:
-                url = self.coord.to_share_url(zoom=self.zoom.value)
-                logger.opt(colors=True).debug(f"Navigating to <c>{escape_tag(url)}</>")
-                await page.goto(url, timeout=60_000, wait_until="domcontentloaded")
+                for _page in filter(lambda p: p is not page, context.pages):
+                    await _page.close()
+
+                await page.goto("https://wplace.live/", timeout=60_000, wait_until="domcontentloaded")
 
                 try:
                     await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10_000, state="visible")
@@ -156,18 +161,17 @@ class WplacePage:
                         "Required buttons not found on the page, is the injected script broken?"
                     ) from e
 
-                self.context = context
                 self.page = page
                 try:
                     yield self
                 finally:
-                    del self.context, self.page
+                    del self.page
 
     def _on_console_log(self, msg: ConsoleMessage) -> None:
-        if not msg.text.startswith(self._log_prefix):
+        if not msg.text.startswith(self._s):
             return
 
-        topic, _, message = msg.text.removeprefix(self._log_prefix).lstrip().partition(" ")
+        topic, _, message = msg.text.removeprefix(self._s).lstrip().partition(" ")
         match topic:
             case "version":
                 logger.opt(colors=True).info(f"WPlace Patch Version: <y>{escape_tag(message)}</>")
@@ -219,8 +223,8 @@ class WplacePage:
         center_x, center_y = self.current_center_px
         start_x = center_x + random.uniform(-2.5, 2.5)
         start_y = center_y + random.uniform(-2.5, 2.5)
-        target_x = center_x - dx * self._pixel_size
-        target_y = center_y - dy * self._pixel_size
+        target_x = center_x - dx * 7.65
+        target_y = center_y - dy * 7.65
         vec_x = target_x - start_x
         vec_y = target_y - start_y
         distance = math.hypot(vec_x, vec_y)

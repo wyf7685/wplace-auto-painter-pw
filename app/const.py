@@ -13,6 +13,7 @@ DATA_DIR = CWD / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR = DATA_DIR / "templates"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+USER_CONTEXT_DIR = DATA_DIR / "user_context"
 CONFIG_FILE = DATA_DIR / "config.json"
 CONFIG_SCHEMA_FILE = DATA_DIR / ".config.schema.json"
 

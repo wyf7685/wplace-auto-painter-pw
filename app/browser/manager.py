@@ -28,6 +28,7 @@ import dataclasses
 import functools
 import re
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.config import Config
@@ -40,7 +41,7 @@ from .install import install_playwright_browser, setup_playwright_env
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from playwright.async_api import Browser, BrowserType, Playwright, ProxySettings
+    from playwright.async_api import Browser, BrowserContext, BrowserType, Playwright, ProxySettings, ViewportSize
 
 # ---------------------------------------------------------------------------
 # Loop bounded state
@@ -151,6 +152,28 @@ def _proxy_settings() -> ProxySettings | None:
     return {"server": proxy_host}
 
 
+async def _get_browser_type() -> tuple[BrowserType, str, str | None]:
+    pw = await _ensure_playwright()
+    name, channel = _resolve_browser_type()
+    return getattr(pw, name), name, channel
+
+
+@contextlib.asynccontextmanager
+async def _hold_browser() -> AsyncGenerator[None]:
+    """Context manager that increments the in-use counter for the
+    duration of the context.  Used by get_browser() and get_persistent_context()
+    to track usage."""
+    state = _get_state()
+    state.in_use += 1
+    try:
+        yield
+    finally:
+        state.in_use -= 1
+        state.last_use_ended = time.monotonic()
+        if state.in_use == 0:
+            state.idle_event.set()
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -163,11 +186,7 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
     The Playwright instance is shared and reused; only the browser process is
     created and destroyed per invocation.
     """
-    state = _get_state()
-    pw = await _ensure_playwright()
-    name, channel = _resolve_browser_type()
-
-    browser_type: BrowserType = getattr(pw, name)
+    browser_type, name, channel = await _get_browser_type()
     display = f"{name} ({channel})" if channel else name
     logger.opt(colors=True).debug(f"Launching browser <g>{display}</> with <c>headless</>=<y>{headless}</>")
 
@@ -176,15 +195,31 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
         headless=headless,
         proxy=_proxy_settings(),
     )
-    state.in_use += 1
-    try:
-        async with browser:
-            yield browser
-    finally:
-        state.in_use -= 1
-        state.last_use_ended = time.monotonic()
-        if state.in_use == 0:
-            state.idle_event.set()
+    async with _hold_browser(), browser:
+        yield browser
+
+
+@contextlib.asynccontextmanager
+async def get_persistent_context(
+    user_data_dir: Path,
+    viewport: ViewportSize | None = None,
+) -> AsyncGenerator[BrowserContext]:
+    browser_type, name, channel = await _get_browser_type()
+    display = f"{name} ({channel})" if channel else name
+
+    user_data_dir = user_data_dir.joinpath(name if not channel else f"{name}_{channel}")
+    logger.opt(colors=True).debug(f"Launching persistent context for <g>{display}</> at <i><y>{user_data_dir}</></>")
+
+    context = await browser_type.launch_persistent_context(
+        user_data_dir=user_data_dir,
+        channel=channel,
+        headless=False,
+        proxy=_proxy_settings(),
+        viewport=viewport,
+        java_script_enabled=True,
+    )
+    async with _hold_browser(), context:
+        yield context
 
 
 async def shutdown_playwright() -> None:

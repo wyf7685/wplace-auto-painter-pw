@@ -130,15 +130,14 @@ class Painter:
                 return
 
             script_data = {
-                "btn": f"btn-{uuid.uuid4().hex[:8]}",
+                "s": uuid.uuid4().hex[:8],
                 "a": [[*base.offset(x, y).tuple(), color_id] for x, y, color_id in pixels],
                 "f": generate_fingerprint(self.user.identifier, len(pixels)),
                 "r": resolved_js,
-                "t": f"data-{uuid.uuid4().hex[:8]}",
-                "p": uuid.uuid4().hex[:8],
+                "l": [*base.offset(*pixels[0][:2]).to_lat_lon()],
             }
 
-            async with WplacePage(self.user.credentials, base.offset(*pixels[0][:2])).open(script_data) as page:
+            async with WplacePage.create(self.user, script_data) as page:
                 delay = random.uniform(3, 7)
                 self.log.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
                 await anyio.sleep(delay)
