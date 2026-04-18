@@ -181,13 +181,13 @@ def find_worker_fn(chunks: Chunks) -> tuple[str, str]:
     return export_name, chunks.url(chunk_path)
 
 
-SEASON_NUM_ASSIGN_PATTERN = re.compile(r",(?P<name>[a-zA-Z0-9_$]+)=[a-zA-Z0-9_$]+.seasons.length-1")
+PATTERN_SEASON_NUM_ASSIGN = re.compile(r",(?P<name>[a-zA-Z0-9_$]+)=[a-zA-Z0-9_$]+.seasons.length-1")
 
 
 def find_season_num(chunks: Chunks) -> tuple[str, str]:
     for chunk_path in chunks.iter_chunks():
         content = chunks.read(chunk_path)
-        if match := SEASON_NUM_ASSIGN_PATTERN.search(content):
+        if match := PATTERN_SEASON_NUM_ASSIGN.search(content):
             obj_name = match.group("name")
             break
     else:
@@ -202,8 +202,42 @@ def find_season_num(chunks: Chunks) -> tuple[str, str]:
     return export_name, chunks.url(chunk_path)
 
 
+PATTERN_PATCHES_MAP = re.compile(
+    r",\s*(?P<name>[a-zA-Z0-9_$]+)\s*=\s*Object.assign\(\{(?P<quote>['\"])\./markdown/.+(?P=quote):\s*[a-zA-Z0-9_$]+,"
+)
+
+
+def find_patch_logs(chunks: Chunks) -> tuple[str, str]:
+    for chunk_path in chunks.iter_chunks():
+        content = chunks.read(chunk_path)
+        if match := PATTERN_PATCHES_MAP.search(content):
+            patches_map_name = match.group("name")
+            break
+    else:
+        raise ResolveFailed("patches map not found")
+
+    pattern = r",\s*(?P<name>[a-zA-Z0-9_$]+)\s*=\s*Object\.entries\(\s*" + re.escape(patches_map_name) + r"\s*\)\.map\("
+    match = re.search(pattern, content)
+    if match is None:
+        raise ResolveFailed("patches array not found")
+    array_name = match.group("name")
+
+    pattern = r"export\s*\{[^}]*?\b,?" + re.escape(array_name) + r"(?:\s+as\s+(?P<name>[a-zA-Z0-9_$]+))?[^}]*?\};"
+    match = re.search(pattern, content)
+    if match is None:
+        raise ResolveFailed("exported name for patches array not found")
+    export_name = match.group("name") or array_name
+
+    return export_name, chunks.url(chunk_path)
+
+
 @with_semaphore(1)
 async def resolve_js() -> list[str]:
     CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
     chunks = await prepare_chunks()
-    return [*find_paint_fn(chunks), *find_worker_fn(chunks), *find_season_num(chunks)]
+    return [
+        *find_paint_fn(chunks),
+        *find_worker_fn(chunks),
+        *find_season_num(chunks),
+        *find_patch_logs(chunks),
+    ]

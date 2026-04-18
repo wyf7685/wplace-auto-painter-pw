@@ -142,7 +142,8 @@ class WplacePage:
 
             async with await context.new_page() as page:
                 url = self.coord.to_share_url(zoom=self.zoom.value)
-                await page.goto(url, wait_until="domcontentloaded")
+                logger.opt(colors=True).debug(f"Navigating to <c>{escape_tag(url)}</>")
+                await page.goto(url, timeout=60_000, wait_until="domcontentloaded")
 
                 try:
                     await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10_000, state="visible")
