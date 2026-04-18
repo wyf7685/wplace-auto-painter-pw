@@ -23,8 +23,9 @@ from app.utils import Highlight
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from playwright.async_api import BrowserContext, Page
-
+    from playwright.async_api import BrowserContext, ConsoleMessage, Page
+else:
+    ConsoleMessage = Any
 
 PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
 USER_AGENT = (
@@ -125,6 +126,8 @@ class WplacePage:
 
     @contextlib.asynccontextmanager
     async def open(self, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
+        self._btn_id = script_data["btn"]
+        self._log_prefix = script_data["p"]
         await notify_open_browser()
 
         async with (
@@ -134,10 +137,10 @@ class WplacePage:
                 java_script_enabled=True,
             ) as context,
         ):
+            context.on("console", self._on_console_log)
             await context.add_init_script(assets.page_init())
             await context.add_init_script(assets.paint_btn(script_data))
             await context.add_cookies(self.credentials.to_pw_cookies())
-            self._btn_id = script_data.get("btn", "paint-button-7685")
             logger.opt(colors=True).debug(f"Using paint button ID: <c>{escape_tag(self._btn_id)}</>")
 
             async with await context.new_page() as page:
@@ -159,6 +162,25 @@ class WplacePage:
                     yield self
                 finally:
                     del self.context, self.page
+
+    def _on_console_log(self, msg: ConsoleMessage) -> None:
+        if not msg.text.startswith(self._log_prefix):
+            return
+
+        topic, _, message = msg.text.removeprefix(self._log_prefix).lstrip().partition(" ")
+        match topic:
+            case "version":
+                logger.opt(colors=True).info(f"WPlace Patch Version: <y>{escape_tag(message)}</>")
+            case "submit" if message.startswith("success"):
+                logger.opt(colors=True).info("Paint submit <g>success</>")
+            case "submit" if message.startswith("error"):
+                error_msg = message.removeprefix("error").lstrip()
+                logger.opt(colors=True).error(f"Paint submit <r>error</>: <r>{escape_tag(error_msg)}</>")
+            case "paint":
+                data = message.strip()
+                with contextlib.suppress(Exception):
+                    data = json.loads(data)
+                logger.opt(colors=True).debug(f"Paint Response: {Highlight.apply(data)}")
 
     async def find_and_close_modal(self) -> None:
         if modal := await self.page.query_selector(".modal[open]"):

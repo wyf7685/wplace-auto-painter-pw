@@ -135,6 +135,7 @@ class Painter:
                 "f": generate_fingerprint(self.user.identifier, len(pixels)),
                 "r": resolved_js,
                 "t": f"data-{uuid.uuid4().hex[:8]}",
+                "p": uuid.uuid4().hex[:8],
             }
 
             async with WplacePage(self.user.credentials, base.offset(*pixels[0][:2])).open(script_data) as page:
