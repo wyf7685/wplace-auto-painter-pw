@@ -125,6 +125,8 @@ class WplacePage:
         self.user = user
         self._s = script_data["s"]
         self._btn_id = f"btn-{self._s}"
+        self.has_captcha = False
+        self.captcha_resolved = anyio.Event()
 
     @property
     def user_data_dir(self) -> Path:
@@ -185,6 +187,14 @@ class WplacePage:
                 with contextlib.suppress(Exception):
                     data = json.loads(data)
                 logger.opt(colors=True).debug(f"Paint Response: {Highlight.apply(data)}")
+                if isinstance(data, dict):
+                    if data.get("error") == "challenge-required":
+                        logger.warning("Captcha challenge detected during paint submit")
+                        self.has_captcha = True
+                    elif isinstance(painted := data.get("painted"), int):
+                        logger.info(f"Painted pixel count: <g>{painted}</>")
+                        self.has_captcha = False
+                        self.captcha_resolved.set()
 
     async def find_and_close_modal(self) -> None:
         if modal := await self.page.query_selector(".modal[open]"):
@@ -199,7 +209,7 @@ class WplacePage:
     @contextlib.asynccontextmanager
     async def open_paint_panel(self) -> AsyncGenerator[PaintPanel]:
         await self.find_and_close_modal()
-        async with PaintPanel(self.page, self._btn_id) as panel:
+        async with PaintPanel(self, self._btn_id) as panel:
             yield panel
 
     @property
@@ -336,8 +346,9 @@ class WplacePage:
 
 
 class BasePanel(abc.ABC):
-    def __init__(self, page: Page) -> None:
-        self.page = page
+    def __init__(self, wplace_page: WplacePage) -> None:
+        self.wplace_page = wplace_page
+        self.page = wplace_page.page
 
     async def __aenter__(self) -> Self:
         await self.open()
@@ -354,8 +365,8 @@ class BasePanel(abc.ABC):
 
 class PaintPanel(BasePanel):
     @override
-    def __init__(self, page: Page, btn_id: str) -> None:
-        super().__init__(page)
+    def __init__(self, wplace_page: WplacePage, btn_id: str) -> None:
+        super().__init__(wplace_page)
         self._btn_id = btn_id
 
     @override
@@ -388,12 +399,6 @@ class PaintPanel(BasePanel):
         await color_btn.click()
         logger.opt(colors=True).debug(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
 
-    async def captcha_exists(self) -> bool:
-        return (
-            await self.page.query_selector("h-captcha") is not None
-            or await self.page.query_selector("iframe[data-hcaptcha-response]") is not None
-        )
-
     async def submit(self) -> None:
         selector = f"#{self._btn_id}"
         btn = await self.page.query_selector(selector)
@@ -413,7 +418,7 @@ class PaintPanel(BasePanel):
             logger.info("Submit completed")
             return
 
-        if await self.captcha_exists():
+        if self.wplace_page.has_captcha:
             logger.warning("Captcha detected after clicking submit, manual intervention is required")
             await self.wait_for_captcha_resolved()
 
@@ -426,12 +431,17 @@ class PaintPanel(BasePanel):
             logger.info("Submit completed after captcha resolution")
 
     async def wait_for_captcha_resolved(self) -> None:
+        if not self.wplace_page.has_captcha:
+            logger.debug("No captcha detected, skipping wait")
+            return
+
         from app.utils import toast
 
+        logger.debug("Notifying user to resolve captcha...")
         toast.notify(APP_NAME, "检测到验证码，请打开浏览器完成验证后继续。", duration=toast.Duration.Long)
-        while await self.captcha_exists():
-            logger.warning("Captcha still present, waiting...")
-            await anyio.sleep(5)
+
+        logger.info("Waiting for captcha to be resolved...")
+        await self.wplace_page.captcha_resolved.wait()
 
 
 @functools.cache
