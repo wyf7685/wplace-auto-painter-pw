@@ -389,7 +389,10 @@ class PaintPanel(BasePanel):
         logger.opt(colors=True).debug(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
 
     async def captcha_exists(self) -> bool:
-        return await self.page.query_selector("h-captcha") is not None
+        return (
+            await self.page.query_selector("h-captcha") is not None
+            or await self.page.query_selector("iframe[data-hcaptcha-response]") is not None
+        )
 
     async def submit(self) -> None:
         selector = f"#{self._btn_id}"
