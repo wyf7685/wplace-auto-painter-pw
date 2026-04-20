@@ -135,10 +135,10 @@ def _fp(identity: object) -> str:
 def generate_fingerprint(
     identity: object,
     count: int,  # noqa: ARG001
-) -> dict[str, str]:
-    data = {
-        # "t": _t(count),
-        "fp": _fp(identity),
-    }
+) -> list[str]:
+    data = [
+        _fp(identity),
+        # _t(count),
+    ]
     logger.opt(colors=True).debug(f"Generated fingerprint: {Highlight.apply(data)}")
     return data

@@ -117,14 +117,10 @@ async def notify_open_browser() -> None:
 class WplacePage:
     page: Page
 
-    def __init__(
-        self,
-        user: UserConfig,
-        script_data: dict[str, Any],
-    ) -> None:
+    def __init__(self, user: UserConfig, key: str) -> None:
         self.user = user
-        self._s = script_data["s"]
-        self._btn_id = f"btn-{self._s}"
+        self._key = key
+        self._btn_id = f"btn-{key}"
         self.has_captcha = False
         self.captcha_resolved = anyio.Event()
 
@@ -134,8 +130,8 @@ class WplacePage:
 
     @classmethod
     @contextlib.asynccontextmanager
-    async def create(cls, user: UserConfig, script_data: dict[str, Any]) -> AsyncGenerator[Self]:
-        self = cls(user, script_data)
+    async def create(cls, user: UserConfig, script_data: list[Any]) -> AsyncGenerator[Self]:
+        self = cls(user, script_data[0])
 
         await notify_open_browser()
 
@@ -170,15 +166,15 @@ class WplacePage:
                     del self.page
 
     def _on_console_log(self, msg: ConsoleMessage) -> None:
-        if not msg.text.startswith(self._s):
+        if not msg.text.startswith(self._key):
             return
 
-        topic, _, message = msg.text.removeprefix(self._s).lstrip().partition(" ")
+        topic, message = msg.text.removeprefix(self._key).lstrip().split(" ", maxsplit=1)
         match topic:
             case "version":
-                logger.opt(colors=True).info(f"WPlace Patch Version: <y>{escape_tag(message)}</>")
+                logger.opt(colors=True).info(f"WPlace Version: <y>{escape_tag(message)}</>")
             case "submit" if message.startswith("success"):
-                logger.opt(colors=True).info("Paint submit <g>success</>")
+                logger.opt(colors=True).success("Paint submit <g>success</>")
             case "submit" if message.startswith("error"):
                 error_msg = message.removeprefix("error").lstrip()
                 logger.opt(colors=True).error(f"Paint submit <r>error</>: <r>{escape_tag(error_msg)}</>")
@@ -187,12 +183,13 @@ class WplacePage:
                 with contextlib.suppress(Exception):
                     data = json.loads(data)
                 logger.opt(colors=True).debug(f"Paint Response: {Highlight.apply(data)}")
-                if isinstance(data, dict):
-                    if data.get("error") == "challenge-required":
+
+                match data:
+                    case {"error": "challenge-required"}:
                         logger.warning("Captcha challenge detected during paint submit")
                         self.has_captcha = True
-                    elif isinstance(painted := data.get("painted"), int):
-                        logger.info(f"Painted pixel count: <g>{painted}</>")
+                    case {"painted": int(painted)}:
+                        logger.opt(colors=True).info(f"Painted pixel count: <g>{painted}</>")
                         self.has_captcha = False
                         self.captcha_resolved.set()
 

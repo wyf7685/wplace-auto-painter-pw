@@ -232,12 +232,7 @@ def find_patch_logs(chunks: Chunks) -> tuple[str, str]:
 
 
 @with_semaphore(1)
-async def resolve_js() -> list[str]:
+async def resolve_js() -> list[tuple[str, str]]:
     CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
     chunks = await prepare_chunks()
-    return [
-        *find_paint_fn(chunks),
-        *find_worker_fn(chunks),
-        *find_season_num(chunks),
-        *find_patch_logs(chunks),
-    ]
+    return [fn(chunks) for fn in (find_paint_fn, find_worker_fn, find_season_num, find_patch_logs)]

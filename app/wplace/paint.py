@@ -129,13 +129,13 @@ class Painter:
             if not pixels:
                 return
 
-            script_data = {
-                "s": uuid.uuid4().hex[:8],
-                "a": [[*base.offset(x, y).tuple(), color_id] for x, y, color_id in pixels],
-                "f": generate_fingerprint(self.user.identifier, len(pixels)),
-                "r": resolved_js,
-                "l": [*base.offset(*pixels[0][:2]).to_lat_lon()],
-            }
+            script_data = [
+                uuid.uuid4().hex[:8],
+                [[*base.offset(x, y).tuple(), color_id] for x, y, color_id in pixels],
+                generate_fingerprint(self.user.identifier, len(pixels)),
+                resolved_js,
+                [*base.offset(*pixels[0][:2]).to_lat_lon()],
+            ]
 
             async with WplacePage.create(self.user, script_data) as page:
                 delay = random.uniform(3, 7)
