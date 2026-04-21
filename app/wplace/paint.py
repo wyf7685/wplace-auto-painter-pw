@@ -14,9 +14,7 @@ from app.config import Config, UserConfig
 from app.exception import PaintFinished, ShouldQuit, TokenExpired
 from app.log import escape_tag, logger
 from app.schemas import TemplateConfig, WplaceUserInfo
-from app.utils import Highlight, is_token_expired
-from app.utils.ansi_image import draw_ansi
-from app.utils.func import logger_wrapper
+from app.utils import Highlight, draw_ansi, is_token_expired, logger_wrapper
 from app.wplace.fingerprint import generate_fingerprint
 from app.wplace.page import WplacePage, fetch_user_info
 from app.wplace.purchase import do_purchase

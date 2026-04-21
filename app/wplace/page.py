@@ -5,7 +5,6 @@ import hashlib
 import json
 import math
 import random
-from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, override
 
@@ -20,7 +19,7 @@ from app.const import APP_NAME, USER_CONTEXT_DIR, assets
 from app.exception import ElementNotFound, FetchFailed
 from app.log import escape_tag, logger
 from app.schemas import UserConfig, WplaceCredentials, WplaceUserInfo
-from app.utils import Highlight
+from app.utils import Highlight, logger_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -69,6 +68,7 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
                 case ("j", ck_val) if ck_val != credentials.token.get_secret_value():
                     credentials.token = SecretStr(ck_val)
                     update = True
+
         if update:
             logger.info("Updated credentials from fetched cookies")
             Config.load().save()
@@ -86,39 +86,12 @@ async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
         raise FetchFailed("Failed to parse user info") from e
 
 
-class ZoomLevel(int, Enum):
-    Z_16 = 16
-    Z_15 = 15
-
-
-_ZOOM_PIXEL_SIZE: dict[ZoomLevel, float] = {
-    ZoomLevel.Z_16: 16,
-    ZoomLevel.Z_15: 7.65,
-}
-
-
-async def notify_open_browser() -> None:
-    from app.utils import toast
-
-    logger.debug("Sending notification for opening browser...")
-    clicked = await anyio.to_thread.run_sync(
-        functools.partial(
-            toast.notify_with_button,
-            APP_NAME,
-            "即将打开浏览器窗口进行绘制操作。",
-            button="确认",
-        ),
-        abandon_on_cancel=True,
-    )
-    if not clicked:
-        logger.info("Toast timed out or dismissed, proceeding to open browser.")
-
-
 class WplacePage:
     page: Page
 
     def __init__(self, user: UserConfig, key: str) -> None:
         self.user = user
+        self.log = logger_wrapper(self.user.identifier)
         self._key = key
         self._btn_id = f"btn-{key}"
         self.has_captcha = False
@@ -132,8 +105,7 @@ class WplacePage:
     @contextlib.asynccontextmanager
     async def create(cls, user: UserConfig, script_data: list[Any]) -> AsyncGenerator[Self]:
         self = cls(user, script_data[0])
-
-        await notify_open_browser()
+        await self.notify_open_browser()
 
         async with get_persistent_context(
             user_data_dir=self.user_data_dir,
@@ -143,7 +115,7 @@ class WplacePage:
             await context.add_init_script(assets.page_init())
             await context.add_init_script(assets.paint_btn(script_data))
             await context.add_cookies(self.user.credentials.to_pw_cookies())
-            logger.opt(colors=True).debug(f"Using paint button ID: <c>{escape_tag(self._btn_id)}</>")
+            self.log.debug(f"Using paint button ID: <c>{escape_tag(self._btn_id)}</>")
 
             async with await context.new_page() as page:
                 for _page in filter(lambda p: p is not page, context.pages):
@@ -165,6 +137,22 @@ class WplacePage:
                 finally:
                     del self.page
 
+    async def notify_open_browser(self) -> None:
+        from app.utils import toast
+
+        self.log.debug("Sending notification for opening browser...")
+        clicked = await anyio.to_thread.run_sync(
+            functools.partial(
+                toast.notify_with_button,
+                APP_NAME,
+                "即将打开浏览器窗口进行绘制操作。",
+                button="确认",
+            ),
+            abandon_on_cancel=True,
+        )
+        if not clicked:
+            self.log.info("Toast timed out or dismissed, proceeding to open browser.")
+
     def _on_console_log(self, msg: ConsoleMessage) -> None:
         if not msg.text.startswith(self._key):
             return
@@ -172,36 +160,36 @@ class WplacePage:
         topic, message = msg.text.removeprefix(self._key).lstrip().split(" ", maxsplit=1)
         match topic:
             case "version":
-                logger.opt(colors=True).info(f"WPlace Version: <y>{escape_tag(message)}</>")
+                self.log.info(f"WPlace Version: <y>{escape_tag(message)}</>")
             case "submit" if message.startswith("success"):
-                logger.opt(colors=True).success("Paint submit <g>success</>")
+                self.log.success("Paint submit <g>success</>")
             case "submit" if message.startswith("error"):
                 error_msg = message.removeprefix("error").lstrip()
-                logger.opt(colors=True).error(f"Paint submit <r>error</>: <r>{escape_tag(error_msg)}</>")
+                self.log.error(f"Paint submit <r>error</>: <r>{escape_tag(error_msg)}</>")
             case "paint":
                 data = message.strip()
                 with contextlib.suppress(Exception):
                     data = json.loads(data)
-                logger.opt(colors=True).debug(f"Paint Response: {Highlight.apply(data)}")
+                self.log.debug(f"Paint Response: {Highlight.apply(data)}")
 
                 match data:
                     case {"error": "challenge-required"}:
-                        logger.warning("Captcha challenge detected during paint submit")
+                        self.log.warning("Captcha challenge detected during paint submit")
                         self.has_captcha = True
                     case {"painted": int(painted)}:
-                        logger.opt(colors=True).info(f"Painted pixel count: <g>{painted}</>")
+                        self.log.info(f"Painted pixel count: <g>{painted}</>")
                         self.has_captcha = False
                         self.captcha_resolved.set()
 
     async def find_and_close_modal(self) -> None:
         if modal := await self.page.query_selector(".modal[open]"):
-            logger.info(f"Found modal dialog: {modal!r}")
+            self.log.info("Found modal dialog")
             for el in await modal.query_selector_all("button.btn"):
                 if await el.text_content() == "Close":
                     await el.click()
-                    logger.info("Closed modal dialog")
+                    self.log.info("Closed modal dialog")
                     return
-            logger.warning("No Close button found in modal dialog")
+            self.log.warning("No Close button found in modal dialog")
 
     @contextlib.asynccontextmanager
     async def open_paint_panel(self) -> AsyncGenerator[PaintPanel]:
@@ -346,6 +334,7 @@ class BasePanel(abc.ABC):
     def __init__(self, wplace_page: WplacePage) -> None:
         self.wplace_page = wplace_page
         self.page = wplace_page.page
+        self.log = wplace_page.log
 
     async def __aenter__(self) -> Self:
         await self.open()
@@ -372,29 +361,29 @@ class PaintPanel(BasePanel):
         if paint_btn is None:
             raise ElementNotFound("No paint button found on the page")
 
-        logger.debug(f"Found paint button: {paint_btn!r}")
+        self.log.debug("Found paint button")
         await paint_btn.click()
-        logger.info("Clicked paint button")
+        self.log.info("Clicked paint button")
 
     @override
     async def close(self) -> None:
         btns = await self.page.query_selector_all(".w-full > .relative > .items-center > .btn.btn-circle.btn-sm")
         if not btns:
-            logger.warning("No close button found on the paint panel")
+            self.log.warning("No close button found on the paint panel")
             return
         close_btn = btns[-1]
-        logger.debug(f"Found close button: {close_btn!r}")
+        self.log.debug("Found close button")
         await close_btn.click()
-        logger.info("Closed paint panel")
+        self.log.info("Closed paint panel")
 
     async def select_color(self, color_id: int) -> None:
         color_btn = await self.page.wait_for_selector(f"#color-{color_id}", timeout=5_000, state="visible")
         if color_btn is None:
             raise ElementNotFound(f"Color button with ID {color_id} not found on the page")
 
-        logger.debug(f"Found color button: {color_btn!r}")
+        self.log.debug("Found color button")
         await color_btn.click()
-        logger.opt(colors=True).debug(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
+        self.log.debug(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
 
     async def submit(self) -> None:
         selector = f"#{self._btn_id}"
@@ -402,42 +391,41 @@ class PaintPanel(BasePanel):
         if btn is None:
             raise ElementNotFound("Submit button not found, is the injected script broken?")
 
-        logger.opt(colors=True).debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
+        self.log.debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
         await btn.click()
-        logger.info("Clicked submit button")
+        self.log.info("Clicked submit button")
 
-        logger.debug("Waiting for submit to complete...")
+        self.log.debug("Waiting for submit to complete...")
         try:
             await self.page.wait_for_selector(selector, timeout=10_000, state="detached")
         except _pw_timeout_error():
-            logger.warning("Submit button still present after timeout")
+            self.log.warning("Submit button still present after timeout")
         else:
-            logger.info("Submit completed")
+            self.log.info("Submit completed")
             return
 
-        if self.wplace_page.has_captcha:
-            logger.warning("Captcha detected after clicking submit, manual intervention is required")
-            await self.wait_for_captcha_resolved()
+        await self.check_captcha()
 
-        logger.debug("Waiting for submit to complete after captcha resolution...")
+        self.log.debug("Waiting for submit to complete after captcha resolution...")
         try:
-            await self.page.wait_for_selector(selector, timeout=10_000, state="detached")
+            await self.page.wait_for_selector(selector, timeout=5_000, state="detached")
         except _pw_timeout_error():
-            logger.warning("Submit button still present after captcha resolution")
+            self.log.warning("Submit button still present after captcha resolution")
         else:
-            logger.info("Submit completed after captcha resolution")
+            self.log.info("Submit completed after captcha resolution")
 
-    async def wait_for_captcha_resolved(self) -> None:
+    async def check_captcha(self) -> None:
         if not self.wplace_page.has_captcha:
-            logger.debug("No captcha detected, skipping wait")
             return
+
+        self.log.warning("Captcha detected after clicking submit, manual intervention is required")
 
         from app.utils import toast
 
-        logger.debug("Notifying user to resolve captcha...")
+        self.log.debug("Notifying user to resolve captcha...")
         toast.notify(APP_NAME, "检测到验证码，请打开浏览器完成验证后继续。", duration=toast.Duration.Long)
 
-        logger.info("Waiting for captcha to be resolved...")
+        self.log.info("Waiting for captcha to be resolved...")
         await self.wplace_page.captcha_resolved.wait()
 
 

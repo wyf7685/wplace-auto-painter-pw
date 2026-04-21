@@ -44,9 +44,10 @@ class Chunks:
         self._cached[chunk_path] = content
         return content
 
-    def iter_chunks(self) -> Iterable[str]:
+    def iter_chunks(self) -> Iterable[tuple[str, str]]:
         for file in self.root.glob("*/*.js"):
-            yield file.relative_to(self.root).as_posix()
+            chunk_path = file.relative_to(self.root).as_posix()
+            yield chunk_path, self.read(chunk_path)
 
     def path(self, chunk_path: str) -> Path:
         return self.root / chunk_path
@@ -124,8 +125,7 @@ PATTERN_PAINT_FN = re.compile(r"await\s+(?P<name>[a-zA-Z0-9_$]+)\.paint\s*\(")
 
 
 def find_paint_fn(chunks: Chunks) -> tuple[str, str]:
-    for chunk_path in chunks.iter_chunks():
-        content = chunks.read(chunk_path)
+    for chunk_path, content in chunks.iter_chunks():  # noqa: B007
         if match := PATTERN_PAINT_FN.search(content):
             obj_name = match.group("name")
             break
@@ -154,8 +154,7 @@ PATTERN_WORKER = re.compile(r"function (?P<name>[a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\
 
 
 def find_worker_fn(chunks: Chunks) -> tuple[str, str]:
-    for chunk_path in chunks.iter_chunks():
-        content = chunks.read(chunk_path)
+    for chunk_path, content in chunks.iter_chunks():  # noqa: B007
         if ("navigator.serviceWorker.controller" in content) and (match := PATTERN_WORKER.search(content)):
             func_name = match.group("name")
             break
@@ -185,8 +184,7 @@ PATTERN_SEASON_NUM_ASSIGN = re.compile(r",(?P<name>[a-zA-Z0-9_$]+)=[a-zA-Z0-9_$]
 
 
 def find_season_num(chunks: Chunks) -> tuple[str, str]:
-    for chunk_path in chunks.iter_chunks():
-        content = chunks.read(chunk_path)
+    for chunk_path, content in chunks.iter_chunks():  # noqa: B007
         if match := PATTERN_SEASON_NUM_ASSIGN.search(content):
             obj_name = match.group("name")
             break
@@ -208,8 +206,7 @@ PATTERN_PATCHES_MAP = re.compile(
 
 
 def find_patch_logs(chunks: Chunks) -> tuple[str, str]:
-    for chunk_path in chunks.iter_chunks():
-        content = chunks.read(chunk_path)
+    for chunk_path, content in chunks.iter_chunks():  # noqa: B007
         if match := PATTERN_PATCHES_MAP.search(content):
             patches_map_name = match.group("name")
             break

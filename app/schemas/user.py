@@ -13,7 +13,7 @@ def _construct_pw_cookie(name: str, value: str) -> SetCookieParam:
     return {
         "name": name,
         "value": value,
-        "domain": ".backend.wplace.live",
+        "domain": ".wplace.live",
         "path": "/",
         "httpOnly": False,
         "secure": True,
