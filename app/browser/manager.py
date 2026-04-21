@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING
 
 from app.config import Config
 from app.exception import BrowserNotAvailable
-from app.log import logger
+from app.log import escape_tag, logger
 
 from .const import PLAYWRIGHT_IDLE_TIMEOUT
 from .install import install_playwright_browser, setup_playwright_env
@@ -64,7 +64,7 @@ def _cleanup_states() -> None:
     """Clean up _PlaywrightState entries for event loops that have been closed."""
     dead_loops = {loop for loop in _pw_states if loop.is_closed()}
     for loop in dead_loops:
-        logger.debug(f"Cleaning up Playwright state for dead loop {loop}")
+        logger.opt(colors=True).debug(f"Cleaning up Playwright state for dead loop <c>{escape_tag(repr(loop))}</>")
         del _pw_states[loop]
 
 

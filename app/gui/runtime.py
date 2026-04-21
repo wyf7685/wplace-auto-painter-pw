@@ -53,13 +53,13 @@ class TaskRuntime:
     def _thread_main(self) -> None:
         from app.wplace import run_painter
 
-        async def _runner() -> None:
-            async def _stop_waiter(scope: anyio.CancelScope) -> None:
+        async def runner() -> None:
+            async def stop_waiter() -> None:
                 await anyio.to_thread.run_sync(self._stop_event.wait, abandon_on_cancel=True)
-                scope.cancel()
+                tg.cancel_scope.cancel()
 
             async with anyio.create_task_group() as tg:
-                tg.start_soon(_stop_waiter, tg.cancel_scope)
+                tg.start_soon(stop_waiter)
                 try:
                     await run_painter()
                 finally:
@@ -67,7 +67,7 @@ class TaskRuntime:
 
         state = "stopped"
         try:
-            anyio.run(_runner)
+            anyio.run(runner)
         except ConfigError as e:
             logger.exception("Configuration error occurred in runtime")
             self._signals.config_error_occurred.emit(e)

@@ -1,3 +1,4 @@
+import functools
 import shutil
 import subprocess
 from datetime import datetime
@@ -19,13 +20,35 @@ ACTIONS_URL = f"https://github.com/{OWNER}/{REPO}/actions/workflows/{WORKFLOW_FI
 COMMIT_HASH_FILE = ASSETS_DIR / ".git_commit_hash"
 
 
+@functools.cache
+def find_git() -> str | None:
+    if IS_FROZEN:
+        return None
+    if not Path(".git").is_dir():
+        return None
+    return shutil.which("git")
+
+
+@functools.cache
+def is_master() -> bool:
+    if not (git := find_git()):
+        return True
+    p = subprocess.run(  # noqa: S603
+        [git, "rev-parse", "--symbolic-full-name", "HEAD"],
+        capture_output=True,
+        text=True,
+        **subprocess_options(),
+    )
+    return p.returncode == 0 and p.stdout.strip() == "refs/heads/master"
+
+
 def get_local_commit_hash() -> str | None:
     if IS_FROZEN:
         if COMMIT_HASH_FILE.is_file():
             return COMMIT_HASH_FILE.read_text("utf-8").strip()
         return None
 
-    if not Path(".git").is_dir() or not (git := shutil.which("git")):
+    if not (git := find_git()):
         return None
 
     p = subprocess.run(  # noqa: S603
@@ -58,6 +81,10 @@ async def get_latest_commit_hash() -> str:
 
 
 async def check_update() -> None:
+    if not is_master():
+        logger.info("未在主分支，跳过更新检查")
+        return
+
     local_hash = get_local_commit_hash()
     if local_hash is None:
         logger.warning("无法获取本地版本信息，跳过更新检查")
@@ -84,7 +111,7 @@ async def check_update() -> None:
 
 
 async def check_update_loop() -> None:
-    if not get_local_commit_hash():
+    if not get_local_commit_hash() or not is_master():
         return
 
     while True:

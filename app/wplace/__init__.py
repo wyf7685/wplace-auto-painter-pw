@@ -37,7 +37,9 @@ async def run_painter() -> None:
     except* Exception:
         logger.exception("Unexpected error occurred")
     finally:
-        await shutdown_playwright()
+        with anyio.CancelScope(shield=True):
+            await shutdown_playwright()
+        logger.info("Painter stopped")
 
 
 __all__ = ["run_painter"]
