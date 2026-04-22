@@ -136,7 +136,7 @@ class Painter:
 
             script_data = [
                 uuid.uuid4().hex[:8],
-                [[*base.offset(x, y).tuple(), color_id] for x, y, color_id in pixels],
+                [[*base.offset(x, y).dtuple(), color_id] for x, y, color_id in pixels],
                 generate_fingerprint(self.user.identifier, len(pixels)),
                 resolved_js,
                 [*base.offset(*pixels[0][:2]).to_lat_lon()],

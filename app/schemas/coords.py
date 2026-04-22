@@ -114,3 +114,6 @@ class WplacePixelCoords:
 
     def tuple(self) -> tuple[int, int, int, int]:
         return self.tlx, self.tly, self.pxx, self.pxy
+
+    def dtuple(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        return (self.tlx, self.tly), (self.pxx, self.pxy)
