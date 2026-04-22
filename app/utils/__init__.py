@@ -30,7 +30,21 @@ _LOCATION = {
     "Highlight": "highlight",
 }
 
-__all__ = [*_LOCATION.keys(), "toast"]  # pyright: ignore[reportUnsupportedDunderAll]
+__all__ = [
+    "Highlight",
+    "PerfLog",
+    "SecretStrEncoder",
+    "draw_ansi",
+    "is_token_expired",
+    "logger_wrapper",
+    "parse_rgb_str",
+    "requests_proxies",
+    "run_sync",
+    "subprocess_options",
+    "toast",
+    "with_retry",
+    "with_semaphore",
+]
 
 
 def __load(name: str) -> object:

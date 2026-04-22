@@ -73,7 +73,10 @@ async def get_latest_commit_hash() -> str:
     from app.config import Config
 
     url = f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{BRANCH}"
-    headers = {"Accept": "application/vnd.github.v3+json"}
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2026-03-10",
+    }
     async with httpx.AsyncClient(proxy=Config.load().proxy) as client:
         resp = await client.get(url, headers=headers, timeout=10.0)
         data = resp.raise_for_status().json()
