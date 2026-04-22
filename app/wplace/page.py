@@ -49,53 +49,13 @@ async def _headless_context(credentials: WplaceCredentials) -> AsyncGenerator[Br
         yield context
 
 
-async def fetch_user_info(credentials: WplaceCredentials) -> WplaceUserInfo:
-    async with _headless_context(credentials) as context, await context.new_page() as page:
-        resp = await page.goto("https://backend.wplace.live/me", wait_until="networkidle")
-        if not resp:
-            raise FetchFailed("Failed to fetch user info")
-        text = await resp.text()
-        cookies = await context.cookies()
-
-        update = False
-        for ck in filter(lambda ck: ck.get("domain") == ".backend.wplace.live", cookies):
-            match (ck.get("name"), ck.get("value", "")):
-                case ("cf_clearance", ck_val) if (
-                    credentials.cf_clearance is None or ck_val != credentials.cf_clearance.get_secret_value()
-                ):
-                    credentials.cf_clearance = SecretStr(ck_val)
-                    update = True
-                case ("j", ck_val) if ck_val != credentials.token.get_secret_value():
-                    credentials.token = SecretStr(ck_val)
-                    update = True
-
-        if update:
-            logger.info("Updated credentials from fetched cookies")
-            Config.load().save()
-
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.opt(colors=True).warning(f"Failed to decode user info JSON: {Highlight.apply(text)}")
-        raise FetchFailed("Failed to decode user info") from e
-
-    try:
-        return WplaceUserInfo.model_validate(data)
-    except ValueError as e:
-        logger.opt(colors=True).warning(f"Failed to parse user info: {Highlight.apply(data)}")
-        raise FetchFailed("Failed to parse user info") from e
-
-
-class WplacePage:
-    page: Page
-
-    def __init__(self, user: UserConfig, key: str) -> None:
+class UserContext:
+    def __init__(self, user: UserConfig) -> None:
         self.user = user
         self.log = logger_wrapper(self.user.identifier)
-        self._key = key
-        self._btn_id = f"btn-{key}"
-        self.has_captcha = False
-        self.captcha_resolved = anyio.Event()
+        self._context = None
+        self._stack = contextlib.AsyncExitStack()
+        self._context_lock = anyio.Lock()
 
     @property
     def user_data_dir(self) -> Path:
@@ -103,39 +63,15 @@ class WplacePage:
 
     @classmethod
     @contextlib.asynccontextmanager
-    async def create(cls, user: UserConfig, script_data: list[Any]) -> AsyncGenerator[Self]:
-        self = cls(user, script_data[0])
-        await self.notify_open_browser()
+    async def create(cls, user: UserConfig) -> AsyncGenerator[Self]:
+        self = cls(user)
 
-        async with get_persistent_context(
-            user_data_dir=self.user_data_dir,
-            viewport={"width": 1280, "height": 720},
-        ) as context:
-            context.on("console", self._on_console_log)
-            await context.add_init_script(assets.page_init())
-            await context.add_init_script(assets.paint_btn(script_data))
-            await context.add_cookies(self.user.credentials.to_pw_cookies())
-            self.log.debug(f"Using paint button ID: <c>{escape_tag(self._btn_id)}</>")
-
-            async with await context.new_page() as page:
-                for _page in filter(lambda p: p is not page, context.pages):
-                    await _page.close()
-
-                await page.goto("https://wplace.live/", timeout=60_000, wait_until="domcontentloaded")
-
-                try:
-                    await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10_000, state="visible")
-                    await page.wait_for_selector(f"#{self._btn_id}", timeout=10_000, state="attached")
-                except _pw_timeout_error() as e:
-                    raise ElementNotFound(
-                        "Required buttons not found on the page, is the injected script broken?"
-                    ) from e
-
-                self.page = page
-                try:
-                    yield self
-                finally:
-                    del self.page
+        try:
+            async with self._stack:
+                yield self
+        finally:
+            self.log.debug("Closing browser context...")
+            self._context = None
 
     async def notify_open_browser(self) -> None:
         from app.utils import toast
@@ -152,6 +88,123 @@ class WplacePage:
         )
         if not clicked:
             self.log.info("Toast timed out or dismissed, proceeding to open browser.")
+
+    async def get_context(self) -> BrowserContext:
+        async with self._context_lock:
+            if self._context is not None:
+                return self._context
+
+            await self.notify_open_browser()
+            cm = get_persistent_context(
+                user_data_dir=self.user_data_dir,
+                viewport={"width": 1280, "height": 720},
+                user_agent=USER_AGENT,
+            )
+            context = await self._stack.enter_async_context(cm)
+            await context.add_init_script(assets.page_init())
+            await context.add_cookies(self.user.credentials.to_pw_cookies())
+            self.log.success("Browser context created")
+            self._context = context
+
+        return self._context
+
+    @contextlib.asynccontextmanager
+    async def new_page(self, close_others: bool = True) -> AsyncGenerator[Page]:
+        context = await self.get_context()
+        page = await context.new_page()
+        self.log.debug("New page created")
+
+        if close_others:
+            for _page in filter(lambda p: p is not page, context.pages):
+                with contextlib.suppress(Exception):
+                    await _page.close()
+
+        try:
+            yield page
+        finally:
+            if close_others:
+                # avoid closing context
+                await context.new_page()
+            await page.close()
+
+    async def fetch_user_info(self) -> WplaceUserInfo:
+        credentials = self.user.credentials
+
+        async with (
+            _headless_context(credentials)
+            if self._context is None
+            else contextlib.nullcontext(self._context) as context,
+            await context.new_page() as page,
+        ):
+            resp = await page.goto("https://backend.wplace.live/me", wait_until="networkidle")
+            if not resp:
+                raise FetchFailed("Failed to fetch user info")
+            text = await resp.text()
+            cookies = await context.cookies()
+
+        update = False
+        for ck in filter(lambda ck: ck.get("domain", "").endswith("wplace.live"), cookies):
+            match ck:
+                case {"name": "j", "value": str(ck_val)} if ck_val != credentials.token.get_secret_value():
+                    credentials.token = SecretStr(ck_val)
+                    update = True
+                case {"name": "cf_clearance", "value": str(ck_val)} if (
+                    credentials.cf_clearance is None or ck_val != credentials.cf_clearance.get_secret_value()
+                ):
+                    credentials.cf_clearance = SecretStr(ck_val)
+                    update = True
+
+        if update:
+            logger.info("Updated credentials from fetched cookies")
+            Config.load().save()
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.opt(colors=True).warning(f"Failed to decode user info JSON: {Highlight.apply(text)}")
+            raise FetchFailed("Failed to decode user info") from e
+
+        try:
+            return WplaceUserInfo.model_validate(data)
+        except ValueError as e:
+            logger.opt(colors=True).warning(f"Failed to parse user info: {Highlight.apply(data)}")
+            raise FetchFailed("Failed to parse user info") from e
+
+
+class WplacePage:
+    page: Page
+
+    def __init__(self, context: UserContext, key: str) -> None:
+        self.log = context.log
+        self._key = key
+        self._btn_id = f"btn-{key}"
+        self.has_captcha = False
+        self.captcha_resolved = anyio.Event()
+
+    @classmethod
+    @contextlib.asynccontextmanager
+    async def create(cls, context: UserContext, script_data: list[Any]) -> AsyncGenerator[Self]:
+        self = cls(context, script_data[0])
+
+        self.log.debug(f"Using paint button ID: <c>{escape_tag(self._btn_id)}</>")
+
+        async with context.new_page() as page:
+            page.on("console", self._on_console_log)
+            await page.add_init_script(assets.paint_btn(script_data))
+
+            await page.goto("https://wplace.live/", timeout=60_000, wait_until="domcontentloaded")
+
+            try:
+                await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10_000, state="visible")
+                await page.wait_for_selector(f"#{self._btn_id}", timeout=10_000, state="attached")
+            except _pw_timeout_error() as e:
+                raise ElementNotFound("Required buttons not found on the page, is the injected script broken?") from e
+
+            self.page = page
+            try:
+                yield self
+            finally:
+                del self.page
 
     def _on_console_log(self, msg: ConsoleMessage) -> None:
         if not msg.text.startswith(self._key):

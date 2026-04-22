@@ -16,7 +16,7 @@ from app.log import escape_tag, logger
 from app.schemas import TemplateConfig, WplaceUserInfo
 from app.utils import Highlight, draw_ansi, is_token_expired, logger_wrapper
 from app.wplace.fingerprint import generate_fingerprint
-from app.wplace.page import WplacePage, fetch_user_info
+from app.wplace.page import UserContext, WplacePage
 from app.wplace.purchase import do_purchase
 from app.wplace.resolver import resolve_js
 from app.wplace.template import calc_template_diff
@@ -36,9 +36,16 @@ class Painter:
     def __init__(self, user: UserConfig) -> None:
         self.user = user
         self.log = logger_wrapper(self.user.identifier)
+        self._context: UserContext | None = None
+
+    @property
+    def context(self) -> UserContext:
+        if self._context is None:
+            raise RuntimeError("UserContext is not available outside of the painting loop.")
+        return self._context
 
     async def get_user_info(self) -> WplaceUserInfo:
-        user_info = await fetch_user_info(self.user.credentials)
+        user_info = await self.context.fetch_user_info()
         self.log.debug(f"Fetched user info: {Highlight.apply(user_info)}")
         self.log.info(f"Current droplets: 💧 <y>{user_info.droplets}</>")
         charges = user_info.charges
@@ -135,7 +142,7 @@ class Painter:
                 [*base.offset(*pixels[0][:2]).to_lat_lon()],
             ]
 
-            async with WplacePage.create(self.user, script_data) as page:
+            async with WplacePage.create(self.context, script_data) as page:
                 delay = random.uniform(3, 7)
                 self.log.info(f"Waiting for <y>{delay:.2f}</> seconds before painting...")
                 await anyio.sleep(delay)
@@ -223,24 +230,33 @@ class Painter:
         self.log.info(f"Next paint cycle at <g>{wakeup_at:%Y-%m-%d %H:%M:%S}</>.")
         return wait_secs
 
+    async def _run_once_with_catch(self) -> float | None:
+        try:
+            wait_secs = await self._run_once()
+        except ShouldQuit:
+            self.log.warning("Received shutdown signal, exiting paint loop.", exception=True)
+            return None
+        except httpx.RequestError:
+            wait_secs = random.uniform(0.5, 1.5) * 60
+            self.log.exception("Request error occurred")
+            self.log.info(f"Maybe network issue? Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
+        except Exception:
+            wait_secs = random.uniform(1, 3) * 60
+            self.log.exception("An error occurred")
+            self.log.info(f"Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
+        return wait_secs
+
     async def run(self) -> None:
         while True:
-            try:
-                wait_secs = await self._run_once()
-            except ShouldQuit:
-                self.log.warning("Received shutdown signal, exiting paint loop.", exception=True)
-                break
-            except httpx.RequestError:
-                wait_secs = random.uniform(0.5, 1.5) * 60
-                self.log.exception("Request error occurred")
-                self.log.info(
-                    f"Maybe network issue? Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying..."
-                )
-            except Exception:
-                wait_secs = random.uniform(1, 3) * 60
-                self.log.exception("An error occurred")
-                self.log.info(f"Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
+            async with UserContext.create(self.user) as self._context:
+                while True:
+                    wait_secs = await self._run_once_with_catch()
+                    if wait_secs is None:
+                        return
+                    if wait_secs > 0:
+                        break
 
+            self._context = None
             await anyio.sleep(max(wait_secs, 0))
 
 

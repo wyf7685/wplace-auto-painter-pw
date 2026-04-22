@@ -203,6 +203,7 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
 async def get_persistent_context(
     user_data_dir: Path,
     viewport: ViewportSize | None = None,
+    user_agent: str | None = None,
 ) -> AsyncGenerator[BrowserContext]:
     browser_type, name, channel = await _get_browser_type()
     display = f"{name} ({channel})" if channel else name
@@ -217,6 +218,7 @@ async def get_persistent_context(
         proxy=_proxy_settings(),
         viewport=viewport,
         java_script_enabled=True,
+        user_agent=user_agent,
     )
     async with _hold_browser(), context:
         yield context
