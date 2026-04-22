@@ -284,3 +284,10 @@ async def shutdown_idle_playwright_loop() -> None:
         if state.instance is not None:
             logger.debug(f"Playwright has been idle for {PLAYWRIGHT_IDLE_TIMEOUT}s; shutting down.")
             await shutdown_playwright()
+
+
+@functools.cache
+def pw_timeout_error() -> type[Exception]:
+    from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
+
+    return PlaywrightTimeoutError

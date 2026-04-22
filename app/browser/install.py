@@ -13,7 +13,7 @@ https://github.com/kexue-z/nonebot-plugin-htmlrender/blob/v0.7.0.a.3/nonebot_plu
 import asyncio
 import contextlib
 import os
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Generator
 from urllib.parse import urlparse
 
 from app.log import logger
@@ -69,7 +69,7 @@ async def find_best_mirror(timeout: float = 5.0) -> MirrorSource | None:  # noqa
 
 
 @contextlib.contextmanager
-def ensure_mirror_env(mirror: MirrorSource | None) -> Iterator[None]:
+def ensure_mirror_env(mirror: MirrorSource | None) -> Generator[None]:
     """Context manager to set PLAYWRIGHT_DOWNLOAD_HOST to the mirror URL if given."""
     env_key = "PLAYWRIGHT_DOWNLOAD_HOST"
     had_prev = env_key in os.environ

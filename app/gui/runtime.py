@@ -39,7 +39,7 @@ class TaskRuntime:
             self._stop_event.clear()
             self._thread = threading.Thread(target=self._thread_main, name="anyio-main", daemon=True)
             self._thread.start()
-        self._signals.state_changed.emit("running")
+        self.signals.state_changed.emit("running")
         return True
 
     def stop(self) -> None:
@@ -70,13 +70,13 @@ class TaskRuntime:
             anyio.run(runner)
         except ConfigError as e:
             logger.exception("Configuration error occurred in runtime")
-            self._signals.config_error_occurred.emit(e)
+            self.signals.config_error_occurred.emit(e)
             state = "error"
         except BaseException:
             logger.exception("Background runtime crashed")
             state = "error"
         finally:
             self._stop_event.set()
-            self._signals.state_changed.emit(state)
+            self.signals.state_changed.emit(state)
             with self._lock:
                 self._thread = None

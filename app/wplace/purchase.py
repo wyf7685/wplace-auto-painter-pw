@@ -21,7 +21,6 @@ _SCRAPER_HEADERS = {
 }
 
 
-
 @run_sync
 def _post_purchase(credentials: WplaceCredentials, type: Literal["max_charges", "charges"], amount: int) -> None:  # noqa: A002
     try:
@@ -45,7 +44,7 @@ def _post_purchase(credentials: WplaceCredentials, type: Literal["max_charges", 
         raise FetchFailed("Purchase failed: Unknown error")
 
 
-async def do_purchase(cfg: UserConfig, user_info: WplaceUserInfo) -> bool:
+async def process_purchase(cfg: UserConfig, user_info: WplaceUserInfo) -> bool:
     if cfg.auto_purchase is None:
         return False
 

@@ -3,7 +3,7 @@ import contextlib
 import os
 import shutil
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
 
 from PyInstaller.building.api import COLLECT, EXE, PYZ
@@ -35,7 +35,7 @@ def write_git_commit_hash() -> None:
 
 
 @contextlib.contextmanager
-def ignore_env_path() -> Iterator[None]:
+def ignore_env_path() -> Generator[None]:
     if os.getenv("BUILD_CI") == "true":
         yield
         return

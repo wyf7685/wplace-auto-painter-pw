@@ -17,7 +17,7 @@ from app.schemas import TemplateConfig, WplaceUserInfo
 from app.utils import Highlight, draw_ansi, is_token_expired, logger_wrapper
 from app.wplace.fingerprint import generate_fingerprint
 from app.wplace.page import UserContext, WplacePage
-from app.wplace.purchase import do_purchase
+from app.wplace.purchase import process_purchase
 from app.wplace.resolver import resolve_js
 from app.wplace.template import calc_template_diff
 
@@ -198,7 +198,7 @@ class Painter:
 
         if self.user.auto_purchase is not None:
             self.log.info(f"Checking auto-purchase: {Highlight.apply(self.user.auto_purchase)}")
-            if await do_purchase(self.user, user_info):
+            if await process_purchase(self.user, user_info):
                 self.log.info("Purchase completed, refetching user info...")
                 user_info = await self.get_user_info()
             else:
