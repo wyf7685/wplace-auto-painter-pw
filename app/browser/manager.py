@@ -41,6 +41,7 @@ from .install import install_playwright_browser, setup_playwright_env
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
     from playwright.async_api import Browser, BrowserContext, BrowserType, Playwright, ProxySettings, ViewportSize
 
 # ---------------------------------------------------------------------------
@@ -287,7 +288,7 @@ async def shutdown_idle_playwright_loop() -> None:
 
 
 @functools.cache
-def pw_timeout_error() -> type[Exception]:
+def pw_timeout_error() -> type[PlaywrightTimeoutError]:
     from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 
     return PlaywrightTimeoutError

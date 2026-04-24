@@ -10,6 +10,7 @@ from PyInstaller.building.api import COLLECT, EXE, PYZ
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.building.datastruct import Target
 
+APP_NAME = "wplace-auto-painter"
 ROOT = Path.cwd()
 ICON = ROOT.joinpath("app", "assets", "icon", "gui.ico")
 BUILD_ONEFILE = os.getenv("BUILD_ONEFILE", "true") == "true"
@@ -74,7 +75,7 @@ def build_main_app() -> Target:
         *exe_inputs,
         [],
         exclude_binaries=not BUILD_ONEFILE,
-        name="wplace-auto-painter",
+        name=APP_NAME,
         icon=ICON,
         debug=False,
         bootloader_ignore_signals=False,
@@ -100,7 +101,7 @@ def build_main_app() -> Target:
         strip=False,
         upx=True,
         upx_exclude=[],
-        name="wplace-auto-painter",
+        name=APP_NAME,
     )
 
 
