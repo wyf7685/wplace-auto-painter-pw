@@ -17,14 +17,14 @@ class AppTrayIcon(QSystemTrayIcon):
         self._on_show = on_show
 
         menu = SystemTrayMenu()
-        menu.addAction(show_act := Action(FluentIcon.HOME, tr("tray.open")))
+        menu.addAction(show_act := Action(FluentIcon.APPLICATION, tr("tray.open")))
         show_act.triggered.connect(on_show)
         menu.addAction(start_act := Action(FluentIcon.PLAY, tr("tray.start")))
         start_act.triggered.connect(on_start)
         menu.addAction(stop_act := Action(FluentIcon.PAUSE, tr("tray.stop")))
         stop_act.triggered.connect(on_stop)
         menu.addSeparator()
-        menu.addAction(exit_act := Action(FluentIcon.CLOSE, tr("tray.exit")))
+        menu.addAction(exit_act := Action(FluentIcon.POWER_BUTTON, tr("tray.exit")))
         exit_act.triggered.connect(on_exit)
         self.setContextMenu(menu)
         self.activated.connect(self._on_activated)

@@ -14,4 +14,4 @@ wheels/
 .git_commit_hash
 AGENTS.md
 
-test*.py
+/test*.py
