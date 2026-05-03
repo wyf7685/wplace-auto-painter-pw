@@ -6,6 +6,7 @@ from pathlib import Path
 
 import anyio
 import anyio.to_thread
+import ayafileio
 import cloudscraper
 import httpx
 
@@ -19,15 +20,18 @@ CHUNKS_DIR = DATA_DIR / "js_chunks"
 CHUNK_ETAG_FILE = CHUNKS_DIR / "etag.json"
 
 
-def load_chunk_etags() -> dict[str, str]:
+async def load_chunk_etags() -> dict[str, str]:
     if not CHUNK_ETAG_FILE.exists():
         return {}
 
-    return json.loads(CHUNK_ETAG_FILE.read_text(encoding="utf-8"))
+    async with ayafileio.open(CHUNK_ETAG_FILE, "r", encoding="utf-8") as file:
+        content = await file.read()
+    return json.loads(content)
 
 
-def save_chunk_etags(etags: dict[str, str]) -> None:
-    CHUNK_ETAG_FILE.write_text(json.dumps(etags), encoding="utf-8")
+async def save_chunk_etags(etags: dict[str, str]) -> None:
+    async with ayafileio.open(CHUNK_ETAG_FILE, "w", encoding="utf-8") as file:
+        await file.write(json.dumps(etags))
 
 
 class Chunks:
@@ -73,7 +77,7 @@ async def prepare_chunks() -> Chunks:
 
     CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
     chunks = {f"{match.group('path')}.js" for match in PATTERN_CHUNK_NAME.finditer(resp.text)}
-    etags = load_chunk_etags()
+    etags = await load_chunk_etags()
     for chunk_name in set(etags.keys()) - chunks:
         # Remove obsolete chunks
         del etags[chunk_name]
@@ -83,15 +87,16 @@ async def prepare_chunks() -> Chunks:
     downloaded = 0
 
     @with_retry(httpx.RequestError, retries=3, delay=1)
+    @with_semaphore(16)
     async def download_js_chunk(chunk_name: str) -> None:
         nonlocal downloaded
 
-        file = CHUNKS_DIR / chunk_name
-        file.parent.mkdir(parents=True, exist_ok=True)
+        chunk_path = CHUNKS_DIR / chunk_name
+        chunk_path.parent.mkdir(parents=True, exist_ok=True)
 
         headers = (
             {"If-None-Match": etags[chunk_name]}
-            if chunk_name in etags and file.exists() and file.stat().st_size > 0
+            if chunk_name in etags and chunk_path.exists() and chunk_path.stat().st_size > 0
             else {}
         )
         url = f"https://wplace.live/_app/immutable/{chunk_name}"
@@ -103,7 +108,8 @@ async def prepare_chunks() -> Chunks:
         if etag := response.headers.get("ETag"):
             etags[chunk_name] = etag
         logger.opt(colors=True).debug(f"Downloaded JS chunk: <c>{escape_tag(chunk_name)}</>")
-        file.write_text(response.text, encoding="utf-8")
+        async with ayafileio.open(chunk_path, "w", encoding="utf-8") as file:
+            await file.write(response.text)
         downloaded += 1
 
     async with (
@@ -113,7 +119,7 @@ async def prepare_chunks() -> Chunks:
         for chunk_name in chunks:
             tg.start_soon(download_js_chunk, chunk_name)
 
-    save_chunk_etags(etags)
+    await save_chunk_etags(etags)
     logger.opt(colors=True).debug(
         f"Prepared JS chunks, <y>{downloaded}</> downloaded, <y>{len(chunks) - downloaded}</> cached"
     )
