@@ -67,17 +67,16 @@ class WplacePage:
         if not msg.text.startswith(self._key):
             return
 
-        topic, message = msg.text.removeprefix(self._key).lstrip().split(" ", maxsplit=1)
+        topic, message = map(str.strip, msg.text.removeprefix(self._key).lstrip().split(" ", maxsplit=1))
         match topic:
             case "version":
                 self.log.info(f"WPlace Version: <y>{escape_tag(message)}</>")
-            case "submit" if message.startswith("success"):
+            case "submit-success":
                 self.log.success("Paint submit <g>success</>")
-            case "submit" if message.startswith("error"):
-                error_msg = message.removeprefix("error").lstrip()
-                self.log.error(f"Paint submit <r>error</>: <r>{escape_tag(error_msg)}</>")
+            case "submit-error":
+                self.log.error(f"Paint submit <r>error</>: <r>{escape_tag(message)}</>")
             case "paint":
-                data = message.strip()
+                data = message
                 with contextlib.suppress(Exception):
                     data = json.loads(data)
                 self.log.debug(f"Paint Response: {Highlight.apply(data)}")
@@ -90,6 +89,9 @@ class WplacePage:
                         self.log.info(f"Painted pixel count: <g>{painted}</>")
                         self.has_captcha = False
                         self.captcha_resolved.set()
+                    case str() if "html" in data:
+                        self.log.warning("Received HTML response during paint submit, assuming captcha challenge")
+                        self.has_captcha = True
 
     async def find_paint_button(self) -> ElementHandle:
         paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)
