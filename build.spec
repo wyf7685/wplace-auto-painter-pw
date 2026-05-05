@@ -12,7 +12,9 @@ from PyInstaller.building.datastruct import Target
 
 APP_NAME = "wplace-auto-painter"
 ROOT = Path.cwd()
-ICON = ROOT.joinpath("app", "assets", "icon", "gui.ico")
+ENTRYPOINT = ROOT.joinpath("app", "__main__.py")
+ASSETS = ROOT.joinpath("app", "assets")
+ICON = ASSETS.joinpath("icon", "gui.ico")
 BUILD_ONEFILE = os.getenv("BUILD_ONEFILE", "true") == "true"
 
 
@@ -29,7 +31,7 @@ def write_git_commit_hash() -> None:
     )
     commit_hash = p.stdout.strip()
 
-    path = ROOT.joinpath("app", "assets", ".git_commit_hash")
+    path = ASSETS.joinpath(".git_commit_hash")
     existing_hash = path.read_text("utf-8").strip() if path.is_file() else None
     if existing_hash != commit_hash:
         path.write_text(commit_hash, encoding="utf-8")
@@ -54,10 +56,10 @@ def build_main_app() -> Target:
 
     with ignore_env_path():
         a = Analysis(
-            scripts=["main.py"],
-            pathex=[],
+            scripts=[ENTRYPOINT],
+            pathex=[ROOT],
             binaries=[],
-            datas=[("app/assets", "app/assets")],
+            datas=[(ASSETS, ASSETS.relative_to(ROOT))],
             hiddenimports=[],
             hookspath=[],
             hooksconfig={},
