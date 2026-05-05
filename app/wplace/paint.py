@@ -2,6 +2,7 @@ import contextlib
 import random
 import uuid
 from collections.abc import AsyncGenerator, Iterable
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from typing import NamedTuple
 
@@ -37,6 +38,7 @@ class Painter:
         self.user = user
         self.log = logger_wrapper(self.user.identifier)
         self._context: UserContext | None = None
+        self._paint_charge_limit = ContextVar[float]("_paint_charge_limit", default=float("inf"))
 
     @property
     def context(self) -> UserContext:
@@ -84,7 +86,8 @@ class Painter:
                 if entry.count > 0 and entry.name in user_info.own_colors and not COLORS_LOCK[entry.name].locked():
                     self.log.info(f"Select color: <g>{entry.name}</> with <y>{entry.count}</> pixels to paint.")
                     entries.append(entry)
-                if sum(e.count for e in entries) >= user_info.charges.count * 0.9:
+                total = sum(e.count for e in entries)
+                if total >= user_info.charges.count * 0.9 or total >= self._paint_charge_limit.get():
                     break
             return entries or None
 
@@ -108,9 +111,9 @@ class Painter:
         self.log.info(f"Found <y>{len(groups)}</> groups of adjacent pixels to paint.")
         colors_rank = self.user.preferred_colors_rank()
         pixels = sorted((Pixel(*p) for g in groups for p in g), key=lambda p: colors_rank[p[2]])
-        pixels_to_paint = min(charges, len(pixels))
+        pixels_to_paint = int(min(charges, len(pixels), self._paint_charge_limit.get()))
         if self.user.max_paint_charges is not None:
-            pixels_to_paint = min(pixels_to_paint, self.user.max_paint_charges)
+            pixels_to_paint = min(pixels_to_paint, int(self.user.max_paint_charges * random.uniform(0.95, 1.05)))
         if pixels_to_paint <= 0:
             self.log.warning("Not enough pixels to paint.")
             return None
@@ -188,13 +191,16 @@ class Painter:
             user_info = await self.get_user_info()
 
             wait_secs = min(
+                60 * 60 * 4 + random.uniform(-10, 10) * 60,  # 4hrs +/- 10min
                 user_info.charges.remaining_secs() * random.uniform(0.85, 0.95),
-                60 * 60 * 4 + random.uniform(-10, 10) * 60,
             )
         else:
             self.log.warning("Not enough charges to paint pixels.")
             self.log.warning(f"Minimum required charges: <y>{self.user.min_paint_charges}</>")
-            wait_secs = max(600.0, user_info.charges.remaining_secs() - random.uniform(10, 20) * 60)
+            wait_secs = max(
+                60 * 10 + random.uniform(-2, 2) * 60,  # 10min +/- 2min
+                user_info.charges.remaining_secs() - random.uniform(10, 20) * 60,
+            )
 
         if self.user.auto_purchase is not None:
             self.log.info(f"Checking auto-purchase: {Highlight.apply(self.user.auto_purchase)}")
@@ -205,8 +211,8 @@ class Painter:
                 self.log.info("No purchase made.")
 
             wait_secs = min(
+                60 * 60 * 4 + random.uniform(-10, 10) * 60,  # 4hrs +/- 10min
                 user_info.charges.remaining_secs() * random.uniform(0.85, 0.95),
-                60 * 60 * 4 + random.uniform(-10, 10) * 60,
             )
 
         if user_info.charges.count >= self.user.min_paint_charges:
@@ -237,11 +243,11 @@ class Painter:
             self.log.warning("Received shutdown signal, exiting paint loop.", exception=True)
             return None
         except httpx.RequestError:
-            wait_secs = random.uniform(0.5, 1.5) * 60
+            wait_secs = random.uniform(0.5, 1.5) * 60  # 0.5-1.5 minutes
             self.log.exception("Request error occurred")
             self.log.info(f"Maybe network issue? Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
         except Exception:
-            wait_secs = random.uniform(1, 3) * 60
+            wait_secs = random.uniform(1, 3) * 60  # 1-3 minutes
             self.log.exception("An error occurred")
             self.log.info(f"Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
         return wait_secs
@@ -249,6 +255,12 @@ class Painter:
     async def run(self) -> None:
         while True:
             async with UserContext.create(self.user) as self._context:
+                with self._paint_charge_limit.set(random.uniform(5, 15)):
+                    wait_secs = await self._run_once_with_catch()
+                    if wait_secs is None:
+                        return
+                await anyio.sleep(random.uniform(0.5, 2.5))
+
                 while True:
                     wait_secs = await self._run_once_with_catch()
                     if wait_secs is None:
