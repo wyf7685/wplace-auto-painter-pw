@@ -63,9 +63,8 @@ class Chunks:
 PATTERN_CHUNK_NAME = re.compile(r"_app/immutable/(?P<path>.+?)\.js")
 
 
-async def prepare_chunks() -> Chunks:
+async def find_chunk_names() -> set[str]:
     logger.debug("Preparing JS chunks...")
-
     resp = await anyio.to_thread.run_sync(
         functools.partial(
             cloudscraper.create_scraper().get,
@@ -74,15 +73,18 @@ async def prepare_chunks() -> Chunks:
         )
     )
     resp.raise_for_status()
-
-    CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
     chunks = {f"{match.group('path')}.js" for match in PATTERN_CHUNK_NAME.finditer(resp.text)}
+    logger.opt(colors=True).debug(f"Found <y>{len(chunks)}</> JS chunks")
+    return chunks
+
+
+async def prepare_chunks(chunk_names: set[str]) -> Chunks:
+    CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
     etags = await load_chunk_etags()
-    for chunk_name in set(etags.keys()) - chunks:
+    for chunk_name in set(etags.keys()) - chunk_names:
         # Remove obsolete chunks
         del etags[chunk_name]
         CHUNKS_DIR.joinpath(chunk_name).unlink(missing_ok=True)
-    logger.opt(colors=True).debug(f"Found <y>{len(chunks)}</> JS chunks")
 
     downloaded = 0
 
@@ -116,12 +118,12 @@ async def prepare_chunks() -> Chunks:
         httpx.AsyncClient(proxy=Config.load().proxy, timeout=30) as client,
         anyio.create_task_group() as tg,
     ):
-        for chunk_name in chunks:
+        for chunk_name in chunk_names:
             tg.start_soon(download_js_chunk, chunk_name)
 
     await save_chunk_etags(etags)
     logger.opt(colors=True).debug(
-        f"Prepared JS chunks, <y>{downloaded}</> downloaded, <y>{len(chunks) - downloaded}</> cached"
+        f"Prepared JS chunks, <y>{downloaded}</> downloaded, <y>{len(chunk_names) - downloaded}</> cached"
     )
 
     return Chunks(CHUNKS_DIR)
@@ -234,8 +236,18 @@ def find_patch_logs(chunks: Chunks) -> tuple[str, str]:
     return export_name, chunks.url(chunk_path)
 
 
+_resolve_cache: tuple[set[str], list[tuple[str, str]]] | None = None
+_resolvers = find_paint_fn, find_worker_fn, find_season_num, find_patch_logs
+
+
 @with_semaphore(1)
 async def resolve_js() -> list[tuple[str, str]]:
-    CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
-    chunks = await prepare_chunks()
-    return [fn(chunks) for fn in (find_paint_fn, find_worker_fn, find_season_num, find_patch_logs)]
+    global _resolve_cache
+    chunk_names = await find_chunk_names()
+    if _resolve_cache is not None and _resolve_cache[0] == chunk_names:
+        logger.debug("Using cached JS resolution")
+        return _resolve_cache[1]
+    chunks = await prepare_chunks(chunk_names)
+    result = [fn(chunks) for fn in _resolvers]
+    _resolve_cache = (chunk_names, result)
+    return result
