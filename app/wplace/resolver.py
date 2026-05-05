@@ -102,17 +102,17 @@ async def prepare_chunks(chunk_names: set[str]) -> Chunks:
             else {}
         )
         url = f"https://wplace.live/_app/immutable/{chunk_name}"
-        response = await client.get(url, headers=headers)
-        if response.status_code == 304:
-            return  # Not modified
-
-        response.raise_for_status()
-        if etag := response.headers.get("ETag"):
-            etags[chunk_name] = etag
-        logger.opt(colors=True).debug(f"Downloaded JS chunk: <c>{escape_tag(chunk_name)}</>")
-        async with ayafileio.open(chunk_path, "w", encoding="utf-8") as file:
-            await file.write(response.text)
-        downloaded += 1
+        async with client.stream("GET", url, headers=headers) as response:
+            if response.status_code == 304:
+                return  # Not modified
+            response.raise_for_status()
+            if etag := response.headers.get("ETag"):
+                etags[chunk_name] = etag
+            logger.opt(colors=True).debug(f"Downloading JS chunk: <i><c>{escape_tag(chunk_name)}</></>")
+            async with ayafileio.open(chunk_path, "wb") as file:
+                async for chunk in response.aiter_bytes(1024 * 1024):
+                    await file.write(chunk)
+            downloaded += 1
 
     async with (
         httpx.AsyncClient(proxy=Config.load().proxy, timeout=30) as client,
