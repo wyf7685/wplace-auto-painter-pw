@@ -39,6 +39,7 @@ class Painter:
         self.log = logger_wrapper(self.user.identifier)
         self._context: UserContext | None = None
         self._paint_charge_limit = ContextVar[float]("_paint_charge_limit", default=float("inf"))
+        self._user_info_cache: tuple[WplaceUserInfo, datetime] | None = None
 
     @property
     def context(self) -> UserContext:
@@ -47,12 +48,21 @@ class Painter:
         return self._context
 
     async def get_user_info(self) -> WplaceUserInfo:
+        if self._user_info_cache is not None:
+            user_info, fetched_at = self._user_info_cache
+            if datetime.now() - fetched_at < timedelta(seconds=30):
+                self.log.debug(f"Using cached user info: {Highlight.apply(user_info)}")
+                return user_info
+
         user_info = await self.context.fetch_user_info()
+        fetched_at = datetime.now()
+        self._user_info_cache = (user_info, fetched_at)
         self.log.debug(f"Fetched user info: {Highlight.apply(user_info)}")
+
         self.log.info(f"Current droplets: 💧 <y>{user_info.droplets}</>")
         charges = user_info.charges
         remaining_secs = charges.remaining_secs()
-        recover_time = (datetime.now() + timedelta(seconds=remaining_secs)).strftime("%Y-%m-%d %H:%M:%S")
+        recover_time = (fetched_at + timedelta(seconds=remaining_secs)).strftime("%Y-%m-%d %H:%M:%S")
         self.log.info(f"Current charge: 🎨 <y>{charges.count:.2f}</>/<y>{charges.max}</> ")
         self.log.info(f"Remaining: ⏱️ <y>{remaining_secs:.2f}</>s, recovers at <g>{recover_time}</>")
         return user_info
