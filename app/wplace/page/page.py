@@ -75,6 +75,11 @@ class WplacePage:
                 self.log.success("Paint submit <g>success</>")
             case "submit-error":
                 self.log.error(f"Paint submit <r>error</>: <r>{escape_tag(message)}</>")
+            case "submit-retry-error":
+                self.log.error(f"Paint submit <r>retry error</>: <r>{escape_tag(message)}</>")
+                if self.has_captcha and not self.captcha_resolved.is_set():
+                    self.log.warning("Assuming captcha is unsolvable and proceeding anyway")
+                    self.captcha_resolved.set()
             case "paint":
                 data = message
                 with contextlib.suppress(Exception):
