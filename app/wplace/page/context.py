@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from app.browser import get_browser, get_persistent_context
 from app.config import Config
 from app.const import APP_NAME, USER_CONTEXT_DIR, assets
-from app.exception import FetchFailed
+from app.exception import FetchFailed, TokenExpired
 from app.log import logger
 from app.schemas import UserConfig, WplaceCredentials, WplaceUserInfo
 from app.utils import Highlight, logger_wrapper
@@ -159,8 +159,14 @@ class UserContext:
             logger.opt(colors=True).warning(f"Failed to decode user info JSON: {Highlight.apply(text)}")
             raise FetchFailed("Failed to decode user info") from e
 
+        logger.opt(colors=True).debug(f"Fetched user info: {Highlight.apply(data)}")
+
+        if isinstance(data, dict) and data.get("status") == "401":  # {'error': 'Unauthorized', 'status': 401}
+            logger.opt(colors=True).warning("Unauthorized response when fetching user info")
+            raise TokenExpired("Authentication token has expired")
+
         try:
             return WplaceUserInfo.model_validate(data)
         except ValueError as e:
-            logger.opt(colors=True).warning(f"Failed to parse user info: {Highlight.apply(data)}")
+            logger.opt(colors=True).warning("Failed to parse user info")
             raise FetchFailed("Failed to parse user info") from e
