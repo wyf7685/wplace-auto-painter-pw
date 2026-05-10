@@ -3,7 +3,7 @@ import functools
 import hashlib
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Self
 
 import anyio
 import anyio.to_thread
@@ -20,9 +20,8 @@ from app.utils import Highlight, logger_wrapper
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from playwright.async_api import BrowserContext, ConsoleMessage, Page
-else:
-    ConsoleMessage = Any
+    from playwright.async_api import BrowserContext, Page
+
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
