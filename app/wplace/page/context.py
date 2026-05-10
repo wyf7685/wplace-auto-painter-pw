@@ -159,12 +159,17 @@ class UserContext:
             logger.opt(colors=True).warning(f"Failed to decode user info JSON: {Highlight.apply(text)}")
             raise FetchFailed("Failed to decode user info") from e
 
+        if isinstance(data, dict):
+            if data.get("status") == "401":  # {'error': 'Unauthorized', 'status': 401}
+                logger.error("Unauthorized response when fetching user info")
+                raise TokenExpired("Authentication token has expired")
+            if data.get("error"):
+                logger.opt(colors=True).error(
+                    f"Unrecognized error response when fetching user info: {Highlight.apply(data)}"
+                )
+                raise TokenExpired(f"Unrecognized error: {data!r}")
+
         logger.opt(colors=True).debug(f"Fetched user info: {Highlight.apply(data)}")
-
-        if isinstance(data, dict) and data.get("status") == "401":  # {'error': 'Unauthorized', 'status': 401}
-            logger.opt(colors=True).warning("Unauthorized response when fetching user info")
-            raise TokenExpired("Authentication token has expired")
-
         try:
             return WplaceUserInfo.model_validate(data)
         except ValueError as e:
