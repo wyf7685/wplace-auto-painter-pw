@@ -10,8 +10,8 @@ WPlace Auto Painter — an automated pixel painter for WPlace.live (collaborativ
 
 ```bash
 uv sync                          # Install dependencies
-uv run main.py                   # Run with GUI
-uv run main.py --no-gui          # Run headless
+uv run python -m app             # Run with GUI
+uv run python -m app --no-gui    # Run headless
 uv run ruff check --fix          # Lint (with auto-fix)
 uv run ruff format               # Format
 uv run pyinstaller build.spec    # Build executable
@@ -20,7 +20,7 @@ uv run prek install              # Install pre-commit hooks (ruff + basedpyright
 
 ## Architecture
 
-- **Entry point**: `main.py` — parses `--no-gui` flag, launches GUI controller or runs `run_painter()` directly
+- **Entry point**: `app/__main__.py` — parses `--no-gui` flag, launches GUI controller or runs `run_painter()` directly
 - **`app/wplace/`** — Core painting logic
   - `paint.py`: `Painter` class — main loop: diff template vs canvas, paint pixels with randomized delays, sleep until charges regenerate
   - `template.py`: Template diff calculation against current canvas state
