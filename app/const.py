@@ -21,8 +21,8 @@ ASSETS_DIR = Path(__file__).parent.resolve() / "assets"
 
 
 class Assets:
-    icon: ClassVar[Path] = ASSETS_DIR.joinpath("icon", "gui.ico")
-    locales: ClassVar[Path] = ASSETS_DIR.joinpath("locales")
+    icon: ClassVar[Path] = ASSETS_DIR / "icon" / "gui.ico"
+    locales: ClassVar[Path] = ASSETS_DIR / "locales"
 
     def __init__(self) -> NoReturn:
         raise NotImplementedError
@@ -44,7 +44,7 @@ class Assets:
     def page_init(self) -> str:
         return self._read("js", "page_init.js")
 
-    def paint_btn(self, script_data: list[str]) -> str:
+    def paint_btn(self, script_data: list[object]) -> str:
         return self._read("js", "paint_btn.js").replace(
             "{{script_data}}", base64.b64encode(json.dumps(script_data).encode()).decode()
         )

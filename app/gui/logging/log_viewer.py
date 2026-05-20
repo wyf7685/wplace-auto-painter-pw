@@ -1,6 +1,4 @@
-from typing import override
-
-from PySide6.QtGui import QCloseEvent, QFont, QTextCursor
+from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CheckBox, PushButton, TextEdit
 
@@ -11,14 +9,12 @@ from app.utils.ansi_qt import LOG_BG, iter_segments
 class AnsiLogViewer(QWidget):
     """QTextEdit-based ANSI log viewer used by the integrated GUI."""
 
-    def __init__(self, closable: bool = False) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._closable = closable
 
         self._text = TextEdit()
         self._text.setReadOnly(True)
-        if doc := self._text.document():
-            doc.setMaximumBlockCount(5000)
+        self._text.document().setMaximumBlockCount(5000)
         self._text.setStyleSheet(f"QTextEdit {{ background-color: {LOG_BG.name()}; }}")
         font = QFont("Consolas")
         font.setPointSize(9)
@@ -56,11 +52,3 @@ class AnsiLogViewer(QWidget):
     def clear(self) -> None:
         self._text.clear()
         self._first_line = True
-
-    @override
-    def closeEvent(self, event: QCloseEvent) -> None:
-        if self._closable:
-            super().closeEvent(event)
-            return
-        event.ignore()
-        self.hide()

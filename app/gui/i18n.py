@@ -1,10 +1,11 @@
 import json
+from collections.abc import Mapping
 from typing import ClassVar, Final, Literal
 
 from app.const import assets
 
 type LanguageCode = Literal["zh_CN", "en_US"]
-type Translations = dict[str, str]
+type Translations = Mapping[str, str]
 
 _DEFAULT_LANGUAGE: Final[LanguageCode] = "zh_CN"
 _SUPPORTED_LANGUAGES: Final[tuple[LanguageCode, ...]] = ("zh_CN", "en_US")
@@ -28,18 +29,20 @@ def _load_language(language: LanguageCode) -> Translations:
 
 class Lang:
     _translations: ClassVar[dict[LanguageCode, Translations]] = {}
+    _current_language: LanguageCode = _DEFAULT_LANGUAGE
 
     def __init__(self) -> None:
-        self._current_language: LanguageCode = _DEFAULT_LANGUAGE
+        raise NotImplementedError
 
     @classmethod
     def _ensure_loaded(cls, language: LanguageCode) -> None:
         if language not in cls._translations:
             cls._translations[language] = _load_language(language)
 
-    def _get_translations(self, language: LanguageCode) -> Translations:
-        self._ensure_loaded(language)
-        return self._translations.get(language, {})
+    @classmethod
+    def _get_translations(cls, language: LanguageCode) -> Translations:
+        cls._ensure_loaded(language)
+        return cls._translations.get(language, {})
 
     def _ensure_key(self, key: str) -> str:
         return (
@@ -48,6 +51,7 @@ class Lang:
             or key
         )
 
+    @property
     def supported_languages(self) -> tuple[LanguageCode, ...]:
         return _SUPPORTED_LANGUAGES
 
@@ -55,10 +59,7 @@ class Lang:
         return self._current_language
 
     def set_language(self, language: str | None) -> LanguageCode:
-        target: LanguageCode = _DEFAULT_LANGUAGE
-        if language in self.supported_languages():
-            target = language
-
+        target = language if language in self.supported_languages else _DEFAULT_LANGUAGE
         self._ensure_loaded(target)
         self._current_language = target
         return self._current_language
@@ -74,5 +75,5 @@ class Lang:
             return text
 
 
-lang = Lang()
+lang = object.__new__(Lang)
 tr = lang.translate
