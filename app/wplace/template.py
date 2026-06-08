@@ -43,8 +43,8 @@ async def download_preview(
     with PerfLog.for_action("creating image") as perf:
         image = await bot7685_ext.wplace.compose_tiles(
             [*tiles.items()],
-            coord1.tuple(),
-            coord2.tuple(),
+            coord1.as_tuple(),
+            coord2.as_tuple(),
             parse_rgb_str(background) if background else None,
         )
     logger.info(f"Created image in <y>{perf.elapsed:.2f}</>s")
