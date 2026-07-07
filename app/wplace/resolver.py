@@ -158,7 +158,9 @@ def find_paint_fn(chunks: Chunks) -> tuple[str, str]:
     return source_name, chunks.url(source_chunk_path)
 
 
-PATTERN_WORKER = re.compile(r"function (?P<name>[a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const .+=Math.random\(\)")
+PATTERN_WORKER = re.compile(
+    r"function (?P<name>[a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const [a-zA-Z0-9_$]+=Math.random\(\)"
+)
 
 
 def find_worker_fn(chunks: Chunks) -> tuple[str, str]:
