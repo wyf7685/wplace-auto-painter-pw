@@ -158,28 +158,19 @@ def find_paint_fn(chunks: Chunks) -> tuple[str, str]:
     return source_name, chunks.url(source_chunk_path)
 
 
-PATTERN_WORKER = re.compile(
-    r"function (?P<name>[a-zA-Z0-9_$]+)\([a-zA-Z0-9_$]+\)\{const [a-zA-Z0-9_$]+=Math.random\(\)"
+PATTERN_WORKER_FN = re.compile(
+    r"function (?P<name>[a-zA-Z0-9_$]+)\((?P<arg>[a-zA-Z0-9_$]+)\)\s*\{"
+    r"return [a-zA-Z0-9_$]+\(\{type:\s*(?P<quote>['\"])paintPixels(?P=quote),data:\s*(?P=arg)\}\)\}"
 )
 
 
 def find_worker_fn(chunks: Chunks) -> tuple[str, str]:
     for chunk_path, content in chunks.iter_chunks():  # noqa: B007
-        if ("navigator.serviceWorker.controller" in content) and (match := PATTERN_WORKER.search(content)):
-            func_name = match.group("name")
+        if match := PATTERN_WORKER_FN.search(content):
+            wrapper_name = match.group("name")
             break
     else:
-        raise ResolveFailed("service worker function not found")
-
-    pattern = (
-        r"function (?P<name>[a-zA-Z0-9_$]+)\((?P<arg>[a-zA-Z0-9_$]+)\)\s*\{return "
-        + re.escape(func_name)
-        + r"\(\{type:\s*(?P<quote>['\"])paintPixels(?P=quote),data:\s*(?P=arg)\}\)\}"
-    )
-    match = re.search(pattern, content)
-    if match is None:
-        raise ResolveFailed("wrapper function not found")
-    wrapper_name = match.group("name")
+        raise ResolveFailed("service worker wrapper not found")
 
     pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"(?:\s+as\s+(?P<name>[a-zA-Z0-9_$]+))?[^}]*?\};"
     match = re.search(pattern, content)
