@@ -114,14 +114,18 @@ async def prepare_chunks(chunk_names: set[str]) -> Chunks:
                     await file.write(chunk)
             downloaded += 1
 
-    async with (
-        httpx.AsyncClient(proxy=Config.load().proxy, timeout=30) as client,
-        anyio.create_task_group() as tg,
-    ):
-        for chunk_name in chunk_names:
-            tg.start_soon(download_js_chunk, chunk_name)
+    try:
+        async with (
+            httpx.AsyncClient(proxy=Config.load().proxy, timeout=30) as client,
+            anyio.create_task_group() as tg,
+        ):
+            for chunk_name in chunk_names:
+                tg.start_soon(download_js_chunk, chunk_name)
+    finally:
+        # Persist whatever completed: losing the whole ledger to one failed chunk
+        # would force a full re-download on the next cycle.
+        await save_chunk_etags(etags)
 
-    await save_chunk_etags(etags)
     logger.opt(colors=True).debug(
         f"Prepared JS chunks, <y>{downloaded}</> downloaded, <y>{len(chunk_names) - downloaded}</> cached"
     )
