@@ -12,7 +12,7 @@ from PyInstaller.building.datastruct import Target
 
 APP_NAME = "wplace-auto-painter"
 ROOT = Path.cwd()
-ENTRYPOINT = ROOT.joinpath("app", "__main__.py")
+ENTRYPOINT = ROOT.joinpath("main.py")
 ASSETS = ROOT.joinpath("app", "assets")
 ICON = ASSETS.joinpath("icon", "gui.ico")
 BUILD_ONEFILE = os.getenv("BUILD_ONEFILE", "true") == "true"
