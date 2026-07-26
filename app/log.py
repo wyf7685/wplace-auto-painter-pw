@@ -40,6 +40,23 @@ class LoguruHandler(logging.Handler):  # pragma: no cover
 
 
 log_format = "<g>{time:HH:mm:ss}</g> [<lvl>{level}</lvl>] <c><u>{name}</u></c> | {message}"
+
+# Everything `log_format` renders before `{message}`, with loguru's color tags
+# stripped (loguru removes them before the text reaches the terminal). The
+# `{time:...}` spec is loguru's own, not `str.format`'s, so it is replaced by a
+# sample rendering of the same width rather than being formatted.
+_LOG_PREFIX_TEMPLATE = re.sub(r"\{time:[^}]*\}", "00:00:00", re.sub(r"</?[^<>\s]*>", "", log_format)).split(
+    "{message}"
+)[0]
+
+
+def log_prefix_width(record_name: str, level: str, logger_name: str = "") -> int:
+    """Terminal columns consumed by the log prefix, used to size ANSI previews."""
+    prefix = _LOG_PREFIX_TEMPLATE.format(level=level, name=record_name)
+    # `LoggerWrapper` prepends "<logger_name> | " to the message body.
+    return len(prefix) + (len(logger_name) + len(" | ") if logger_name else 0)
+
+
 logger.remove()
 
 
