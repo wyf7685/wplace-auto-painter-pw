@@ -100,8 +100,11 @@ class UserConfig(BaseModel):
     def validate_charges(self) -> UserConfig:
         if self.min_paint_charges <= 0:
             raise ValueError("min_paint_charges must be > 0")
-        if self.max_paint_charges is not None and self.max_paint_charges <= 0:
-            raise ValueError("max_paint_charges must be > 0")
+        if self.max_paint_charges is not None:
+            if self.max_paint_charges <= 0:
+                raise ValueError("max_paint_charges must be > 0")
+            if self.max_paint_charges < self.min_paint_charges:
+                raise ValueError("max_paint_charges must be >= min_paint_charges")
         return self
 
     def preferred_colors_rank(self) -> list[int]:
