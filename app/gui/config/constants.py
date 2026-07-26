@@ -1,5 +1,8 @@
-from bot7685_ext.wplace.consts import ALL_COLORS
+from typing import get_args
 
-BROWSER_TYPES = ["chromium", "chrome", "msedge", "firefox", "webkit"]
-LOG_LEVELS = ["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-COLOR_RGB_MAP = dict(ALL_COLORS)
+from app.config import Config
+
+# Derived from the config model so the dropdowns can never drift from validation.
+BROWSER_TYPES = list(get_args(Config.model_fields["browser"].annotation))
+LOG_LEVELS = list(get_args(Config.model_fields["log_level"].annotation))
+LANGUAGE_CODES = list(get_args(Config.model_fields["language"].annotation))

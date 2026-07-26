@@ -26,7 +26,7 @@ from app.const import CONFIG_FILE, TEMPLATES_DIR
 from app.gui.i18n import lang, tr
 from app.schemas import WplacePixelCoords
 
-from .constants import BROWSER_TYPES, LOG_LEVELS
+from .constants import BROWSER_TYPES, LANGUAGE_CODES, LOG_LEVELS
 from .user_detail_card import UserDetailCard
 from .user_draft import default_user, normalize_user
 
@@ -55,9 +55,9 @@ class ConfigEditorWidget(QWidget):
         self.log_level_cb.addItems(LOG_LEVELS)
 
         self.language_cb = ComboBox()
-        self._language_codes = ["zh_CN", "en_US"]
+        self._language_codes = LANGUAGE_CODES
         self._language_index = {code: index for index, code in enumerate(self._language_codes)}
-        self.language_cb.addItems([tr("language.zh_cn"), tr("language.en_us")])
+        self.language_cb.addItems([tr(f"language.{code.lower()}") for code in self._language_codes])
 
         self.proxy_edit = LineEdit()
         self.proxy_edit.setPlaceholderText(tr("config.placeholder.proxy"))

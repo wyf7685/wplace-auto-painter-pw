@@ -1,6 +1,6 @@
 import json
 from collections.abc import Mapping
-from typing import ClassVar, Final, Literal
+from typing import ClassVar, Final, Literal, get_args
 
 from app.const import assets
 
@@ -8,7 +8,7 @@ type LanguageCode = Literal["zh_CN", "en_US"]
 type Translations = Mapping[str, str]
 
 _DEFAULT_LANGUAGE: Final[LanguageCode] = "zh_CN"
-_SUPPORTED_LANGUAGES: Final[tuple[LanguageCode, ...]] = ("zh_CN", "en_US")
+_SUPPORTED_LANGUAGES: Final[tuple[LanguageCode, ...]] = get_args(LanguageCode.__value__)
 
 
 def _load_language(language: LanguageCode) -> Translations:
