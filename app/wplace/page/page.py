@@ -24,6 +24,16 @@ else:
 
 PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
 
+# Map zoom level the injected script writes into `localStorage.location`. Passed
+# through `script_data`, so this stays the single source of truth for both sides.
+CANVAS_ZOOM = 15
+
+# CSS pixels covered by one canvas pixel at `CANVAS_ZOOM`, measured against the
+# live site. Only valid for `CANVAS_ZOOM`: every mouse offset below is scaled by
+# it, so a stale value silently paints at the wrong coordinates. Re-measure if
+# `CANVAS_ZOOM` changes or wplace alters its map projection.
+CANVAS_PX_PER_PIXEL = 7.65
+
 
 class WplacePage:
     page: Page
@@ -141,8 +151,8 @@ class WplacePage:
         center_x, center_y = self.current_center_px
         start_x = center_x + random.uniform(-2.5, 2.5)
         start_y = center_y + random.uniform(-2.5, 2.5)
-        target_x = center_x - dx * 7.65
-        target_y = center_y - dy * 7.65
+        target_x = center_x - dx * CANVAS_PX_PER_PIXEL
+        target_y = center_y - dy * CANVAS_PX_PER_PIXEL
         vec_x = target_x - start_x
         vec_y = target_y - start_y
         distance = math.hypot(vec_x, vec_y)
