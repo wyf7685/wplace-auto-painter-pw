@@ -9,12 +9,39 @@ on:
       - "build.spec"
       - "app/**"
       - "main.py"
+      - "pyproject.toml"
+      - "ruff.toml"
       - "uv.lock"
   workflow_dispatch:
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Ruff check
+        run: uv run ruff check --output-format=github
+
+      - name: Ruff format check
+        run: uv run ruff format --check
+
+      - name: Type check
+        run: uv run basedpyright
+
   build:
     name: Build on ${{ matrix.platform.os }}
+    needs: lint
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: false
