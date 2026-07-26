@@ -15,12 +15,10 @@ async def run_painter() -> None:
 
         await check_update()
 
-    from .events import setup_events
     from .paint import setup_paint
 
     try:
         async with anyio.create_task_group() as tg:
-            tg.start_soon(setup_events)
             tg.start_soon(shutdown_idle_playwright_loop)
             if Config.load().check_update:
                 tg.start_soon(check_update_loop)
