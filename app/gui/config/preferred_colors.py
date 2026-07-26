@@ -137,7 +137,10 @@ class PreferredColorsEditor(QWidget):
             self._available_list.addItem(self._make_item(name))
 
     def _on_add_clicked(self) -> None:
-        raw = self._available_list.currentItem().data(Qt.ItemDataRole.UserRole)
+        if (item := self._available_list.currentItem()) is None:
+            return
+
+        raw = item.data(Qt.ItemDataRole.UserRole)
         name = str(raw).strip() if raw is not None else ""
         if not name or name in set(self.colors()):
             return

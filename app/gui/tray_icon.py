@@ -7,6 +7,8 @@ from .i18n import tr
 
 
 class AppTrayIcon(QSystemTrayIcon):
+    _on_show: Callable[[], None] = staticmethod(lambda: None)
+
     def setup_menu(
         self,
         on_show: Callable[[], None],

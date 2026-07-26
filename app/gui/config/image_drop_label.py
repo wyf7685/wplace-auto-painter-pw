@@ -43,6 +43,7 @@ class ImageDropLabel(QLabel):
 
         self._orig_pixmap: QPixmap | None = None
         self._display_pixmap: QPixmap | None = None
+        self._scale = 1.0
 
         self._offset_x = 0
         self._offset_y = 0
@@ -259,12 +260,12 @@ class ImageDropLabel(QLabel):
             return
 
     @override
-    def mouseReleaseEvent(self, evet: QMouseEvent) -> None:
-        if evet.button() == Qt.MouseButton.LeftButton and self._is_drawing:
-            self.select_end = evet.pos()
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self._is_drawing:
+            self.select_end = event.pos()
             self._is_drawing = False
             self.update()
-        if evet.button() == Qt.MouseButton.RightButton and self._panning:
+        if event.button() == Qt.MouseButton.RightButton and self._panning:
             # 结束平移
             self._panning = False
             self._pan_last_pos = None
@@ -283,18 +284,17 @@ class ImageDropLabel(QLabel):
             return
 
         factor = 1.1 if delta > 0 else (1.0 / 1.1)
-        old_scale = getattr(self, "_scale", 1.0)
-        new_scale = old_scale * factor
-        new_scale = max(0.1, min(8.0, new_scale))
-        if abs(new_scale - old_scale) < 1e-6:
+        new_scale = max(0.1, min(8.0, self._scale * factor))
+        if abs(new_scale - self._scale) < 1e-6:
             return
 
         orig = self._orig_pixmap
-        new_w = max(1, int(orig.width() * new_scale))
-        new_h = max(1, int(orig.height() * new_scale))
-        aspect_mode = Qt.AspectRatioMode.KeepAspectRatio
-        transf_mode = Qt.TransformationMode.SmoothTransformation
-        new_disp = orig.scaled(new_w, new_h, aspect_mode, transf_mode)
+        new_disp = orig.scaled(
+            max(1, int(orig.width() * new_scale)),
+            max(1, int(orig.height() * new_scale)),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
 
         label_w = self.width()
         label_h = self.height()
@@ -304,13 +304,14 @@ class ImageDropLabel(QLabel):
         old_off_y = self._offset_y
 
         # 计算缩放中心：当且仅当正在右键平移时，使用平移记录的位置作为指针中心；否则使用控件中心
-        if self._panning and self._pan_last_pos is not None and old_disp is not None:
-            pos = self._pan_last_pos
-        else:
-            pos = QPoint(label_w // 2, label_h // 2)
+        pos = (
+            self._pan_last_pos
+            if self._panning and self._pan_last_pos is not None and old_disp is not None
+            else QPoint(label_w // 2, label_h // 2)
+        )
 
         # 只有当鼠标/锚点位于图片显示区域内时，才做基于指针的缩放，否则以中心缩放
-        use_pointer = (
+        anchored = (
             old_disp is not None
             and old_disp.width() > 0
             and old_disp.height() > 0
@@ -318,66 +319,45 @@ class ImageDropLabel(QLabel):
             and old_off_y <= pos.y() <= old_off_y + old_disp.height()
         )
 
-        if use_pointer:
+        def clamp_offset(pointer: int, old_offset: int, old_extent: int, new_extent: int, label_extent: int) -> int:
+            if new_extent <= label_extent:
+                return (label_extent - new_extent) // 2
+            # 保持锚点下的图像内容不动，再夹回可视范围
+            rel = (pointer - old_offset) / old_extent
+            return max(label_extent - new_extent, min(int(pointer - rel * new_extent), 0))
+
+        if anchored:
             assert old_disp is not None
-
-            rel_x = (pos.x() - old_off_x) / old_disp.width()
-            rel_y = (pos.y() - old_off_y) / old_disp.height()
-            raw_new_off_x = int(pos.x() - rel_x * new_disp.width())
-            raw_new_off_y = int(pos.y() - rel_y * new_disp.height())
-
-            if new_disp.width() <= label_w:
-                new_off_x = (label_w - new_disp.width()) // 2
-            else:
-                min_x = label_w - new_disp.width()
-                new_off_x = max(min_x, min(raw_new_off_x, 0))
-
-            if new_disp.height() <= label_h:
-                new_off_y = (label_h - new_disp.height()) // 2
-            else:
-                min_y = label_h - new_disp.height()
-                new_off_y = max(min_y, min(raw_new_off_y, 0))
-
-            # 根据缩放比例计算选区新坐标
-            if self.has_selection() and old_disp.width() > 0 and old_disp.height() > 0:
-                s = self.select_start
-                e = self.select_end
-                if s is not None and e is not None:
-                    sx = (s.x() - old_off_x) / old_disp.width()
-                    sy = (s.y() - old_off_y) / old_disp.height()
-                    ex = (e.x() - old_off_x) / old_disp.width()
-                    ey = (e.y() - old_off_y) / old_disp.height()
-                    sxpos = int(new_off_x + sx * new_disp.width())
-                    sypos = int(new_off_y + sy * new_disp.height())
-                    self.select_start = QPoint(sxpos, sypos)
-                    expos = int(new_off_x + ex * new_disp.width())
-                    eypos = int(new_off_y + ey * new_disp.height())
-                    self.select_end = QPoint(expos, eypos)
-
-            self._offset_x = new_off_x
-            self._offset_y = new_off_y
+            new_off_x = clamp_offset(pos.x(), old_off_x, old_disp.width(), new_disp.width(), label_w)
+            new_off_y = clamp_offset(pos.y(), old_off_y, old_disp.height(), new_disp.height(), label_h)
         else:
-            # 中心缩放：按比例映射选区到新的 display，并将图片居中或按 new offsets 计算
             new_off_x = (label_w - new_disp.width()) // 2
             new_off_y = (label_h - new_disp.height()) // 2
-            if self.has_selection() and old_disp is not None and old_disp.width() > 0 and old_disp.height() > 0:
-                s = self.select_start
-                e = self.select_end
-                if s is not None and e is not None:
-                    sx = (s.x() - old_off_x) / old_disp.width()
-                    sy = (s.y() - old_off_y) / old_disp.height()
-                    ex = (e.x() - old_off_x) / old_disp.width()
-                    ey = (e.y() - old_off_y) / old_disp.height()
-                    sxpos = int(new_off_x + sx * new_disp.width())
-                    sypos = int(new_off_y + sy * new_disp.height())
-                    self.select_start = QPoint(sxpos, sypos)
-                    expos = int(new_off_x + ex * new_disp.width())
-                    eypos = int(new_off_y + ey * new_disp.height())
-                    self.select_end = QPoint(expos, eypos)
 
-            self._offset_x = new_off_x
-            self._offset_y = new_off_y
+        # 按缩放比例把选区重新映射到新的 display 坐标系
+        if (
+            self.has_selection()
+            and old_disp is not None
+            and old_disp.width() > 0
+            and old_disp.height() > 0
+            and self.select_start is not None
+            and self.select_end is not None
+        ):
 
+            def remap(point: QPoint) -> QPoint:
+                assert old_disp is not None
+                rel_x = (point.x() - old_off_x) / old_disp.width()
+                rel_y = (point.y() - old_off_y) / old_disp.height()
+                return QPoint(
+                    int(new_off_x + rel_x * new_disp.width()),
+                    int(new_off_y + rel_y * new_disp.height()),
+                )
+
+            self.select_start = remap(self.select_start)
+            self.select_end = remap(self.select_end)
+
+        self._offset_x = new_off_x
+        self._offset_y = new_off_y
         self._scale = new_scale
         self._display_pixmap = new_disp
 
