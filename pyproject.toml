@@ -21,12 +21,12 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["prek>=0.4.4", "pyinstaller>=6.16.0", "ruff>=0.15.16"]
+dev = ["basedpyright>=1.39.9", "prek>=0.4.11", "pyinstaller>=6.16.0", "ruff>=0.16.0"]
 
 [tool.uv]
 package = false
 
-[tool.pyright]
+[tool.basedpyright]
 pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
