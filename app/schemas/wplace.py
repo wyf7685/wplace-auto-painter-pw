@@ -20,7 +20,12 @@ class Charges(BaseModel):
     max: int
 
     def remaining_secs(self) -> float:
-        return (self.max - self.count) * (self.cooldown_ms / 1000.0)
+        """Seconds until charges are fully replenished."""
+        return self.secs_until(self.max)
+
+    def secs_until(self, target: float) -> float:
+        """Seconds until `count` reaches `target`; 0 if already there."""
+        return max(0.0, (target - self.count) * (self.cooldown_ms / 1000.0))
 
 
 class WplaceUserInfo(BaseModel):
@@ -50,6 +55,5 @@ class WplaceUserInfo(BaseModel):
         paid = {color for idx, color in enumerate(PAID_COLORS) if bitmap & (1 << idx)}
         return frozenset({"Transparent"} | set(FREE_COLORS) | paid)
 
-    @functools.cached_property
     def is_timed_out(self) -> bool:
         return self.timeout_until > datetime.now(UTC)
