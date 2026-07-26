@@ -2,7 +2,7 @@ import contextlib
 from pathlib import Path
 from typing import override
 
-from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, Qt, Signal
 from PySide6.QtGui import (
     QDragEnterEvent,
     QDropEvent,
@@ -10,6 +10,7 @@ from PySide6.QtGui import (
     QPainter,
     QPaintEvent,
     QPixmap,
+    QResizeEvent,
     QWheelEvent,
 )
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
@@ -17,13 +18,21 @@ from qfluentwidgets import isDarkTheme, qconfig, themeColor
 
 from app.gui.i18n import tr
 
+_MIN_SCALE = 0.1
+_MAX_SCALE = 8.0
+_ZOOM_STEP = 1.1
+
 
 class ImageDropLabel(QLabel):
-    """接受图片拖放并显示预览的 QLabel，支持鼠标绘制矩形并导出透明背景模板图。
+    """接受图片拖放并显示预览的 QLabel，支持鼠标框选并读取选区坐标。
 
-    - 鼠标左键按下开始绘制，拖动更新矩形，松开结束。
-    - 使用 `create_masked_template` 生成只保留矩形区域的透明图片，图片尺寸与原始一致。
+    - 鼠标左键按下开始框选，拖动更新矩形，松开结束；右键拖动平移，滚轮缩放。
+    - 选区始终以 **原始图片坐标** 存储，因此缩放、平移、控件尺寸变化都不会使其失真。
+    - `selection_rect` 返回选区在原始图片坐标系下的 (x, y, w, h)。
+    - 用户实际改动选区时发出 `selection_changed`，便于调用方区分"未编辑"与"已清空"。
     """
+
+    selection_changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -34,7 +43,6 @@ class ImageDropLabel(QLabel):
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         self.setMouseTracking(True)
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -44,15 +52,15 @@ class ImageDropLabel(QLabel):
         self._orig_pixmap: QPixmap | None = None
         self._display_pixmap: QPixmap | None = None
         self._scale = 1.0
-
         self._offset_x = 0
         self._offset_y = 0
 
         self._panning = False
         self._pan_last_pos: QPoint | None = None
 
-        self.select_start: QPoint | None = None
-        self.select_end: QPoint | None = None
+        # 选区端点，原始图片坐标系
+        self._sel_start: QPointF | None = None
+        self._sel_end: QPointF | None = None
         self._is_drawing = False
 
     def _update_style(self) -> None:
@@ -78,14 +86,12 @@ class ImageDropLabel(QLabel):
     # --- Drag & drop ---
     @override
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        md = event.mimeData()
-        if md.hasUrls():
+        if event.mimeData().hasUrls():
             event.acceptProposedAction()
 
     @override
     def dropEvent(self, event: QDropEvent) -> None:
-        md = event.mimeData()
-        urls = md.urls()
+        urls = event.mimeData().urls()
         if not urls:
             return
         path = urls[0].toLocalFile()
@@ -100,173 +106,166 @@ class ImageDropLabel(QLabel):
             self.filepath = None
             self._orig_pixmap = None
             self._display_pixmap = None
+            self.clear_selection()
             return
 
         self.filepath = path
         self._orig_pixmap = pix
-
-        label_w = max(1, self.width())
-        label_h = max(1, self.height())
-        self._scale = min(1.0, min(label_w / max(1, pix.width()), label_h / max(1, pix.height())))
-        disp_w = max(1, int(pix.width() * self._scale))
-        disp_h = max(1, int(pix.height() * self._scale))
-        aspect_mode = Qt.AspectRatioMode.KeepAspectRatio
-        transf_mode = Qt.TransformationMode.SmoothTransformation
-        self._display_pixmap = pix.scaled(disp_w, disp_h, aspect_mode, transf_mode)
-
-        label_w = self.width()
-        label_h = self.height()
-        display_w = self._display_pixmap.width()
-        display_h = self._display_pixmap.height()
-        self._offset_x = (label_w - display_w) // 2 if display_w <= label_w else 0
-        self._offset_y = (label_h - display_h) // 2 if display_h <= label_h else 0
+        self._scale = min(1.0, self.width() / max(1, pix.width()), self.height() / max(1, pix.height()))
+        self._scale = max(_MIN_SCALE, self._scale)
+        self._rescale()
+        self._center_offsets()
 
         self.setPixmap(QPixmap())
-        self.update()
-        # 重置选择框
-        self.select_start = None
-        self.select_end = None
+        self.clear_selection()
+
+    def _rescale(self) -> None:
+        """按当前 `_scale` 重建显示用 pixmap。仅在缩放或换图时调用。"""
+        if (orig := self._orig_pixmap) is None:
+            self._display_pixmap = None
+            return
+
+        self._display_pixmap = orig.scaled(
+            max(1, round(orig.width() * self._scale)),
+            max(1, round(orig.height() * self._scale)),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+
+    def _display_size(self) -> tuple[int, int]:
+        if (disp := self._display_pixmap) is None:
+            return (0, 0)
+        return (disp.width(), disp.height())
+
+    @staticmethod
+    def _clamp_offset(offset: int, extent: int, label_extent: int) -> int:
+        """图片小于控件时居中，否则夹住边缘避免出现空白。"""
+        if extent <= label_extent:
+            return (label_extent - extent) // 2
+        return max(label_extent - extent, min(offset, 0))
+
+    def _center_offsets(self) -> None:
+        disp_w, disp_h = self._display_size()
+        self._offset_x = self._clamp_offset(0, disp_w, self.width())
+        self._offset_y = self._clamp_offset(0, disp_h, self.height())
+
+    def _clamp_offsets(self) -> None:
+        disp_w, disp_h = self._display_size()
+        self._offset_x = self._clamp_offset(self._offset_x, disp_w, self.width())
+        self._offset_y = self._clamp_offset(self._offset_y, disp_h, self.height())
+
+    def _to_origin(self, point: QPoint) -> QPointF | None:
+        """控件坐标 -> 原始图片坐标，并夹入图片范围内。"""
+        if (orig := self._orig_pixmap) is None or self._scale <= 0:
+            return None
+
+        x = (point.x() - self._offset_x) / self._scale
+        y = (point.y() - self._offset_y) / self._scale
+        return QPointF(
+            max(0.0, min(float(orig.width()), x)),
+            max(0.0, min(float(orig.height()), y)),
+        )
+
+    def _to_display(self, point: QPointF) -> QPoint:
+        return QPoint(
+            round(point.x() * self._scale) + self._offset_x,
+            round(point.y() * self._scale) + self._offset_y,
+        )
+
+    # --- 选区 ---
+    def has_selection(self) -> bool:
+        return self._sel_start is not None and self._sel_end is not None
+
+    def clear_selection(self) -> None:
+        self._sel_start = None
+        self._sel_end = None
         self._is_drawing = False
         self.update()
 
-    def has_selection(self) -> bool:
-        return self.select_start is not None and self.select_end is not None
-
     def get_selection_display_rect(self) -> QRect | None:
-        if not self.has_selection() or self._display_pixmap is None:
+        """选区在当前控件坐标系下的矩形，用于绘制。"""
+        if self._sel_start is None or self._sel_end is None:
             return None
-        p1 = self.select_start
-        p2 = self.select_end
-        if p1 is None or p2 is None:
-            return None
-        x1 = min(p1.x(), p2.x())
-        y1 = min(p1.y(), p2.y())
-        x2 = max(p1.x(), p2.x())
-        y2 = max(p1.y(), p2.y())
+
+        p1 = self._to_display(self._sel_start)
+        p2 = self._to_display(self._sel_end)
+        x1, x2 = sorted((p1.x(), p2.x()))
+        y1, y2 = sorted((p1.y(), p2.y()))
         return QRect(x1, y1, x2 - x1, y2 - y1)
 
     def get_selection_origin_rect(self) -> QRect | None:
-        """将显示坐标映射回原始图片坐标并返回 QRect（在原始图片坐标系中）。"""
-        if not self.has_selection() or self._orig_pixmap is None or self._display_pixmap is None:
-            return None
-        disp = self._display_pixmap
-        orig = self._orig_pixmap
-        # display pixmap 相对于 label 的左上偏移
-        label_w = self.width()
-        label_h = self.height()
-        # 若图片小于控件，则偏移为居中；否则使用当前偏移
-        dx = (label_w - disp.width()) // 2 if disp.width() <= label_w else self._offset_x
-        dy = (label_h - disp.height()) // 2 if disp.height() <= label_h else self._offset_y
-
-        rect = self.get_selection_display_rect()
-        if rect is None:
+        """选区在原始图片坐标系下的矩形。空选区返回 None。"""
+        if (orig := self._orig_pixmap) is None or self._sel_start is None or self._sel_end is None:
             return None
 
-        # 将 display 坐标映射到原始坐标
-        sx = orig.width() / disp.width()
-        sy = orig.height() / disp.height()
+        x1, x2 = sorted((self._sel_start.x(), self._sel_end.x()))
+        y1, y2 = sorted((self._sel_start.y(), self._sel_end.y()))
 
-        x1 = int((rect.x() - dx) * sx)
-        y1 = int((rect.y() - dy) * sy)
-        x2 = int((rect.x() + rect.width() - dx) * sx)
-        y2 = int((rect.y() + rect.height() - dy) * sy)
-
-        x1 = max(0, min(orig.width() - 1, x1))
-        y1 = max(0, min(orig.height() - 1, y1))
-        x2 = max(0, min(orig.width(), x2))
-        y2 = max(0, min(orig.height(), y2))
-
-        return QRect(x1, y1, max(1, x2 - x1), max(1, y2 - y1))
+        left = max(0, min(orig.width() - 1, int(x1)))
+        top = max(0, min(orig.height() - 1, int(y1)))
+        right = max(left + 1, min(orig.width(), round(x2)))
+        bottom = max(top + 1, min(orig.height(), round(y2)))
+        return QRect(left, top, right - left, bottom - top)
 
     def set_selection_from_original_rect(self, rect: QRect) -> None:
-        """根据原始图片坐标系下的 QRect 设置显示坐标系下的选区。"""
-        if self._orig_pixmap is None or self._display_pixmap is None:
+        """根据原始图片坐标系下的 QRect 设置选区。"""
+        if self._orig_pixmap is None:
             return
 
-        orig = self._orig_pixmap
-        disp = self._display_pixmap
-
-        sx = disp.width() / orig.width()
-        sy = disp.height() / orig.height()
-
-        label_w = self.width()
-        label_h = self.height()
-        dx = (label_w - disp.width()) // 2 if disp.width() <= label_w else self._offset_x
-        dy = (label_h - disp.height()) // 2 if disp.height() <= label_h else self._offset_y
-
-        x1 = int(rect.x() * sx) + dx
-        y1 = int(rect.y() * sy) + dy
-        x2 = int((rect.x() + rect.width()) * sx) + dx
-        y2 = int((rect.y() + rect.height()) * sy) + dy
-
-        self.select_start = QPoint(x1, y1)
-        self.select_end = QPoint(x2, y2)
+        self._sel_start = QPointF(rect.x(), rect.y())
+        self._sel_end = QPointF(rect.x() + rect.width(), rect.y() + rect.height())
         self.update()
 
-    # --- 鼠标绘制 ---
+    def selection_rect(self) -> tuple[int, int, int, int] | None:
+        """返回选区在原始图片坐标系下的 (x, y, w, h)；无图或无选区时返回 None。"""
+        if self.filepath is None or (rect := self.get_selection_origin_rect()) is None:
+            return None
+        return (rect.x(), rect.y(), rect.width(), rect.height())
+
+    # --- 事件 ---
+    @override
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        # 选区存于原图坐标系，无需重映射；只要保持偏移量合法即可。
+        self._clamp_offsets()
+        self.update()
+
     @override
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        # 右键开始平移（手抓拖动），左键开始绘制选区
-        if event.button() == Qt.MouseButton.RightButton and self._display_pixmap is not None:
+        if self._display_pixmap is None:
+            return
+
+        if event.button() == Qt.MouseButton.RightButton:
             self._panning = True
             self._pan_last_pos = event.pos()
-            # 改变光标为闭合手形以提示处于拖动状态
             with contextlib.suppress(Exception):
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
-            return
-        if event.button() == Qt.MouseButton.LeftButton and self._display_pixmap is not None:
-            self.select_start = event.pos()
-            self.select_end = event.pos()
-            self._is_drawing = True
+        elif event.button() == Qt.MouseButton.LeftButton:
+            self._sel_start = self._sel_end = self._to_origin(event.pos())
+            self._is_drawing = self._sel_start is not None
             self.update()
 
     @override
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if self._is_drawing:
-            self.select_end = event.pos()
-            self.update()
-        # 平移逻辑优先
-        if self._panning and self._pan_last_pos is not None and self._display_pixmap is not None:
-            last = self._pan_last_pos
-            dx = event.pos().x() - last.x()
-            dy = event.pos().y() - last.y()
-            disp = self._display_pixmap
-            label_w = self.width()
-            label_h = self.height()
-            # 只有当显示图片比控件大的时候允许平移
-            if disp.width() > label_w:
-                min_x = label_w - disp.width()
-                max_x = 0
-                self._offset_x = max(min_x, min(self._offset_x + dx, max_x))
-            else:
-                # 保持居中
-                self._offset_x = (label_w - disp.width()) // 2
-
-            if disp.height() > label_h:
-                min_y = label_h - disp.height()
-                max_y = 0
-                self._offset_y = max(min_y, min(self._offset_y + dy, max_y))
-            else:
-                self._offset_y = (label_h - disp.height()) // 2
-
-            # 同步调整现有选区（选区以 widget 坐标系存储）
-            if self.select_start is not None:
-                self.select_start = QPoint(self.select_start.x() + dx, self.select_start.y() + dy)
-            if self.select_end is not None:
-                self.select_end = QPoint(self.select_end.x() + dx, self.select_end.y() + dy)
-
+        if self._panning and self._pan_last_pos is not None:
+            delta = event.pos() - self._pan_last_pos
+            self._offset_x += delta.x()
+            self._offset_y += delta.y()
+            self._clamp_offsets()
             self._pan_last_pos = event.pos()
             self.update()
-            return
+        elif self._is_drawing:
+            self._sel_end = self._to_origin(event.pos())
+            self.update()
 
     @override
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self._is_drawing:
-            self.select_end = event.pos()
+            self._sel_end = self._to_origin(event.pos())
             self._is_drawing = False
             self.update()
-        if event.button() == Qt.MouseButton.RightButton and self._panning:
-            # 结束平移
+            self.selection_changed.emit()
+        elif event.button() == Qt.MouseButton.RightButton and self._panning:
             self._panning = False
             self._pan_last_pos = None
             with contextlib.suppress(Exception):
@@ -275,125 +274,41 @@ class ImageDropLabel(QLabel):
 
     @override
     def wheelEvent(self, event: QWheelEvent) -> None:
-        # 简化实现：在固定的预览区域内按比例缩放显示图片，并按比例更新选区位置（若存在）。
-        if self._orig_pixmap is None:
+        if self._orig_pixmap is None or (delta := event.angleDelta().y()) == 0:
             return
 
-        delta = event.angleDelta().y()
-        if delta == 0:
-            return
-
-        factor = 1.1 if delta > 0 else (1.0 / 1.1)
-        new_scale = max(0.1, min(8.0, self._scale * factor))
+        new_scale = self._scale * (_ZOOM_STEP if delta > 0 else 1 / _ZOOM_STEP)
+        new_scale = max(_MIN_SCALE, min(_MAX_SCALE, new_scale))
         if abs(new_scale - self._scale) < 1e-6:
             return
 
-        orig = self._orig_pixmap
-        new_disp = orig.scaled(
-            max(1, int(orig.width() * new_scale)),
-            max(1, int(orig.height() * new_scale)),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
+        # 保持光标下的图像内容不动
+        anchor = event.position().toPoint()
+        origin_at_anchor = self._to_origin(anchor)
 
-        label_w = self.width()
-        label_h = self.height()
-        old_disp = self._display_pixmap
-        # 当前旧偏移（可能为居中或先前平移的值）
-        old_off_x = self._offset_x
-        old_off_y = self._offset_y
-
-        # 计算缩放中心：当且仅当正在右键平移时，使用平移记录的位置作为指针中心；否则使用控件中心
-        pos = (
-            self._pan_last_pos
-            if self._panning and self._pan_last_pos is not None and old_disp is not None
-            else QPoint(label_w // 2, label_h // 2)
-        )
-
-        # 只有当鼠标/锚点位于图片显示区域内时，才做基于指针的缩放，否则以中心缩放
-        anchored = (
-            old_disp is not None
-            and old_disp.width() > 0
-            and old_disp.height() > 0
-            and old_off_x <= pos.x() <= old_off_x + old_disp.width()
-            and old_off_y <= pos.y() <= old_off_y + old_disp.height()
-        )
-
-        def clamp_offset(pointer: int, old_offset: int, old_extent: int, new_extent: int, label_extent: int) -> int:
-            if new_extent <= label_extent:
-                return (label_extent - new_extent) // 2
-            # 保持锚点下的图像内容不动，再夹回可视范围
-            rel = (pointer - old_offset) / old_extent
-            return max(label_extent - new_extent, min(int(pointer - rel * new_extent), 0))
-
-        if anchored:
-            assert old_disp is not None
-            new_off_x = clamp_offset(pos.x(), old_off_x, old_disp.width(), new_disp.width(), label_w)
-            new_off_y = clamp_offset(pos.y(), old_off_y, old_disp.height(), new_disp.height(), label_h)
-        else:
-            new_off_x = (label_w - new_disp.width()) // 2
-            new_off_y = (label_h - new_disp.height()) // 2
-
-        # 按缩放比例把选区重新映射到新的 display 坐标系
-        if (
-            self.has_selection()
-            and old_disp is not None
-            and old_disp.width() > 0
-            and old_disp.height() > 0
-            and self.select_start is not None
-            and self.select_end is not None
-        ):
-
-            def remap(point: QPoint) -> QPoint:
-                assert old_disp is not None
-                rel_x = (point.x() - old_off_x) / old_disp.width()
-                rel_y = (point.y() - old_off_y) / old_disp.height()
-                return QPoint(
-                    int(new_off_x + rel_x * new_disp.width()),
-                    int(new_off_y + rel_y * new_disp.height()),
-                )
-
-            self.select_start = remap(self.select_start)
-            self.select_end = remap(self.select_end)
-
-        self._offset_x = new_off_x
-        self._offset_y = new_off_y
         self._scale = new_scale
-        self._display_pixmap = new_disp
+        self._rescale()
+
+        if origin_at_anchor is not None:
+            self._offset_x = round(anchor.x() - origin_at_anchor.x() * new_scale)
+            self._offset_y = round(anchor.y() - origin_at_anchor.y() * new_scale)
+        self._clamp_offsets()
 
         self.setPixmap(QPixmap())
         self.update()
 
     @override
     def paintEvent(self, event: QPaintEvent) -> None:
-        """
-        自定义绘制函数，支持偏移绘制和平移。
-        还会绘制选区覆盖层。
-        """
         super().paintEvent(event)
-        if self._display_pixmap is not None:
-            painter = QPainter(self)
-            # 绘制 pixmap 到当前偏移位置
-            painter.drawPixmap(self._offset_x, self._offset_y, self._display_pixmap)
-            # 绘制选区覆盖层
-            if self.has_selection() and (rect := self.get_selection_display_rect()) is not None:
-                color = themeColor()
-                painter.setPen(color)
-                color.setAlpha(50)
-                painter.setBrush(color)
-                painter.drawRect(rect)
-            painter.end()
+        if self._display_pixmap is None:
+            return
 
-    def create_masked_template(self) -> tuple[int, int, int, int] | None:
-        """返回选区在原始图片坐标系下的 (x, y, w, h)。
-
-        不再创建或保存新图片，仅返回选区的原始坐标和尺寸。若无选区或无法获取原图则返回 None。
-        """
-        if self.filepath is None:
-            return None
-        if self._orig_pixmap is None:
-            return None
-        rect = self.get_selection_origin_rect()
-        if rect is None:
-            return None
-        return (rect.x(), rect.y(), rect.width(), rect.height())
+        painter = QPainter(self)
+        painter.drawPixmap(self._offset_x, self._offset_y, self._display_pixmap)
+        if (rect := self.get_selection_display_rect()) is not None:
+            color = themeColor()
+            painter.setPen(color)
+            color.setAlpha(50)
+            painter.setBrush(color)
+            painter.drawRect(rect)
+        painter.end()

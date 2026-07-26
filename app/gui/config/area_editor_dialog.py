@@ -25,12 +25,16 @@ class AreaEditorDialog(MessageBoxBase):
 
         self._result_area: tuple[int, int, int, int] | None = selected_area
         self._result_image_path: str | None = image_path
+        # 仅当用户实际改动选区时才回写，否则保留传入值。
+        # 否则"打开-直接确定"会用一个未经编辑的选区覆盖已有配置。
+        self._area_dirty = False
 
         title = SubtitleLabel(tr("area_editor.title"), self)
         hint = BodyLabel(tr("area_editor.hint"), self)
         # hint.setTextColor(Qt.GlobalColor.darkGray, Qt.GlobalColor.lightGray)
 
         self._image_label = ImageDropLabel()
+        self._image_label.selection_changed.connect(self._on_selection_changed)
 
         browse_btn = PushButton(tr("area_editor.browse"))
         browse_btn.clicked.connect(self._pick_image)
@@ -80,20 +84,27 @@ class AreaEditorDialog(MessageBoxBase):
             return
         self._image_label.set_image(file_path)
         self._result_image_path = file_path
+        # 换图后旧选区不再有意义，set_image 已清空它
+        self._result_area = None
+        self._area_dirty = True
+
+    def _on_selection_changed(self) -> None:
+        self._area_dirty = True
 
     def _sync_selection(self) -> None:
-        self._result_area = self._image_label.create_masked_template()
+        self._result_area = self._image_label.selection_rect()
+        self._area_dirty = True
 
     def _clear_selection(self) -> None:
         self._result_area = None
-        self._image_label.select_start = None
-        self._image_label.select_end = None
-        self._image_label.update()
+        self._image_label.clear_selection()
+        self._area_dirty = True
 
     def validate(self) -> bool:
         if self._image_label.filepath:
             self._result_image_path = self._image_label.filepath
-            self._result_area = self._image_label.create_masked_template()
+            if self._area_dirty:
+                self._result_area = self._image_label.selection_rect()
 
         if not self._result_image_path or not Path(self._result_image_path).is_file():
             InfoBar.warning(

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QSplitter, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
@@ -33,8 +33,6 @@ from .user_draft import default_user, normalize_user
 
 class ConfigEditorWidget(QWidget):
     """Fluent configuration editor with modular widgets and pydantic validation."""
-
-    saved = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -243,8 +241,8 @@ class ConfigEditorWidget(QWidget):
 
         self._users[row] = user
 
-        item = self.users_list.item(row)
-        item.setText(user["identifier"])
+        if (item := self.users_list.item(row)) is not None:
+            item.setText(user["identifier"])
 
     def _add_user(self) -> None:
         if self._current_user_row >= 0:
@@ -282,11 +280,17 @@ class ConfigEditorWidget(QWidget):
             )
             return
 
+        # Mutating the list emits currentRowChanged, which would make _on_user_changed
+        # flush the detail card (still holding the removed user) into a now-shifted row.
+        self.users_list.blockSignals(True)
         del self._users[row]
         self.users_list.takeItem(row)
-
         target = min(row, len(self._users) - 1)
         self.users_list.setCurrentRow(target)
+        self.users_list.blockSignals(False)
+
+        self._current_user_row = -1
+        self._on_user_changed(target)
 
     def save_to_disk(self, show_message: bool = True) -> bool:
         selected_language = self._current_language_code()
@@ -360,7 +364,6 @@ class ConfigEditorWidget(QWidget):
             config = Config.model_validate(payload)
             export_config_schema()
             config.save()
-            self.saved.emit()
 
         except ValidationError as exc:
             if show_message:
