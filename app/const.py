@@ -1,5 +1,4 @@
 import base64
-import functools
 import json
 import sys
 from pathlib import Path
@@ -23,23 +22,25 @@ ASSETS_DIR = Path(__file__).parent.resolve() / "assets"
 class Assets:
     icon: ClassVar[Path] = ASSETS_DIR / "icon" / "gui.ico"
     locales: ClassVar[Path] = ASSETS_DIR / "locales"
+    # Keyed by path, holding (mtime_ns, content) so edits are picked up without a restart.
+    _cache: ClassVar[dict[tuple[str, ...], tuple[int, str]]] = {}
 
     def __init__(self) -> NoReturn:
         raise NotImplementedError
 
-    @staticmethod
-    @functools.cache
-    def _read(*path: str, __cache: dict[int, tuple[int, str]] = {}) -> str:  # noqa: B006
+    @classmethod
+    def _read(cls, *path: str) -> str:
         fp = ASSETS_DIR.joinpath(*path)
         if not fp.exists():
             raise FileNotFoundError(f"Asset not found: {fp}")
 
-        key = hash(path)
         mtime = fp.stat().st_mtime_ns
-        if (cache := __cache.get(key)) is not None and cache[0] == mtime:
-            return cache[1]
-        __cache[key] = (mtime, fp.read_text("utf-8"))
-        return __cache[key][1]
+        if (cached := cls._cache.get(path)) is not None and cached[0] == mtime:
+            return cached[1]
+
+        content = fp.read_text("utf-8")
+        cls._cache[path] = (mtime, content)
+        return content
 
     def page_init(self) -> str:
         return self._read("js", "page_init.js")
