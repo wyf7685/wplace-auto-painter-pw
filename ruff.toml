@@ -91,4 +91,7 @@ extra-standard-library = ["typing_extensions"]
 keep-runtime-typing = true
 
 [lint.extend-per-file-ignores]
-"test_*.py" = ["T201"] # print
+"test_*.py" = [
+  "T201",   # print
+  "SLF001", # private-member-access  # regression tests pin internal invariants
+]

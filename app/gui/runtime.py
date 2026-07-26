@@ -72,7 +72,7 @@ class TaskRuntime:
             logger.exception("Configuration error occurred in runtime")
             self.signals.config_error_occurred.emit(e)
             state = "error"
-        except BaseException:
+        except Exception:
             logger.exception("Background runtime crashed")
             state = "error"
         finally:

@@ -38,7 +38,13 @@ class Controller:
         self.bridge = LogBridge()
         self.bridge.start()
         self.runtime = TaskRuntime()
-        self.window = MainWindow(self.icon)
+        self.window = MainWindow(
+            self.icon,
+            on_start=self.start_runtime,
+            on_stop=self.stop_runtime,
+            on_save=self.save_config,
+            on_exit=self.exit_app,
+        )
         self.tray = AppTrayIcon(self.icon, parent=self.app)
 
         for line in self.bridge.buffer:
@@ -47,12 +53,6 @@ class Controller:
         self.runtime.signals.state_changed.connect(self.window.set_runtime_state)
         self.runtime.signals.config_error_occurred.connect(self.handle_config_error)
         self.app.aboutToQuit.connect(self.save_gui_state)
-        self.window.set_handlers(
-            on_start=self.start_runtime,
-            on_stop=self.stop_runtime,
-            on_save=self.save_config,
-            on_exit=self.exit_app,
-        )
         self.tray.setToolTip(APP_NAME)
         self.tray.setup_menu(
             on_show=self.window.show_main_window,

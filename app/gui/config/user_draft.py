@@ -96,7 +96,7 @@ def parse_selected_area(raw: str) -> tuple[int, int, int, int] | None:
     if len(parts) != 4:
         raise ValueError("selected_area must be x,y,w,h")
 
-    return tuple(int(p) for p in parts)  # type: ignore[return-value]
+    return int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
 
 
 def resolve_template_image(file_id: str) -> Path | None:

@@ -16,14 +16,22 @@ from .tool_row import ToolRowWidget
 
 
 class MainWindow(FluentWindow):
-    def __init__(self, icon: QIcon) -> None:
+    def __init__(
+        self,
+        icon: QIcon,
+        *,
+        on_start: Callable[[], None],
+        on_stop: Callable[[], None],
+        on_save: Callable[[], None],
+        on_exit: Callable[[], None],
+    ) -> None:
         super().__init__()
         self._allow_close = False
 
-        self._on_start: Callable[[], None] | None = None
-        self._on_stop: Callable[[], None] | None = None
-        self._on_save: Callable[[], None] | None = None
-        self._on_exit: Callable[[], None] | None = None
+        self._on_start = on_start
+        self._on_stop = on_stop
+        self._on_save = on_save
+        self._on_exit = on_exit
 
         self._tool_rows: list[ToolRowWidget] = []
 
@@ -55,46 +63,13 @@ class MainWindow(FluentWindow):
     def _create_tool_row(self) -> ToolRowWidget:
         tool_row = ToolRowWidget(
             self,
-            on_start=self._handle_start,
-            on_stop=self._handle_stop,
-            on_save=self._handle_save,
-            on_exit=self._handle_exit,
+            on_start=self._on_start,
+            on_stop=self._on_stop,
+            on_save=self._on_save,
+            on_exit=self._on_exit,
         )
         self._tool_rows.append(tool_row)
         return tool_row
-
-    def set_handlers(
-        self,
-        *,
-        on_start: Callable[[], None],
-        on_stop: Callable[[], None],
-        on_save: Callable[[], None],
-        on_exit: Callable[[], None],
-    ) -> None:
-        self._on_start = on_start
-        self._on_stop = on_stop
-        self._on_save = on_save
-        self._on_exit = on_exit
-
-    def _handle_start(self) -> None:
-        if self._on_start is None:
-            return
-        self._on_start()
-
-    def _handle_stop(self) -> None:
-        if self._on_stop is None:
-            return
-        self._on_stop()
-
-    def _handle_save(self) -> None:
-        if self._on_save is None:
-            return
-        self._on_save()
-
-    def _handle_exit(self) -> None:
-        if self._on_exit is None:
-            return
-        self._on_exit()
 
     def set_runtime_state(self, state: str) -> None:
         for tool_row in self._tool_rows:
