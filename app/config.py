@@ -49,6 +49,7 @@ class Config(BaseModel):
         return cls._cache
 
     def save(self) -> None:
+        from app.browser.manager import proxy_settings
         from app.log import get_log_level
         from app.utils import SecretStrEncoder
 
@@ -64,6 +65,7 @@ class Config(BaseModel):
         )
         Config._cache = self
         get_log_level.cache_clear()
+        proxy_settings.cache_clear()
 
 
 def export_config_schema() -> None:

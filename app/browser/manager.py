@@ -133,21 +133,26 @@ def _resolve_browser_type() -> tuple[str, str | None]:
     return name, channel
 
 
+_DEFAULT_PROXY_PORTS = {"http": 80, "https": 443, "socks": 1080, "socks5": 1080}
+
+
 @functools.cache
-def _proxy_settings() -> ProxySettings | None:
+def proxy_settings() -> ProxySettings | None:
     proxy_host = Config.load().proxy
     if not proxy_host:
         return None
 
     pattern = re.compile(
-        r"^(?P<protocol>https?|socks5?|http)://"
+        r"^(?P<protocol>https?|socks5?)://"
         r"(?P<username>[^:]+):(?P<password>[^@]+)"
         r"@(?P<host>[^:/]+)(?::(?P<port>\d+))?$",
         re.IGNORECASE,
     )
     if m := pattern.match(proxy_host):
         info = m.groupdict()
-        url = f"{info['protocol']}://{info['host']}:{info['port'] or 80}"
+        protocol = info["protocol"].lower()
+        port = info["port"] or _DEFAULT_PROXY_PORTS[protocol]
+        url = f"{protocol}://{info['host']}:{port}"
         return {"server": url, "username": info["username"], "password": info["password"]}
 
     return {"server": proxy_host}
@@ -194,7 +199,7 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
     browser: Browser = await browser_type.launch(
         channel=channel,
         headless=headless,
-        proxy=_proxy_settings(),
+        proxy=proxy_settings(),
     )
     async with _hold_browser(), browser:
         yield browser
@@ -216,7 +221,7 @@ async def get_persistent_context(
         user_data_dir=user_data_dir,
         channel=channel,
         headless=False,
-        proxy=_proxy_settings(),
+        proxy=proxy_settings(),
         viewport=viewport,
         java_script_enabled=True,
         user_agent=user_agent,
