@@ -159,7 +159,7 @@ class UserContext:
             raise FetchFailed("Failed to decode user info") from e
 
         if isinstance(data, dict):
-            if data.get("status") == "401":  # {'error': 'Unauthorized', 'status': 401}
+            if data.get("status") == 401:  # {'error': 'Unauthorized', 'status': 401}
                 logger.error("Unauthorized response when fetching user info")
                 raise TokenExpired("Authentication token has expired")
             if data.get("error"):
