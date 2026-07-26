@@ -18,7 +18,8 @@ class MirrorSource:
 
 
 # Mirrors listed in ascending priority order (smaller priority = preferred).
+# The legacy `playwright.azureedge.net` host now only 307-redirects here.
 MIRRORS: list[MirrorSource] = [
-    MirrorSource("Default", "https://playwright.azureedge.net", 1),
+    MirrorSource("Default", "https://playwright.download.prss.microsoft.com/dbazure/download/playwright", 1),
     MirrorSource("Taobao", "https://registry.npmmirror.com/-/binary/playwright", 2),
 ]
