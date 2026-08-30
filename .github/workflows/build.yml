@@ -16,8 +16,16 @@ on:
 
 jobs:
   lint:
-    name: Lint
-    runs-on: ubuntu-22.04
+    name: Lint on ${{ matrix.platform.os }}
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: linux
+            runner: ubuntu-22.04
+          - os: windows
+            runner: windows-2022
     steps:
       - uses: actions/checkout@v6
 
