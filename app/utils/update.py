@@ -1,78 +1,41 @@
 import functools
-import shutil
-import subprocess
 from datetime import datetime
-from pathlib import Path
 
 import anyio
 import httpx
 
-from app.const import ASSETS_DIR, IS_FROZEN
+from app.const import IS_FROZEN, REPOSITORY_ACTIONS_URL, REPOSITORY_NAME, REPOSITORY_OWNER
 from app.log import logger
+from app.version import get_commit_hash, run_git
 
-from .func import subprocess_options
-
-OWNER = "wyf7685"
-REPO = "wplace-auto-painter-pw"
 BRANCH = "master"
 WORKFLOW_FILE = "build.yml"
-ACTIONS_URL = f"https://github.com/{OWNER}/{REPO}/actions/workflows/{WORKFLOW_FILE}"
-COMMIT_HASH_FILE = ASSETS_DIR / ".git_commit_hash"
-
-
-@functools.cache
-def find_git() -> str | None:
-    if IS_FROZEN:
-        return None
-    if not Path(".git").is_dir():
-        return None
-    return shutil.which("git")
+ACTIONS_URL = f"{REPOSITORY_ACTIONS_URL}/workflows/{WORKFLOW_FILE}"
 
 
 @functools.cache
 def is_master() -> bool:
-    if not (git := find_git()):
+    process = run_git("rev-parse", "--symbolic-full-name", "HEAD")
+    if process is None:
         return True
-    p = subprocess.run(  # noqa: S603
-        [git, "rev-parse", "--symbolic-full-name", "HEAD"],
-        capture_output=True,
-        text=True,
-        **subprocess_options(),
-    )
-    return p.returncode == 0 and p.stdout.strip() == "refs/heads/master"
+    return process.returncode == 0 and process.stdout.strip() == "refs/heads/master"
 
 
 def get_local_commit_hash() -> str | None:
     if IS_FROZEN:
-        if COMMIT_HASH_FILE.is_file():
-            return COMMIT_HASH_FILE.read_text("utf-8").strip()
+        return get_commit_hash()
+
+    process = run_git("status", "--porcelain")
+    if process is None or process.returncode != 0 or process.stdout.strip():
         return None
 
-    if not (git := find_git()):
-        return None
-
-    p = subprocess.run(  # noqa: S603
-        [git, "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-        **subprocess_options(),
-    )
-    if p.returncode != 0 or p.stdout.strip():
-        return None
-
-    p = subprocess.run(  # noqa: S603
-        [git, "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        **subprocess_options(),
-    )
-    return p.stdout.strip() if p.returncode == 0 else None
+    return get_commit_hash()
 
 
 async def get_latest_commit_hash() -> str:
     from app.config import Config
 
-    url = f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{BRANCH}"
+    url = f"https://api.github.com/repos/{REPOSITORY_OWNER}/{REPOSITORY_NAME}/commits/{BRANCH}"
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2026-03-10",

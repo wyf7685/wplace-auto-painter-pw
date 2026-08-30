@@ -5,9 +5,12 @@ from app.config import Config, ensure_config_ready
 from app.exception import AppException
 from app.log import logger
 from app.utils.update import check_update_loop
+from app.version import get_app_version
 
 
 async def run_painter() -> None:
+    logger.opt(colors=True).info(f"Starting painter loop (version=<c>{get_app_version()}</>)")
+
     ensure_config_ready()
 
     if Config.load().check_update:

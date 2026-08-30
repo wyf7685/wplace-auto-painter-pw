@@ -6,6 +6,11 @@ from typing import ClassVar, NoReturn
 
 IS_FROZEN = getattr(sys, "frozen", False)
 APP_NAME = "wplace-auto-painter"
+REPOSITORY_OWNER = "wyf7685"
+REPOSITORY_NAME = "wplace-auto-painter-pw"
+REPOSITORY_URL = f"https://github.com/{REPOSITORY_OWNER}/{REPOSITORY_NAME}"
+REPOSITORY_ACTIONS_URL = f"{REPOSITORY_URL}/actions"
+
 
 CWD = (Path(sys.executable).parent if IS_FROZEN else Path.cwd()).resolve()
 DATA_DIR = CWD / "data"

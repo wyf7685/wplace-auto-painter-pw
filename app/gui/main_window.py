@@ -4,10 +4,11 @@ from typing import override
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import QCloseEvent, QIcon
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
-from qfluentwidgets import FluentIcon, FluentWindow
+from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 
 from app.const import APP_NAME
 
+from .about_page import AboutPage
 from .config import ConfigEditorWidget
 from .i18n import tr
 from .logging import AnsiLogViewer
@@ -45,9 +46,16 @@ class MainWindow(FluentWindow):
 
         self.config_page = self._build_page(self.config_editor, "ConfigPage")
         self.logs_page = self._build_page(self.log_viewer, "LogsPage")
+        self.about_page = AboutPage(icon, self)
 
         self.addSubInterface(self.config_page, FluentIcon.SETTING, tr("main.nav.config"))
         self.addSubInterface(self.logs_page, FluentIcon.DOCUMENT, tr("main.nav.logs"))
+        self.addSubInterface(
+            self.about_page,
+            FluentIcon.INFO,
+            tr("main.nav.about"),
+            position=NavigationItemPosition.BOTTOM,
+        )
         self.switchTo(self.config_page)
 
     def _build_page(self, content: QWidget, name: str) -> QWidget:

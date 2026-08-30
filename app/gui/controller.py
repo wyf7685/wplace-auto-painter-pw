@@ -15,6 +15,7 @@ from app.config import Config
 from app.const import APP_NAME, assets
 from app.exception import ConfigError
 from app.log import logger
+from app.version import get_app_version
 
 from .i18n import lang, tr
 from .logging import LogBridge
@@ -62,7 +63,7 @@ class Controller:
         )
 
     def run(self) -> NoReturn:
-        logger.info("Starting GUI")
+        logger.opt(colors=True).info(f"Starting GUI (version=<c>{get_app_version()}</>)")
         self.tray.show()
         self.window.show_main_window()
         exit_code = self.app.exec()
