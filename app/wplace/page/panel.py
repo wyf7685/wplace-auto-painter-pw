@@ -67,6 +67,7 @@ class PaintPanel:
         else:
             await self.wplace_page.wait_for_paint_responses()
             self.wplace_page.raise_for_paint_error()
+            self.wplace_page.ensure_submit_succeeded()
             self.log.info("Submit completed")
             return
 
@@ -82,11 +83,13 @@ class PaintPanel:
         else:
             await self.wplace_page.wait_for_paint_responses()
             self.wplace_page.raise_for_paint_error()
+            self.wplace_page.ensure_submit_succeeded()
             self.log.info("Submit completed after captcha resolution")
             return
 
         await self.wplace_page.wait_for_paint_responses()
         self.wplace_page.raise_for_paint_error()
+        self.wplace_page.ensure_submit_succeeded()
 
     async def check_captcha(self) -> None:
         if not self.wplace_page.has_captcha:

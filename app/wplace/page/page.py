@@ -48,6 +48,7 @@ class WplacePage:
         self.captcha_resolved = anyio.Event()
         self._paint_response_tasks: set[asyncio.Task[None]] = set()
         self._paint_error: Exception | None = None
+        # Set only after the injected script completes the whole batch.
         self._submit_succeeded = False
 
     @property
@@ -84,7 +85,8 @@ class WplacePage:
         if not msg.text.startswith(self._key):
             return
 
-        topic, message = map(str.strip, msg.text.removeprefix(self._key).lstrip().split(" ", maxsplit=1))
+        topic, _, message = msg.text.removeprefix(self._key).lstrip().partition(" ")
+        message = message.strip()
         match topic:
             case "version":
                 self.log.info(f"WPlace Version: <y>{escape_tag(message)}</>")
@@ -110,7 +112,7 @@ class WplacePage:
 
     async def _read_paint_response(self, response: Response) -> None:
         if response.ok:
-            self._handle_paint_response(response, {})
+            # A batch may issue multiple requests; submit-success is the batch-level signal.
             return
 
         headers = response.headers
@@ -175,15 +177,6 @@ class WplacePage:
             )
             return
 
-        if response.ok:
-            painted = payload.get("painted")
-            if isinstance(painted, int):
-                self.log.info(f"Painted pixel count: <g>{painted}</>")
-            self._submit_succeeded = True
-            self.has_captcha = False
-            self.captcha_resolved.set()
-            return
-
         if isinstance(code, str):
             error = PaintRequestFailed(
                 f"Paint request failed: {code}",
@@ -211,6 +204,10 @@ class WplacePage:
     def raise_for_paint_error(self) -> None:
         if self._paint_error is not None:
             raise self._paint_error
+
+    def ensure_submit_succeeded(self) -> None:
+        if not self._submit_succeeded:
+            raise PaintRequestFailed("Paint submit did not report success")
 
     async def find_paint_button(self) -> ElementHandle:
         paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)

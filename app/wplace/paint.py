@@ -228,7 +228,8 @@ class Painter:
         if user_info.charges.count >= self.user.min_paint_charges:
             painted = await self.paint_pixels(user_info)
             if painted:
-                self.log.info("Painting completed, refetching user info...")
+                # Painting mutates server-side charges; force a fresh snapshot.
+                self._user_info_cache = None
                 user_info = await self.get_user_info()
             else:
                 self.log.warning("Nothing was painted this cycle.")
@@ -240,6 +241,8 @@ class Painter:
             self.log.info(f"Checking auto-purchase: {Highlight.apply(self.user.auto_purchase)}")
             if await process_purchase(self.user, user_info):
                 self.log.info("Purchase completed, refetching user info...")
+                # A successful purchase mutates charges/droplets; do not reuse stale data.
+                self._user_info_cache = None
                 user_info = await self.get_user_info()
             else:
                 self.log.info("No purchase made.")
@@ -322,14 +325,18 @@ class Painter:
                     self._paint_charge_limit = float("inf")
                 if wait_secs is None:
                     return
-                await anyio.sleep(random.uniform(0.5, 2.5))
 
-                while True:
-                    wait_secs = await self._run_once_with_catch()
-                    if wait_secs is None:
-                        return
-                    if wait_secs > 0:
-                        break
+                # A positive wait from the first cycle is a real refill or retry
+                # delay; do not start a full-size cycle before it expires.
+                if wait_secs <= 0:
+                    await anyio.sleep(random.uniform(0.5, 2.5))
+
+                    while True:
+                        wait_secs = await self._run_once_with_catch()
+                        if wait_secs is None:
+                            return
+                        if wait_secs > 0:
+                            break
 
             self._context = None
             await anyio.sleep(max(wait_secs, 0))
