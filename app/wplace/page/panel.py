@@ -65,9 +65,13 @@ class PaintPanel:
         except pw_timeout_error():
             self.log.warning("Submit button still present after timeout")
         else:
+            await self.wplace_page.wait_for_paint_responses()
+            self.wplace_page.raise_for_paint_error()
             self.log.info("Submit completed")
             return
 
+        await self.wplace_page.wait_for_paint_responses()
+        self.wplace_page.raise_for_paint_error()
         await self.check_captcha()
 
         self.log.debug("Waiting for submit to complete after captcha resolution...")
@@ -76,7 +80,13 @@ class PaintPanel:
         except pw_timeout_error():
             self.log.warning("Submit button still present after captcha resolution")
         else:
+            await self.wplace_page.wait_for_paint_responses()
+            self.wplace_page.raise_for_paint_error()
             self.log.info("Submit completed after captcha resolution")
+            return
+
+        await self.wplace_page.wait_for_paint_responses()
+        self.wplace_page.raise_for_paint_error()
 
     async def check_captcha(self) -> None:
         if not self.wplace_page.has_captcha:

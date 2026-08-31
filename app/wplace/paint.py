@@ -11,11 +11,10 @@ from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
 from app.config import Config, UserConfig
-from app.exception import PaintFinished, ShouldQuit, TokenExpired
+from app.exception import PaintFinished, PaintRequestFailed, ShouldQuit, TokenExpired
 from app.log import escape_tag, log_prefix_width, logger
 from app.schemas import TemplateConfig, WplaceUserInfo
 from app.utils import Highlight, draw_ansi, is_token_expired, logger_wrapper
-from app.wplace.fingerprint import generate_fingerprint
 from app.wplace.page import CANVAS_ZOOM, UserContext, WplacePage
 from app.wplace.purchase import process_purchase
 from app.wplace.resolver import resolve_js
@@ -178,7 +177,6 @@ class Painter:
             script_data = [
                 uuid.uuid4().hex[:8],
                 [[*base.offset(x, y).as_dtuple(), color_id] for x, y, color_id in pixels],
-                generate_fingerprint(self.user.identifier),
                 resolved_js,
                 [*base.offset(*pixels[0][:2]).to_lat_lon()],
                 CANVAS_ZOOM,
@@ -289,9 +287,13 @@ class Painter:
     async def _run_once_with_catch(self) -> float | None:
         try:
             wait_secs = await self._run_once()
-        except ShouldQuit:
-            self.log.warning("Received shutdown signal, exiting paint loop.", exception=True)
+        except ShouldQuit as error:
+            self.log.warning(f"{type(error).__name__}: {error}; exiting paint loop")
             return None
+        except PaintRequestFailed:
+            wait_secs = random.uniform(5, 10) * 60
+            self.log.exception("Paint request failed")
+            self.log.info(f"Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
         except httpx.RequestError:
             wait_secs = random.uniform(0.5, 1.5) * 60  # 0.5-1.5 minutes
             self.log.exception("Request error occurred")

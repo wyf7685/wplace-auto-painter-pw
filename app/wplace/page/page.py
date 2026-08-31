@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import json
 import math
@@ -8,7 +9,7 @@ import anyio
 
 from app.browser import pw_timeout_error
 from app.const import assets
-from app.exception import ElementNotFound
+from app.exception import ElementNotFound, PaintAccountBanned, PaintRequestBlocked, PaintRequestFailed, TokenExpired
 from app.log import escape_tag
 from app.utils import Highlight
 
@@ -18,11 +19,12 @@ from .panel import PaintPanel
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from playwright.async_api import ConsoleMessage, ElementHandle, Page
+    from playwright.async_api import ConsoleMessage, ElementHandle, Page, Response
 else:
-    ConsoleMessage = Any
+    ConsoleMessage = ElementHandle = Page = Response = Any
 
 PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
+PAINT_REQUEST_URL = "https://backend.wplace.live/paint"
 
 # Map zoom level the injected script writes into `localStorage.location`. Passed
 # through `script_data`, so this stays the single source of truth for both sides.
@@ -44,6 +46,9 @@ class WplacePage:
         self._btn_id = f"btn-{key}"
         self.has_captcha = False
         self.captcha_resolved = anyio.Event()
+        self._paint_response_tasks: set[asyncio.Task[None]] = set()
+        self._paint_error: Exception | None = None
+        self._submit_succeeded = False
 
     @property
     def submit_btn_selector(self) -> str:
@@ -58,6 +63,7 @@ class WplacePage:
 
         async with context.new_page() as page:
             page.on("console", self._on_console_log)
+            page.on("response", self._on_response)
             await page.add_init_script(assets.paint_btn(script_data))
             await page.goto("https://wplace.live/", timeout=60_000, wait_until="domcontentloaded")
 
@@ -71,6 +77,7 @@ class WplacePage:
             try:
                 yield self
             finally:
+                await self.wait_for_paint_responses()
                 del self.page
 
     def _on_console_log(self, msg: ConsoleMessage) -> None:
@@ -83,30 +90,127 @@ class WplacePage:
                 self.log.info(f"WPlace Version: <y>{escape_tag(message)}</>")
             case "submit-success":
                 self.log.success("Paint submit <g>success</>")
+                self._submit_succeeded = True
+                self.has_captcha = False
+                self.captcha_resolved.set()
             case "submit-error":
                 self.log.error(f"Paint submit <r>error</>: <r>{escape_tag(message)}</>")
-            case "submit-retry-error":
-                self.log.error(f"Paint submit <r>retry error</>: <r>{escape_tag(message)}</>")
-                if self.has_captcha and not self.captcha_resolved.is_set():
-                    self.log.warning("Assuming captcha is unsolvable and proceeding anyway")
-                    self.captcha_resolved.set()
-            case "paint":
-                data = message
-                with contextlib.suppress(Exception):
-                    data = json.loads(data)
-                self.log.debug(f"Paint Response: {Highlight.apply(data)}")
+                if self._paint_error is None:
+                    self._record_paint_error(PaintRequestFailed(message))
+                if self.has_captcha:
+                    self.log.warning("Challenge flow ended without a successful paint response")
+                self.captcha_resolved.set()
 
-                match data:
-                    case {"error": "challenge-required"}:
-                        self.log.warning("Captcha challenge detected during paint submit")
-                        self.has_captcha = True
-                    case {"painted": int(painted)}:
-                        self.log.info(f"Painted pixel count: <g>{painted}</>")
-                        self.has_captcha = False
-                        self.captcha_resolved.set()
-                    case str() if "html" in data:
-                        self.log.warning("Received HTML response during paint submit, assuming captcha challenge")
-                        self.has_captcha = True
+    def _on_response(self, response: Response) -> None:
+        if response.url != PAINT_REQUEST_URL or response.request.method != "POST":
+            return
+
+        task = asyncio.create_task(self._read_paint_response(response))
+        self._paint_response_tasks.add(task)
+
+    async def _read_paint_response(self, response: Response) -> None:
+        if response.ok:
+            self._handle_paint_response(response, {})
+            return
+
+        headers = response.headers
+        if response.status == 401 or headers.get("x-block-reason") or headers.get("cf-mitigated"):
+            self._handle_paint_response(response, {})
+            return
+
+        try:
+            with anyio.fail_after(10):
+                text = await response.text()
+        except TimeoutError:
+            self._record_paint_error(
+                PaintRequestFailed(
+                    f"Timed out reading paint response body (HTTP {response.status})",
+                    status=response.status,
+                )
+            )
+            return
+        except Exception:
+            self.log.exception("Failed to read paint response")
+            return
+
+        data: object = text
+        with contextlib.suppress(Exception):
+            data = json.loads(text)
+        self.log.debug(f"Paint Response: {Highlight.apply(data)}")
+        self._handle_paint_response(response, data)
+
+    def _handle_paint_response(self, response: Response, data: object) -> None:
+        if self._submit_succeeded:
+            return
+        headers = response.headers
+        block_reason = headers.get("x-block-reason", "").lower()
+        if block_reason in {"integrity", "tor"}:
+            self._record_paint_error(PaintRequestBlocked(f"Paint request blocked by server policy: {block_reason}"))
+            return
+
+        if response.status == 401:
+            self._record_paint_error(TokenExpired("Authentication token expired during paint submit"))
+            return
+
+        if headers.get("cf-mitigated", "").lower() == "challenge" or (isinstance(data, str) and "html" in data.lower()):
+            self.log.warning("Received a Cloudflare challenge during paint submit")
+            self.has_captcha = True
+            return
+
+        payload: dict[str, object] = data if isinstance(data, dict) else {}
+        code = payload.get("error")
+        if code == "challenge-required":
+            tier = payload.get("tier")
+            self.log.warning(f"Captcha challenge detected during paint submit, tier={tier!r}")
+            self.has_captcha = True
+            return
+        if code == "verification-required":
+            self.log.warning("Additional fingerprint verification required during paint submit")
+            return
+        if code == "timeout":
+            duration_ms = payload.get("durationMs")
+            suffix = f" (durationMs={duration_ms})" if isinstance(duration_ms, int | float) else ""
+            self._record_paint_error(
+                PaintAccountBanned(f"Paint request returned timeout; treating account as banned{suffix}")
+            )
+            return
+
+        if response.ok:
+            painted = payload.get("painted")
+            if isinstance(painted, int):
+                self.log.info(f"Painted pixel count: <g>{painted}</>")
+            self._submit_succeeded = True
+            self.has_captcha = False
+            self.captcha_resolved.set()
+            return
+
+        if isinstance(code, str):
+            error = PaintRequestFailed(
+                f"Paint request failed: {code}",
+                status=response.status,
+                code=code,
+            )
+        else:
+            error = PaintRequestFailed(
+                f"Paint request failed with HTTP {response.status}: {data!r}",
+                status=response.status,
+            )
+        self._record_paint_error(error)
+
+    def _record_paint_error(self, error: Exception) -> None:
+        self._paint_error = error
+        if not self.captcha_resolved.is_set():
+            self.captcha_resolved.set()
+
+    async def wait_for_paint_responses(self) -> None:
+        while self._paint_response_tasks:
+            tasks = tuple(self._paint_response_tasks)
+            await asyncio.gather(*tasks)
+            self._paint_response_tasks.difference_update(tasks)
+
+    def raise_for_paint_error(self) -> None:
+        if self._paint_error is not None:
+            raise self._paint_error
 
     async def find_paint_button(self) -> ElementHandle:
         paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)

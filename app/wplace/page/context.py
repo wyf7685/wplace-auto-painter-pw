@@ -9,7 +9,7 @@ import anyio
 import anyio.to_thread
 from pydantic import SecretStr
 
-from app.browser import get_browser, get_persistent_context
+from app.browser import get_persistent_context
 from app.config import Config
 from app.const import APP_NAME, USER_CONTEXT_DIR, assets
 from app.exception import FetchFailed, TokenExpired
@@ -23,21 +23,13 @@ if TYPE_CHECKING:
     from playwright.async_api import BrowserContext, Page
 
 
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
-)
-
-
 @contextlib.asynccontextmanager
-async def _headless_context(credentials: WplaceCredentials) -> AsyncGenerator[BrowserContext]:
-    async with (
-        get_browser(headless=True) as browser,
-        await browser.new_context(
-            user_agent=USER_AGENT,
-            viewport={"width": 1920, "height": 1080},
-            java_script_enabled=True,
-        ) as context,
-    ):
+async def _headless_context(user_data_dir: Path, credentials: WplaceCredentials) -> AsyncGenerator[BrowserContext]:
+    async with get_persistent_context(
+        user_data_dir=user_data_dir,
+        viewport={"width": 1920, "height": 1080},
+        headless=True,
+    ) as context:
         await context.add_init_script(assets.page_init())
         await context.add_cookies(credentials.to_pw_cookies())
         yield context
@@ -92,7 +84,7 @@ class UserContext:
             cm = get_persistent_context(
                 user_data_dir=self.user_data_dir,
                 viewport={"width": 1280, "height": 720},
-                user_agent=USER_AGENT,
+                headless=False,
             )
             context = await self._stack.enter_async_context(cm)
             await context.add_init_script(assets.page_init())
@@ -125,7 +117,7 @@ class UserContext:
         credentials = self.user.credentials
 
         async with (
-            _headless_context(credentials)
+            _headless_context(self.user_data_dir, credentials)
             if self._context is None
             else contextlib.nullcontext(self._context) as context,
             await context.new_page() as page,

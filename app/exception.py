@@ -52,3 +52,20 @@ class ElementNotFound(ShouldQuit):
 
 class PaintFinished(ShouldQuit):
     """Exception raised when painting is finished."""
+
+
+class PaintRequestFailed(AppException):
+    """Exception raised when a paint request is rejected but may be retried."""
+
+    def __init__(self, message: str, *, status: int | None = None, code: str | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+        self.code = code
+
+
+class PaintRequestBlocked(ShouldQuit):
+    """Exception raised when paint requests are blocked by a network or integrity policy."""
+
+
+class PaintAccountBanned(ShouldQuit):
+    """Exception raised when a paint timeout response indicates that the account is banned."""
