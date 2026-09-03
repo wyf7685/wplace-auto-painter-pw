@@ -24,6 +24,7 @@ class MainWindow(FluentWindow):
         on_start: Callable[[], None],
         on_stop: Callable[[], None],
         on_save: Callable[[], None],
+        on_update: Callable[[], None],
         on_exit: Callable[[], None],
     ) -> None:
         super().__init__()
@@ -32,6 +33,7 @@ class MainWindow(FluentWindow):
         self._on_start = on_start
         self._on_stop = on_stop
         self._on_save = on_save
+        self._on_update = on_update
         self._on_exit = on_exit
 
         self._tool_rows: list[ToolRowWidget] = []
@@ -46,7 +48,7 @@ class MainWindow(FluentWindow):
 
         self.config_page = self._build_page(self.config_editor, "ConfigPage")
         self.logs_page = self._build_page(self.log_viewer, "LogsPage")
-        self.about_page = AboutPage(icon, self)
+        self.about_page = AboutPage(icon, self._on_update, self)
 
         self.addSubInterface(self.config_page, FluentIcon.SETTING, tr("main.nav.config"))
         self.addSubInterface(self.logs_page, FluentIcon.DOCUMENT, tr("main.nav.logs"))
@@ -88,6 +90,12 @@ class MainWindow(FluentWindow):
 
     def goto_logs_page(self) -> None:
         self.switchTo(self.logs_page)
+
+    def set_update_state(self, state: str, version: str = "") -> None:
+        self.about_page.set_update_state(state, version)
+
+    def set_update_progress(self, downloaded: int, total: int) -> None:
+        self.about_page.set_update_progress(downloaded, total)
 
     def _move_to_screen_center(self) -> None:
         geometry = self.screen().availableGeometry()

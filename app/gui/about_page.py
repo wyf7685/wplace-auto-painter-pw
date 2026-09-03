@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QFontDatabase, QIcon
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -7,21 +9,23 @@ from qfluentwidgets import (
     ElevatedCardWidget,
     FluentIcon,
     HyperlinkCard,
+    PrimaryPushSettingCard,
     SettingCard,
     SettingCardGroup,
     SmoothScrollArea,
     TitleLabel,
 )
 
-from app.const import APP_NAME, REPOSITORY_ACTIONS_URL, REPOSITORY_URL
-from app.version import get_app_version, get_commit_hash
+from app.const import APP_NAME, REPOSITORY_RELEASES_URL, REPOSITORY_URL
+from app.version import get_commit_hash, get_version_display
 
 from .i18n import tr
 
 
 class AboutPage(SmoothScrollArea):
-    def __init__(self, icon: QIcon, parent: QWidget | None = None) -> None:
+    def __init__(self, icon: QIcon, on_update: Callable[[], None], parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._on_update = on_update
         self.setObjectName("AboutPage")
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -65,7 +69,7 @@ class AboutPage(SmoothScrollArea):
         text_layout.addWidget(TitleLabel(APP_NAME, card))
         text_layout.addWidget(BodyLabel(tr("about.description"), card))
 
-        build_label = CaptionLabel(tr("about.build", version=get_app_version()), card)
+        build_label = CaptionLabel(tr("about.build", version=get_version_display()), card)
         build_label.setFont(self._fixed_font())
         text_layout.addWidget(build_label)
         text_layout.addStretch()
@@ -105,12 +109,20 @@ class AboutPage(SmoothScrollArea):
             tr("about.repository.description"),
             group,
         )
-        actions_card = HyperlinkCard(
-            REPOSITORY_ACTIONS_URL,
+        self.update_card = PrimaryPushSettingCard(
+            tr("update.action.check"),
+            FluentIcon.UPDATE,
+            tr("update.title"),
+            tr("update.state.idle"),
+            group,
+        )
+        self.update_card.clicked.connect(self._on_update)
+        releases_card = HyperlinkCard(
+            REPOSITORY_RELEASES_URL,
             tr("about.open"),
             FluentIcon.CLOUD_DOWNLOAD,
-            tr("about.actions"),
-            tr("about.actions.description"),
+            tr("about.releases"),
+            tr("about.releases.description"),
             group,
         )
         license_card = SettingCard(
@@ -120,5 +132,27 @@ class AboutPage(SmoothScrollArea):
             group,
         )
 
-        group.addSettingCards([commit_card, repository_card, actions_card, license_card])
+        group.addSettingCards([commit_card, self.update_card, repository_card, releases_card, license_card])
         return group
+
+    def set_update_state(self, state: str, version: str = "") -> None:
+        button_key = {
+            "idle": "update.action.check",
+            "unsupported": "update.action.open_releases",
+            "checking": "update.action.checking",
+            "current": "update.action.check_again",
+            "available": "update.action.download",
+            "downloading": "update.action.downloading",
+            "ready": "update.action.restart",
+            "applying": "update.action.applying",
+            "error": "update.action.retry",
+        }.get(state, "update.action.check")
+        content_key = f"update.state.{state}"
+        self.update_card.button.setText(tr(button_key, version=version))
+        self.update_card.contentLabel.setText(tr(content_key, version=version, percent=0))
+        self.update_card.button.setEnabled(state not in {"checking", "downloading", "applying"})
+
+    def set_update_progress(self, downloaded: int, total: int) -> None:
+        percent = min(100, round(downloaded * 100 / total)) if total > 0 else 0
+        self.update_card.button.setText(tr("update.action.downloading"))
+        self.update_card.contentLabel.setText(tr("update.state.downloading", percent=percent))

@@ -3,6 +3,7 @@ __pycache__/
 *.py[oc]
 build/
 dist/
+release/
 wheels/
 *.egg-info
 
@@ -11,7 +12,6 @@ wheels/
 /data
 /logs
 
-.git_commit_hash
 AGENTS.md
 
 /test*.py

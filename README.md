@@ -10,9 +10,11 @@
 
 Paint on wplace with playwright
 
-## Getting Started
+## 获取应用
 
-Download prebuilt binaries from [GitHub Actions](https://github.com/wyf7685/wplace-auto-painter-pw/actions) for Windows and Linux.
+从 [GitHub Releases](https://github.com/wyf7685/wplace-auto-painter-pw/releases) 下载对应平台的发布包并完整解压。应用使用 `onedir` 目录结构，不能只复制主程序文件。
+
+首次从旧版单文件程序迁移时，将新发布包内容解压到旧程序所在目录；发布包不包含 `data/` 和 `logs/`，现有配置、模板和 Playwright 浏览器数据会保留。完成这次手动迁移后，可在 GUI 的“关于”页面检查、下载并重启更新。
 
 ## Develop
 
@@ -40,6 +42,29 @@ uv run prek install
 ```bash
 uv run main.py
 ```
+
+## 本地打包
+
+必须先构建独立 updater，再构建主程序。开发机打包不要设置 `BUILD_CI=true`，`build.spec` 和 `updater.spec` 会隔离本机 `PATH` 中可能污染构建的 DLL。
+
+```bash
+uv run pyinstaller --clean --noconfirm updater.spec
+uv run pyinstaller --clean --noconfirm build.spec
+uv run python scripts/release.py package --bundle-dir dist/wplace-auto-painter --platform windows-x86_64 --output-dir release
+```
+
+Linux 打包时将 `--platform` 改为 `linux-x86_64`。
+
+## 版本发布
+
+`pyproject.toml` 中的版本号是唯一版本来源。正式发布使用匹配的 SemVer tag；CI 会验证 tag、构建 Windows/Linux `onedir` 包、生成 SHA-256 更新清单，并在所有资产上传成功后发布 GitHub Release。
+
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+```
+
+tag 去掉前缀 `v` 后必须与 `[project].version` 完全一致，并且 tag 所指向的提交必须位于 `master`。
 
 ## See Also
 

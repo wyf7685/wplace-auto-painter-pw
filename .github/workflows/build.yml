@@ -4,15 +4,8 @@ on:
   push:
     branches:
       - master
-    paths:
-      - ".github/workflows/build.yml"
-      - ".gitattributes"
-      - "build.spec"
-      - "app/**"
-      - "main.py"
-      - "pyproject.toml"
-      - "ruff.toml"
-      - "uv.lock"
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
 
 jobs:
@@ -37,7 +30,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Ruff check
         run: uv run ruff check --output-format=github
@@ -49,7 +42,7 @@ jobs:
         run: uv run basedpyright
 
   build:
-    name: Build on ${{ matrix.platform.os }}
+    name: Build ${{ matrix.platform.key }}
     needs: lint
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -58,9 +51,82 @@ jobs:
         platform:
           - os: linux
             runner: ubuntu-22.04
+            key: linux-x86_64
+            executable_suffix: ""
           - os: windows
             runner: windows-2022
+            key: windows-x86_64
+            executable_suffix: ".exe"
 
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Validate build version
+        id: metadata
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            git fetch origin master
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/master
+          fi
+          uv run python scripts/release.py build-info --tag "$RELEASE_TAG"
+
+      - name: Install UPX
+        uses: crazy-max/ghaction-upx@v4
+        with:
+          install-only: true
+
+      - name: Build standalone updater
+        env:
+          BUILD_CI: "true"
+        run: uv run pyinstaller --clean --noconfirm updater.spec
+
+      - name: Build onedir application
+        env:
+          BUILD_CI: "true"
+          BUILD_COMMIT: ${{ github.sha }}
+          BUILD_TAG: ${{ steps.metadata.outputs.tag }}
+        run: uv run pyinstaller --clean --noconfirm build.spec
+
+      - name: Smoke test packaged version
+        shell: bash
+        run: ./dist/wplace-auto-painter/wplace-auto-painter${{ matrix.platform.executable_suffix }} --version
+
+      - name: Create release archive
+        id: package
+        run: >-
+          uv run python scripts/release.py package
+          --bundle-dir dist/wplace-auto-painter
+          --platform ${{ matrix.platform.key }}
+          --output-dir release
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.platform.key }}
+          path: release/
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
 
@@ -71,24 +137,36 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
-      - name: Install UPX
-        uses: crazy-max/ghaction-upx@v4
+      - name: Download release assets
+        uses: actions/download-artifact@v8
         with:
-          install-only: true
+          pattern: release-*
+          path: release
+          merge-multiple: true
 
-      - name: Build
+      - name: Generate update manifest
+        run: >-
+          uv run python scripts/release.py build-manifest
+          --assets-dir release
+          --tag "${{ github.ref_name }}"
+          --commit "${{ github.sha }}"
+          --output release/update-manifest.json
+
+      - name: Publish release atomically
+        shell: bash
         env:
-          BUILD_CI: "true"
-          BUILD_ONEFILE: "true"
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
         run: |
-          upx --version
-          uv run pyinstaller build.spec
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: wplace-auto-painter_${{ matrix.platform.os }}
-          path: |
-            dist/
+          existing="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [ "$existing" = "false" ]; then
+            echo "Published release already exists: $TAG" >&2
+            exit 1
+          fi
+          if [ "$existing" = "true" ]; then
+            gh release delete "$TAG" --yes
+          fi
+          gh release create "$TAG" release/* --draft --verify-tag --generate-notes --title "$TAG"
+          gh release edit "$TAG" --draft=false --latest

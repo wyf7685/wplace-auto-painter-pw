@@ -7,6 +7,8 @@ from collections.abc import Callable
 
 import loguru
 
+from app.const import LOGS_DIR
+
 logger: loguru.Logger = loguru.logger
 
 
@@ -57,6 +59,7 @@ def log_prefix_width(record_name: str, level: str, logger_name: str = "") -> int
     return len(prefix) + (len(logger_name) + len(" | ") if logger_name else 0)
 
 
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 logger.remove()
 
 
@@ -88,7 +91,7 @@ if sys.stdout:
     )
 
 logger.add(
-    "./logs/{time:YYYY-MM-DD}.log",
+    str(LOGS_DIR / "{time:YYYY-MM-DD}.log"),
     rotation="00:00",
     level="DEBUG",
     diagnose=True,

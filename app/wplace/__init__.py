@@ -1,10 +1,9 @@
 import anyio
 
 from app.browser import shutdown_idle_playwright_loop, shutdown_playwright
-from app.config import Config, ensure_config_ready
+from app.config import ensure_config_ready
 from app.exception import AppException
 from app.log import logger
-from app.utils.update import check_update_loop
 from app.version import get_app_version
 
 
@@ -13,18 +12,11 @@ async def run_painter() -> None:
 
     ensure_config_ready()
 
-    if Config.load().check_update:
-        from app.utils.update import check_update
-
-        await check_update()
-
     from .paint import setup_paint
 
     try:
         async with anyio.create_task_group() as tg:
             tg.start_soon(shutdown_idle_playwright_loop)
-            if Config.load().check_update:
-                tg.start_soon(check_update_loop)
 
             try:
                 await setup_paint()
