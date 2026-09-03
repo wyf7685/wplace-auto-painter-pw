@@ -32,6 +32,3 @@ test = ["pytest>=8.4.0"]
 
 [tool.uv]
 package = false
-
-[tool.ty.analysis]
-allowed-unresolved-imports = ["windows_toasts", "winrt.windows.ui.notifications"]
