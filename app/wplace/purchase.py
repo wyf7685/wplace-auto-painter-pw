@@ -1,50 +1,69 @@
 from typing import Literal, assert_never
 
-import cloudscraper
-
-from app.exception import FetchFailed
+from app.exception import FetchFailed, TokenExpired
 from app.log import logger
-from app.schemas import PurchaseChargeConfig, PurchaseMaxChargeConfig, UserConfig, WplaceCredentials, WplaceUserInfo
-from app.utils import requests_proxies, run_sync
+from app.schemas import PurchaseChargeConfig, PurchaseMaxChargeConfig, WplaceUserInfo
+from app.wplace.page import UserContext
 
+WPLACE_APP_URL = "https://wplace.live/"
 WPLACE_PURCHASE_API_URL = "https://backend.wplace.live/purchase"
-_SCRAPER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/140.0.0.0 Safari/537.36"
-    ),
-    "Sec-Ch-Ua": '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Origin": "https://wplace.live",
+_PRODUCT_IDS = {"max_charges": 70, "charges": 80}
+_PURCHASE_SCRIPT = """
+async ({url, product}) => {
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    body: JSON.stringify({product}),
+    signal: AbortSignal.timeout(20_000),
+  });
+  return {
+    status: response.status,
+    body: await response.text(),
+    cfMitigated: response.headers.get("cf-mitigated"),
+  };
 }
+"""
 
 
-@run_sync
-def _post_purchase(credentials: WplaceCredentials, type: Literal["max_charges", "charges"], amount: int) -> None:  # noqa: A002
+async def _post_purchase(
+    context: UserContext,
+    purchase_type: Literal["max_charges", "charges"],
+    amount: int,
+) -> None:
+    payload = {
+        "url": WPLACE_PURCHASE_API_URL,
+        "product": {"id": _PRODUCT_IDS[purchase_type], "amount": amount},
+    }
     try:
-        resp = cloudscraper.create_scraper().post(
-            WPLACE_PURCHASE_API_URL,
-            headers=_SCRAPER_HEADERS,
-            cookies=credentials.to_requests_cookies(),
-            proxies=requests_proxies(),
-            json={"product": {"id": {"max_charges": 70, "charges": 80}[type], "amount": amount}},
-            timeout=20,
-        )
-        resp.raise_for_status()
+        async with context.new_background_page() as (_, page):
+            await page.goto(WPLACE_APP_URL, timeout=60_000, wait_until="domcontentloaded")
+            result = await page.evaluate(_PURCHASE_SCRIPT, payload)
     except Exception as e:
-        raise FetchFailed(f"Request failed: {e!r}") from e
+        raise FetchFailed(f"Purchase request failed: {e!r}") from e
 
-    try:
-        data = resp.json()
-    except Exception as e:
-        raise FetchFailed("Failed to parse JSON response") from e
-    if not data["success"]:
-        raise FetchFailed("Purchase failed: Unknown error")
+    if not isinstance(result, dict):
+        raise FetchFailed(f"Purchase returned an invalid response: {result!r}")
+
+    status = result.get("status")
+    body = result.get("body")
+    cf_mitigated = result.get("cfMitigated")
+    if not isinstance(status, int) or not isinstance(body, str):
+        raise FetchFailed(f"Purchase returned an invalid response: {result!r}")
+
+    if status == 200:
+        return
+    if status == 401:
+        raise TokenExpired("Authentication token expired during purchase")
+    if isinstance(cf_mitigated, str) and cf_mitigated.lower() == "challenge":
+        raise FetchFailed("Purchase request was challenged by Cloudflare")
+
+    detail = body.strip()
+    suffix = f": {detail[:500]}" if detail else ""
+    raise FetchFailed(f"Purchase failed with HTTP {status}{suffix}")
 
 
-async def process_purchase(cfg: UserConfig, user_info: WplaceUserInfo) -> bool:
+async def process_purchase(context: UserContext, user_info: WplaceUserInfo) -> bool:
+    cfg = context.user
     if cfg.auto_purchase is None:
         return False
 
@@ -62,7 +81,7 @@ async def process_purchase(cfg: UserConfig, user_info: WplaceUserInfo) -> bool:
                 "Auto-purchasing max charges: "
                 f"current_max=<y>{user_info.charges.max}</>, target_max=<y>{target}</>, amount=<y>{amount}</>"
             )
-            await _post_purchase(cfg.credentials, "max_charges", amount)
+            await _post_purchase(context, "max_charges", amount)
             return True
 
         case PurchaseChargeConfig(retain_droplets=retain):
@@ -73,7 +92,7 @@ async def process_purchase(cfg: UserConfig, user_info: WplaceUserInfo) -> bool:
             logger.opt(colors=True).info(
                 f"Auto-purchasing charges: current=<y>{user_info.charges.count:.2f}</>, amount=<y>{amount}</>"
             )
-            await _post_purchase(cfg.credentials, "charges", amount)
+            await _post_purchase(context, "charges", amount)
             return True
 
         case x:

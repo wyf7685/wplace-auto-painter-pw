@@ -12,7 +12,6 @@ from json import JSONEncoder
 from typing import TYPE_CHECKING, Any, Literal, NotRequired, Self, TypedDict, cast
 
 import anyio
-import anyio.to_thread
 from pydantic import BaseModel, SecretStr
 from tzlocal import get_localzone
 
@@ -188,13 +187,6 @@ def with_semaphore[T: Callable](initial_value: int) -> Callable[[T], T]:
     return decorator
 
 
-def requests_proxies() -> dict[str, str] | None:
-    from app.config import Config
-
-    proxy = Config.load().proxy
-    return {"http": proxy, "https": proxy} if proxy else None
-
-
 class _TokenPayload(BaseModel):
     userId: int  # noqa: N815
     sessionId: str  # noqa: N815
@@ -222,20 +214,6 @@ def is_token_expired(token: str, ahead_secs: int = 60) -> bool:
         return True
 
     return (payload.expires_at - dt.datetime.now()).total_seconds() < ahead_secs
-
-
-def run_sync[**P, R](call: Callable[P, R]) -> Callable[P, Coroutine[None, None, R]]:
-    """一个用于包装 sync function 为 async function 的装饰器
-
-    参数:
-        call: 被装饰的同步函数
-    """
-
-    @functools.wraps(call)
-    async def _wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        return await anyio.to_thread.run_sync(functools.partial(call, *args, **kwargs), abandon_on_cancel=True)
-
-    return _wrapper
 
 
 class SecretStrEncoder(JSONEncoder):

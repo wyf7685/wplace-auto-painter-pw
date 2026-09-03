@@ -8,8 +8,6 @@ if TYPE_CHECKING:
     from .func import SecretStrEncoder as SecretStrEncoder
     from .func import is_token_expired as is_token_expired
     from .func import logger_wrapper as logger_wrapper
-    from .func import requests_proxies as requests_proxies
-    from .func import run_sync as run_sync
     from .func import subprocess_options as subprocess_options
     from .func import with_retry as with_retry
     from .func import with_semaphore as with_semaphore
@@ -22,8 +20,6 @@ _LOCATION = {
     "SecretStrEncoder": "func",
     "is_token_expired": "func",
     "logger_wrapper": "func",
-    "requests_proxies": "func",
-    "run_sync": "func",
     "subprocess_options": "func",
     "with_retry": "func",
     "with_semaphore": "func",
@@ -38,8 +34,6 @@ __all__ = [
     "is_token_expired",
     "logger_wrapper",
     "parse_rgb_str",
-    "requests_proxies",
-    "run_sync",
     "subprocess_options",
     "toast",
     "with_retry",

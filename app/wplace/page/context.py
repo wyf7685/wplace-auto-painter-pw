@@ -113,15 +113,22 @@ class UserContext:
                 await context.new_page()
             await page.close()
 
-    async def fetch_user_info(self) -> WplaceUserInfo:
+    @contextlib.asynccontextmanager
+    async def new_background_page(self) -> AsyncGenerator[tuple[BrowserContext, Page]]:
+        """Use the active browser context, or a temporary headless persistent context."""
         credentials = self.user.credentials
-
         async with (
             _headless_context(self.user_data_dir, credentials)
             if self._context is None
             else contextlib.nullcontext(self._context) as context,
             await context.new_page() as page,
         ):
+            yield context, page
+
+    async def fetch_user_info(self) -> WplaceUserInfo:
+        credentials = self.user.credentials
+
+        async with self.new_background_page() as (context, page):
             resp = await page.goto("https://backend.wplace.live/me", wait_until="networkidle")
             if not resp:
                 raise FetchFailed("Failed to fetch user info")

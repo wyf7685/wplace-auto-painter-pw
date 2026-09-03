@@ -33,12 +33,6 @@ class WplaceCredentials(BaseModel):
             cookies.append(_construct_pw_cookie("cf_clearance", self.cf_clearance.get_secret_value()))
         return cookies
 
-    def to_requests_cookies(self) -> dict[str, str]:
-        cookies: dict[str, str] = {"j": self.token.get_secret_value()}
-        if self.cf_clearance:
-            cookies["cf_clearance"] = self.cf_clearance.get_secret_value()
-        return cookies
-
 
 class PurchaseMaxChargeConfig(BaseModel):
     type: Literal["max_charges"]

@@ -239,7 +239,7 @@ class Painter:
 
         if self.user.auto_purchase is not None:
             self.log.info(f"Checking auto-purchase: {Highlight.apply(self.user.auto_purchase)}")
-            if await process_purchase(self.user, user_info):
+            if await process_purchase(self.context, user_info):
                 self.log.info("Purchase completed, refetching user info...")
                 # A successful purchase mutates charges/droplets; do not reuse stale data.
                 self._user_info_cache = None
