@@ -3371,7 +3371,7 @@ wheels = [
 
 [[package]]
 name = "wplace-auto-painter-pw"
-version = "0.1.0"
+version = "0.1.1"
 source = { virtual = "." }
 dependencies = [
     { name = "anyio" },
