@@ -10,11 +10,11 @@
 
 Paint on wplace with playwright
 
-## 获取应用
+## Download
 
-从 [GitHub Releases](https://github.com/wyf7685/wplace-auto-painter-pw/releases) 下载对应平台的发布包并完整解压。应用使用 `onedir` 目录结构，不能只复制主程序文件。
+Download the release archive for your platform from [GitHub Releases](https://github.com/wyf7685/wplace-auto-painter-pw/releases) and extract the entire archive. The application uses a PyInstaller `onedir` layout, so copying only the main executable is not supported.
 
-首次从旧版单文件程序迁移时，将新发布包内容解压到旧程序所在目录；发布包不包含 `data/` 和 `logs/`，现有配置、模板和 Playwright 浏览器数据会保留。完成这次手动迁移后，可在 GUI 的“关于”页面检查、下载并重启更新。
+When migrating from the legacy single-file build, extract the new release into the directory containing the old executable. Release archives do not contain `data/` or `logs/`, so existing configuration, templates, and Playwright browser data are preserved. After this one-time manual migration, future releases can be checked, downloaded, and installed from the Update card on the GUI About page.
 
 ## Develop
 
@@ -43,9 +43,9 @@ uv run prek install
 uv run main.py
 ```
 
-## 本地打包
+## Local Packaging
 
-必须先构建独立 updater，再构建主程序。开发机打包不要设置 `BUILD_CI=true`，`build.spec` 和 `updater.spec` 会隔离本机 `PATH` 中可能污染构建的 DLL。
+Build the standalone updater before building the main application. Do not set `BUILD_CI=true` for local builds: `build.spec` and `updater.spec` isolate the build from DLLs that may be introduced through the local `PATH`.
 
 ```bash
 uv run pyinstaller --clean --noconfirm updater.spec
@@ -53,18 +53,18 @@ uv run pyinstaller --clean --noconfirm build.spec
 uv run python scripts/release.py package --bundle-dir dist/wplace-auto-painter --platform windows-x86_64 --output-dir release
 ```
 
-Linux 打包时将 `--platform` 改为 `linux-x86_64`。
+For Linux builds, use `linux-x86_64` as the `--platform` value.
 
-## 版本发布
+## Releases
 
-`pyproject.toml` 中的版本号是唯一版本来源。正式发布使用匹配的 SemVer tag；CI 会验证 tag、构建 Windows/Linux `onedir` 包、生成 SHA-256 更新清单，并在所有资产上传成功后发布 GitHub Release。
+The version in `pyproject.toml` is the single source of truth. A release is triggered by a matching SemVer tag. CI validates the tag, builds the Windows and Linux `onedir` archives, generates the SHA-256 update manifest, and publishes the GitHub Release only after every asset has been uploaded successfully.
 
 ```bash
 git tag -a v0.1.0 -m "Release v0.1.0"
 git push origin v0.1.0
 ```
 
-tag 去掉前缀 `v` 后必须与 `[project].version` 完全一致，并且 tag 所指向的提交必须位于 `master`。
+The tag without its leading `v` must exactly match `[project].version`, and the tagged commit must be reachable from `master`.
 
 ## See Also
 
