@@ -12,6 +12,4 @@ wheels/
 /data
 /logs
 
-AGENTS.md
-
 /test*.py
