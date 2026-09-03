@@ -22,13 +22,13 @@ from app.const import APP_NAME, assets
 from app.log import logger
 
 if TYPE_CHECKING:
-    from windows_toasts import (  # pyright: ignore[reportMissingImports]
+    from windows_toasts import (
         Toast,
         ToastActivatedEventArgs,
         ToastDisplayImage,
     )
-    from windows_toasts import ToastDuration as Duration  # pyright: ignore[reportMissingImports]
-    from winrt.windows.ui.notifications import NotificationSetting  # pyright: ignore[reportMissingImports]
+    from windows_toasts import ToastDuration as Duration
+    from winrt.windows.ui.notifications import NotificationSetting
 else:
 
     class Duration(enum.Enum):
@@ -57,8 +57,8 @@ if sys.platform == "win32":
         global _wt, Duration, NotificationSetting
 
         try:
-            import windows_toasts as wt  # pyright: ignore[reportMissingImports]
-            from winrt.windows.ui.notifications import (  # pyright: ignore[reportMissingImports]
+            import windows_toasts as wt
+            from winrt.windows.ui.notifications import (
                 NotificationSetting as Setting,
             )
         except ImportError:

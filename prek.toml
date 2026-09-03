@@ -1,14 +1,23 @@
 [[repos]]
-repo = "https://github.com/astral-sh/ruff-pre-commit"
-rev = "v0.16.0"
-hooks = [
-  { id = "ruff-check", args = ["--fix"], types_or = ["python", "pyi"] },
-  { id = "ruff-format", types_or = ["python", "pyi"] },
-]
+repo = "local"
 
-[[repos]]
-repo = "https://github.com/DetachHead/basedpyright-prek-mirror"
-rev = "1.39.9"
-hooks = [
-    { id = "basedpyright"}
-]
+[[repos.hooks]]
+id = "ruff-check"
+name = "ruff check"
+entry = "uv run ruff check --fix --force-exclude ."
+language = "python"
+types_or = ["python", "pyi"]
+
+[[repos.hooks]]
+id = "ruff-format"
+name = "ruff format"
+entry = "uv run ruff format --force-exclude ."
+language = "python"
+types_or = ["python", "pyi"]
+
+[[repos.hooks]]
+id = "ty"
+name = "ty check"
+entry = "uv run ty check --force-exclude ."
+language = "python"
+types_or = ["python", "pyi"]

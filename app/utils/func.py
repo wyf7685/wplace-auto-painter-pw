@@ -70,7 +70,7 @@ def with_retry[**P, R](
                         f"第 <y>{attempt + 1}</>/<y>{retries}</> 次调用失败: "
                         f"<r>{escape_tag(repr(e))}</>"
                     )
-                    caught.append(cast("Exception", e))
+                    caught.append(e)
                     await anyio.sleep(delay)
 
             raise ExceptionGroup(f"所有 {retries} 次尝试均失败", caught) from caught[0]
