@@ -3,15 +3,6 @@ root = ["."]
 python-version = "3.14"
 python-platform = "all"
 
-# [src]
-# include = [
-#   "main.py",
-#   "app/**/*.py",
-#   "scripts/**/*.py",
-#   "build.spec",
-#   "updater.spec",
-# ]
-
 [[overrides]]
 include = ["app/utils/toast.py"]
 
