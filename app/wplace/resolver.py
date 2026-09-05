@@ -239,9 +239,23 @@ def find_paint_fn(chunks: Chunks) -> tuple[str, str]:
 
 
 PATTERN_WORKER_FN = re.compile(
-    r"function (?P<name>[a-zA-Z0-9_$]+)\((?P<arg>[a-zA-Z0-9_$]+)\)\s*\{"
-    r"return [a-zA-Z0-9_$]+\(\{type:\s*(?P<quote>['\"`])paintPixels(?P=quote),data:\s*(?P=arg)\}\)\}"
+    r"(?:async\s+)?function\s+(?P<name>[a-zA-Z0-9_$]+)\((?P<arg>[a-zA-Z0-9_$]+)\)\s*\{\s*"
+    r"(?:return|await)\s+[a-zA-Z0-9_$]+\(\{\s*type:\s*(?P<quote>['\"`])paintPixels(?P=quote),"
+    r"\s*data:\s*(?P=arg)\s*\}\)"
 )
+
+
+PATTERN_EXPORT_BLOCK = re.compile(r"export\s*\{(?P<entries>[^}]*)\};")
+PATTERN_EXPORT_ENTRY = re.compile(r"(?P<local>[a-zA-Z0-9_$]+)(?:\s+as\s+(?P<exported>[a-zA-Z0-9_$]+))?")
+
+
+def _find_exported_name(content: str, local_name: str) -> str | None:
+    for block_match in PATTERN_EXPORT_BLOCK.finditer(content):
+        for entry in block_match.group("entries").split(","):
+            entry_match = PATTERN_EXPORT_ENTRY.fullmatch(entry.strip())
+            if entry_match is not None and entry_match.group("local") == local_name:
+                return entry_match.group("exported") or local_name
+    return None
 
 
 def find_worker_fn(chunks: Chunks) -> tuple[str, str]:
@@ -252,11 +266,9 @@ def find_worker_fn(chunks: Chunks) -> tuple[str, str]:
     else:
         raise ResolveFailed("service worker wrapper not found")
 
-    pattern = r"export\s*\{[^}]*?\b,?" + re.escape(wrapper_name) + r"(?:\s+as\s+(?P<name>[a-zA-Z0-9_$]+))?[^}]*?\};"
-    match = re.search(pattern, content)
-    if match is None:
+    export_name = _find_exported_name(content, wrapper_name)
+    if export_name is None:
         raise ResolveFailed("exported name for wrapper not found")
-    export_name = match.group("name") or wrapper_name
 
     return export_name, chunks.url(chunk_path)
 
@@ -272,11 +284,9 @@ def find_season_num(chunks: Chunks) -> tuple[str, str]:
     else:
         raise ResolveFailed("season number assignment not found")
 
-    pattern = r"export\s*\{[^}]*?\b,?" + re.escape(obj_name) + r"(?:\s+as\s+(?P<name>[a-zA-Z0-9_$]+))?[^}]*?\};"
-    match = re.search(pattern, content)
-    if match is None:
+    export_name = _find_exported_name(content, obj_name)
+    if export_name is None:
         raise ResolveFailed("exported name for season number not found")
-    export_name = match.group("name") or obj_name
 
     return export_name, chunks.url(chunk_path)
 
@@ -314,11 +324,9 @@ def find_patch_logs(chunks: Chunks) -> tuple[str, str]:
         array_name = match.group("name")
 
     assert array_name is not None
-    pattern = r"export\s*\{[^}]*?\b,?" + re.escape(array_name) + r"(?:\s+as\s+(?P<name>[a-zA-Z0-9_$]+))?[^}]*?\};"
-    match = re.search(pattern, content)
-    if match is None:
+    export_name = _find_exported_name(content, array_name)
+    if export_name is None:
         raise ResolveFailed("exported name for patches array not found")
-    export_name = match.group("name") or array_name
 
     return export_name, chunks.url(chunk_path)
 
