@@ -1,7 +1,9 @@
+import json
 import tempfile
 import zipfile
+from dataclasses import replace
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import httpx
 import pytest
@@ -9,7 +11,7 @@ import pytest
 from app.update.client import ReleaseClient
 from app.update.model import PackageManifest, UpdateError
 from app.update.service import _extract_archive
-from app.update_helper import UpdatePlan, apply_update
+from app.update_helper import UpdatePlan, apply_update, load_plan
 from app.version import BuildInfo
 
 MANAGED_ENTRIES = ("wplace-auto-painter.exe", "_internal", "package-manifest.json")
@@ -58,6 +60,38 @@ def test_package_manifest_rejects_user_data_as_managed_entry() -> None:
         )
 
 
+def test_update_plan_rejects_non_boolean_headless_mode() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        plan = make_plan(Path(directory))
+        plan_path = plan.ready_file.parent / "update-plan.json"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "parent_pid": plan.parent_pid,
+                    "install_dir": str(plan.install_dir),
+                    "staging_dir": str(plan.staging_dir),
+                    "backup_dir": str(plan.backup_dir),
+                    "executable": plan.executable,
+                    "ready_file": str(plan.ready_file),
+                    "log_file": str(plan.log_file),
+                    "old_managed_entries": plan.old_managed_entries,
+                    "new_managed_entries": plan.new_managed_entries,
+                    "readiness_timeout": plan.readiness_timeout,
+                    "headless": "yes",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        helper_path = plan.log_file.parent / "helper.exe"
+        with (
+            patch("app.update_helper.sys.executable", str(helper_path)),
+            pytest.raises(TypeError, match="headless"),
+        ):
+            load_plan(plan_path)
+
+
 def test_archive_extraction_rejects_parent_directory_escape() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -72,7 +106,7 @@ def test_archive_extraction_rejects_parent_directory_escape() -> None:
 
 def test_helper_success_replaces_managed_entries_and_preserves_data() -> None:
     with tempfile.TemporaryDirectory() as directory:
-        plan = make_plan(Path(directory))
+        plan = replace(make_plan(Path(directory)), headless=True)
         process = MagicMock()
 
         def mark_ready(*_args: object) -> None:
@@ -80,7 +114,7 @@ def test_helper_success_replaces_managed_entries_and_preserves_data() -> None:
 
         with (
             patch("app.update_helper.wait_for_process_exit"),
-            patch("app.update_helper._launch", return_value=process),
+            patch("app.update_helper._launch", return_value=process) as launch,
             patch("app.update_helper._wait_until_ready", side_effect=mark_ready),
         ):
             apply_update(plan)
@@ -89,11 +123,17 @@ def test_helper_success_replaces_managed_entries_and_preserves_data() -> None:
         assert plan.install_dir.joinpath("_internal", "runtime.txt").read_text(encoding="utf-8") == "new"
         assert plan.install_dir.joinpath("data", "config.json").read_text(encoding="utf-8") == "preserved"
         assert not plan.backup_dir.exists()
+        launch.assert_called_once_with(
+            plan.install_dir / plan.executable,
+            "--no-gui",
+            "--update-ready-file",
+            str(plan.ready_file),
+        )
 
 
 def test_helper_failed_new_version_restores_old_package() -> None:
     with tempfile.TemporaryDirectory() as directory:
-        plan = make_plan(Path(directory))
+        plan = replace(make_plan(Path(directory)), headless=True)
         process = MagicMock()
         with (
             patch("app.update_helper.wait_for_process_exit"),
@@ -107,7 +147,15 @@ def test_helper_failed_new_version_restores_old_package() -> None:
         assert plan.install_dir.joinpath("wplace-auto-painter.exe").read_text(encoding="utf-8") == "exe-old"
         assert plan.install_dir.joinpath("_internal", "runtime.txt").read_text(encoding="utf-8") == "old"
         assert plan.install_dir.joinpath("data", "config.json").read_text(encoding="utf-8") == "preserved"
-        assert launch.call_count == 2
+        assert launch.call_args_list == [
+            call(
+                plan.install_dir / plan.executable,
+                "--no-gui",
+                "--update-ready-file",
+                str(plan.ready_file),
+            ),
+            call(plan.install_dir / plan.executable, "--no-gui"),
+        ]
 
 
 def test_release_client_selects_newer_platform_asset() -> None:

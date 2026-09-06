@@ -16,6 +16,8 @@ Download the release archive for your platform from [GitHub Releases](https://gi
 
 When migrating from the legacy single-file build, extract the new release into the directory containing the old executable. Release archives do not contain `data/` or `logs/`, so existing configuration, templates, and Playwright browser data are preserved. After this one-time manual migration, future releases can be checked, downloaded, and installed from the Update card on the GUI About page.
 
+Packaged builds also support `--no-gui`. When `check_update` is enabled, headless startup checks for a newer stable release before painting, verifies and stages it, then restarts in headless mode through the updater. A transient update failure is logged and the current version continues running.
+
 ## Develop
 
 Before setting up this project, ensure you have the following installed:

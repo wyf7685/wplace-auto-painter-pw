@@ -185,7 +185,7 @@ class UpdateService:
             if not (payload_dir / entry).exists():
                 raise UpdateError(f"Package managed entry is missing: {entry}")
 
-    def launch_helper(self, prepared: PreparedUpdate) -> subprocess.Popen[bytes]:
+    def launch_helper(self, prepared: PreparedUpdate, *, headless: bool = False) -> subprocess.Popen[bytes]:
         if not IS_FROZEN:
             raise UpdateError("Self-update is only available in a packaged application")
         if not assets.update_helper.is_file():
@@ -217,6 +217,7 @@ class UpdateService:
             "old_managed_entries": current_package.managed_entries,
             "new_managed_entries": prepared.package_manifest.managed_entries,
             "readiness_timeout": 45.0,
+            "headless": headless,
         }
         plan_file.write_text(json.dumps(plan, indent=2), encoding="utf-8")
 

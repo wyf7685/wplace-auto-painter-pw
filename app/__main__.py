@@ -15,6 +15,11 @@ def _parse_args() -> tuple[argparse.Namespace, list[str]]:
     return parser.parse_known_args()
 
 
+def _report_update_ready(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("ready\n", encoding="utf-8")
+
+
 def main() -> None:
     args, qt_args = _parse_args()
     if args.version:
@@ -29,7 +34,22 @@ def main() -> None:
     sys.argv[1:] = qt_args
 
     with contextlib.suppress(KeyboardInterrupt):
-        if args.no_gui and not IS_FROZEN:
+        if args.no_gui:
+            if args.update_ready_file is not None:
+                try:
+                    _report_update_ready(args.update_ready_file)
+                except OSError as exc:
+                    from app.log import logger
+
+                    logger.opt(exception=exc).critical("Failed to report updated headless application readiness")
+                    raise SystemExit(1) from exc
+
+            if IS_FROZEN:
+                from app.update.headless import try_install_headless_update
+
+                if try_install_headless_update():
+                    return
+
             import anyio
 
             from app.wplace import run_painter

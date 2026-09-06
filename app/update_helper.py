@@ -30,6 +30,7 @@ class UpdatePlan:
     old_managed_entries: tuple[str, ...]
     new_managed_entries: tuple[str, ...]
     readiness_timeout: float
+    headless: bool = False
 
 
 def _require(data: dict[str, Any], name: str, expected: type[Any]) -> Any:
@@ -83,6 +84,10 @@ def load_plan(path: Path) -> UpdatePlan:
     if parent_pid <= 0 or not isinstance(readiness_timeout, int | float) or readiness_timeout <= 0:
         raise ValueError("Invalid update process settings")
 
+    headless = data.get("headless", False)
+    if not isinstance(headless, bool):
+        raise TypeError("Invalid update plan field: headless")
+
     executable = _require(data, "executable", str)
     old_entries = _validate_entries(data.get("old_managed_entries"), "old_managed_entries")
     new_entries = _validate_entries(data.get("new_managed_entries"), "new_managed_entries")
@@ -100,6 +105,7 @@ def load_plan(path: Path) -> UpdatePlan:
         old_managed_entries=old_entries,
         new_managed_entries=new_entries,
         readiness_timeout=float(readiness_timeout),
+        headless=headless,
     )
 
 
@@ -235,6 +241,7 @@ def apply_update(plan: UpdatePlan) -> None:
     remove_path(plan.backup_dir)
     plan.backup_dir.mkdir(parents=True)
     plan.ready_file.unlink(missing_ok=True)
+    restart_args = ("--no-gui",) if plan.headless else ()
 
     activated: list[str] = []
     new_process: subprocess.Popen[bytes] | None = None
@@ -250,7 +257,12 @@ def apply_update(plan: UpdatePlan) -> None:
 
         executable = plan.install_dir / plan.executable
         write_log(plan, f"Launching updated application: {executable}")
-        new_process = _launch(executable, "--update-ready-file", str(plan.ready_file))
+        new_process = _launch(
+            executable,
+            *restart_args,
+            "--update-ready-file",
+            str(plan.ready_file),
+        )
         _wait_until_ready(new_process, plan.ready_file, plan.readiness_timeout)
     except Exception:
         write_log(plan, "Update failed; restoring previous version")
@@ -259,7 +271,7 @@ def apply_update(plan: UpdatePlan) -> None:
         _restore_backup(plan, activated)
         old_executable = plan.install_dir / plan.executable
         if old_executable.is_file():
-            _launch(old_executable)
+            _launch(old_executable, *restart_args)
         raise
 
     write_log(plan, "Updated application reported readiness")
