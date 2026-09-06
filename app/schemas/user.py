@@ -61,6 +61,10 @@ class UserConfig(BaseModel):
         default=None,
         description="Optional automatic charge purchasing configuration",
     )
+    paint_input_mode: Literal["click", "space_drag"] = Field(
+        default="click",
+        description="Browser input method used to queue pixels before submission",
+    )
     min_paint_charges: int = Field(
         default=30,
         description="Minimum number of charges required to start painting",

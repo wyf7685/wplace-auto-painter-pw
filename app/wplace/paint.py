@@ -26,12 +26,35 @@ logger = logger.opt(colors=True)
 # semantics of `anyio.Lock`, which would reject a re-claim from the same task.
 COLORS_CLAIMER_LOCK = anyio.Lock()
 CLAIMED_COLORS: set[ColorName] = set()
+SPACE_DRAG_MAX_RADIUS = 20
 
 
 class Pixel(NamedTuple):
     x: int
     y: int
     color: int
+
+
+def plan_space_drag_strokes(pixels: Iterable[Pixel], max_radius: int = SPACE_DRAG_MAX_RADIUS) -> list[list[Pixel]]:
+    if max_radius <= 0:
+        raise ValueError("max_radius must be greater than 0")
+
+    strokes: list[list[Pixel]] = []
+    current: list[Pixel] = []
+    for pixel in pixels:
+        if current:
+            previous = current[-1]
+            anchor = current[0]
+            is_adjacent = max(abs(pixel.x - previous.x), abs(pixel.y - previous.y)) <= 1
+            is_within_radius = max(abs(pixel.x - anchor.x), abs(pixel.y - anchor.y)) <= max_radius
+            if pixel.color != previous.color or not is_adjacent or not is_within_radius:
+                strokes.append(current)
+                current = []
+        current.append(pixel)
+
+    if current:
+        strokes.append(current)
+    return strokes
 
 
 class Painter:
@@ -188,25 +211,48 @@ class Painter:
                 await anyio.sleep(delay)
 
                 async with page.open_paint_panel() as paint:
-                    prev = pixels[0]
                     await anyio.sleep(random.uniform(0.5, 1.5))
-                    await paint.select_color(prev.color)
-                    for curr in pixels:
-                        if prev.color != curr.color:
-                            await anyio.sleep(random.uniform(0.5, 1.5))
-                            self.log.info(
-                                f"Switching color: <g>{COLORS_NAME[prev.color]}</>(id=<c>{prev.color}</>) "
-                                f"-> <g>{COLORS_NAME[curr.color]}</>(id=<c>{curr.color}</>)"
-                            )
-                            await paint.select_color(curr.color)
-                            await anyio.sleep(random.uniform(0.5, 1.5))
-                        await page.move_by_pixel(curr.x - prev.x, curr.y - prev.y)
-                        await page.click_current_pixel()
-                        prev = curr
-                        if random.random() < 0.02:
-                            idle_secs = random.uniform(0.5, 2.0)
-                            self.log.debug(f"Taking a short break for <y>{idle_secs:.2f}</> seconds...")
-                            await anyio.sleep(idle_secs)
+                    await paint.select_color(pixels[0].color)
+                    if self.user.paint_input_mode == "space_drag":
+                        anchor = pixels[0]
+                        previous_color = pixels[0].color
+                        for stroke in plan_space_drag_strokes(pixels):
+                            first = stroke[0]
+                            if previous_color != first.color:
+                                await anyio.sleep(random.uniform(0.5, 1.5))
+                                self.log.info(
+                                    f"Switching color: <g>{COLORS_NAME[previous_color]}</>(id=<c>{previous_color}</>) "
+                                    f"-> <g>{COLORS_NAME[first.color]}</>(id=<c>{first.color}</>)"
+                                )
+                                await paint.select_color(first.color)
+                                await anyio.sleep(random.uniform(0.5, 1.5))
+
+                            await page.move_by_pixel(first.x - anchor.x, first.y - anchor.y)
+                            anchor = first
+                            await page.paint_space_drag([(pixel.x - anchor.x, pixel.y - anchor.y) for pixel in stroke])
+                            previous_color = first.color
+                            if random.random() < 0.02:
+                                idle_secs = random.uniform(0.5, 2.0)
+                                self.log.debug(f"Taking a short break for <y>{idle_secs:.2f}</> seconds...")
+                                await anyio.sleep(idle_secs)
+                    else:
+                        previous = pixels[0]
+                        for current in pixels:
+                            if previous.color != current.color:
+                                await anyio.sleep(random.uniform(0.5, 1.5))
+                                self.log.info(
+                                    f"Switching color: <g>{COLORS_NAME[previous.color]}</>(id=<c>{previous.color}</>) "
+                                    f"-> <g>{COLORS_NAME[current.color]}</>(id=<c>{current.color}</>)"
+                                )
+                                await paint.select_color(current.color)
+                                await anyio.sleep(random.uniform(0.5, 1.5))
+                            await page.move_by_pixel(current.x - previous.x, current.y - previous.y)
+                            await page.click_current_pixel()
+                            previous = current
+                            if random.random() < 0.02:
+                                idle_secs = random.uniform(0.5, 2.0)
+                                self.log.debug(f"Taking a short break for <y>{idle_secs:.2f}</> seconds...")
+                                await anyio.sleep(idle_secs)
 
                     delay = random.uniform(3, 7)
                     self.log.info(f"Waiting for <y>{delay:.2f}</> seconds before submitting...")

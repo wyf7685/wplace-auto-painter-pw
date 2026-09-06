@@ -3,6 +3,8 @@ import contextlib
 import json
 import math
 import random
+from collections.abc import Sequence
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any, Self
 
 import anyio
@@ -334,6 +336,37 @@ class WplacePage:
                 await anyio.sleep(random.uniform(0.03, 0.12))
                 if random.random() < 0.12:
                     await anyio.sleep(random.uniform(0.08, 0.25))
+
+    async def paint_space_drag(self, offsets: Sequence[tuple[int, int]]) -> None:
+        """Queue a continuous pixel stroke by holding Space while moving the pointer."""
+        if not offsets:
+            raise ValueError("offsets cannot be empty")
+        for previous, current in pairwise(offsets):
+            if max(abs(current[0] - previous[0]), abs(current[1] - previous[1])) > 1:
+                raise ValueError("space drag offsets must be adjacent")
+
+        center_x, center_y = self.current_center_px
+
+        def screen_position(offset: tuple[int, int]) -> tuple[float, float]:
+            return (
+                center_x + offset[0] * CANVAS_PX_PER_PIXEL,
+                center_y + offset[1] * CANVAS_PX_PER_PIXEL,
+            )
+
+        first_x, first_y = screen_position(offsets[0])
+        await self.page.mouse.up(button="left")
+        await self.page.mouse.move(first_x, first_y, steps=random.randint(3, 7))
+        await anyio.sleep(random.uniform(0.02, 0.08))
+        await self.page.keyboard.down("Space")
+        try:
+            for offset in offsets[1:]:
+                target_x, target_y = screen_position(offset)
+                await self.page.mouse.move(target_x, target_y, steps=random.randint(2, 4))
+                await anyio.sleep(random.uniform(0.01, 0.04))
+        finally:
+            with anyio.CancelScope(shield=True):
+                await self.page.keyboard.up("Space")
+        await anyio.sleep(random.uniform(0.03, 0.12))
 
     async def click_current_pixel(self) -> None:
         """Click the current pixel on the page."""
