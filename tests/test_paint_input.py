@@ -87,16 +87,36 @@ class FakeKeyboard:
         self.events.append(("key_up", key))
 
 
+class BlockingKeyboard(FakeKeyboard):
+    def __init__(self, events: list[tuple[object, ...]], down_started: asyncio.Event) -> None:
+        super().__init__(events)
+        self.down_started = down_started
+
+    async def down(self, key: str) -> None:
+        await super().down(key)
+        self.down_started.set()
+        await asyncio.Event().wait()
+
+
 class FakeBrowserPage:
-    def __init__(self, events: list[tuple[object, ...]], fail_on_move: int | None = None) -> None:
+    def __init__(
+        self,
+        events: list[tuple[object, ...]],
+        fail_on_move: int | None = None,
+        keyboard: FakeKeyboard | None = None,
+    ) -> None:
         self.viewport_size = {"width": 1280, "height": 720}
         self.mouse = FakeMouse(events, fail_on_move)
-        self.keyboard = FakeKeyboard(events)
+        self.keyboard = keyboard or FakeKeyboard(events)
 
 
-def _wplace_page(events: list[tuple[object, ...]], fail_on_move: int | None = None) -> WplacePage:
+def _wplace_page(
+    events: list[tuple[object, ...]],
+    fail_on_move: int | None = None,
+    keyboard: FakeKeyboard | None = None,
+) -> WplacePage:
     page = object.__new__(WplacePage)
-    page.page = cast("Any", FakeBrowserPage(events, fail_on_move))
+    page.page = cast("Any", FakeBrowserPage(events, fail_on_move, keyboard))
     return page
 
 
@@ -117,5 +137,24 @@ def test_space_drag_releases_space_after_movement_failure() -> None:
 
     with pytest.raises(RuntimeError, match="mouse move failed"):
         asyncio.run(_wplace_page(events, fail_on_move=2).paint_space_drag([(0, 0), (1, 0)]))
+
+    assert events[-1] == ("key_up", "Space")
+
+
+def test_space_drag_releases_space_when_cancelled_during_key_down() -> None:
+    events: list[tuple[object, ...]] = []
+
+    async def run() -> None:
+        down_started = asyncio.Event()
+        keyboard = BlockingKeyboard(events, down_started)
+        page = _wplace_page(events, keyboard=keyboard)
+        task = asyncio.create_task(page.paint_space_drag([(0, 0)]))
+
+        await down_started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(run())
 
     assert events[-1] == ("key_up", "Space")

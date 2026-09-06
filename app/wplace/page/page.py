@@ -357,8 +357,8 @@ class WplacePage:
         await self.page.mouse.up(button="left")
         await self.page.mouse.move(first_x, first_y, steps=random.randint(3, 7))
         await anyio.sleep(random.uniform(0.02, 0.08))
-        await self.page.keyboard.down("Space")
         try:
+            await self.page.keyboard.down("Space")
             for offset in offsets[1:]:
                 target_x, target_y = screen_position(offset)
                 await self.page.mouse.move(target_x, target_y, steps=random.randint(2, 4))
