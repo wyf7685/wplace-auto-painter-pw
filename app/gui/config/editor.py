@@ -317,6 +317,7 @@ class ConfigEditorWidget(QWidget):
                     },
                     "selected_area": user["selected_area"],
                     "preferred_colors": user["preferred_colors"],
+                    "paint_input_mode": user["paint_input_mode"],
                     "auto_purchase": user["auto_purchase"],
                     "min_paint_charges": user["min_paint_charges"],
                     "max_paint_charges": user["max_paint_charges"],

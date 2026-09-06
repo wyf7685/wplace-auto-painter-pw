@@ -15,6 +15,7 @@ def default_user(identifier: str) -> dict[str, Any]:
         "preferred_colors": [],
         "selected_area": None,
         "auto_purchase": None,
+        "paint_input_mode": "click",
         "min_paint_charges": 30,
         "max_paint_charges": None,
         "_template_source": "",
@@ -69,6 +70,9 @@ def normalize_user(user: dict[str, Any]) -> dict[str, Any]:
     auto_purchase = user.get("auto_purchase")
     if isinstance(auto_purchase, dict):
         result["auto_purchase"] = auto_purchase
+    paint_input_mode = user.get("paint_input_mode")
+    if paint_input_mode in {"click", "space_drag"}:
+        result["paint_input_mode"] = paint_input_mode
 
     min_charges = user.get("min_paint_charges")
     if isinstance(min_charges, int):

@@ -67,6 +67,15 @@ class UserDetailCard(ElevatedCardWidget):
         self.edit_area_btn.clicked.connect(self._open_area_editor)
 
         self.preferred_colors_editor = PreferredColorsEditor()
+        self.paint_input_mode_cb = ComboBox()
+        self._paint_input_mode_values = ["click", "space_drag"]
+        self._paint_input_mode_index = {value: index for index, value in enumerate(self._paint_input_mode_values)}
+        self.paint_input_mode_cb.addItems(
+            [
+                tr("config.paint_input_mode.click"),
+                tr("config.paint_input_mode.space_drag"),
+            ]
+        )
 
         self.min_charges_spin = SpinBox()
         self.min_charges_spin.setRange(1, 1_000_000)
@@ -136,6 +145,7 @@ class UserDetailCard(ElevatedCardWidget):
         form.addRow(tr("config.field.selected_area"), selected_area_row)
 
         form.addRow(tr("config.field.preferred_colors"), self.preferred_colors_editor)
+        form.addRow(tr("config.field.paint_input_mode"), self.paint_input_mode_cb)
         form.addRow(tr("config.field.min_paint_charges"), self.min_charges_spin)
 
         max_row = QHBoxLayout()
@@ -246,6 +256,8 @@ class UserDetailCard(ElevatedCardWidget):
         )
 
         self.preferred_colors_editor.set_colors(list(user.get("preferred_colors") or []))
+        paint_input_mode = str(user.get("paint_input_mode") or "click")
+        self.paint_input_mode_cb.setCurrentIndex(self._paint_input_mode_index.get(paint_input_mode, 0))
         self.min_charges_spin.setValue(int(user.get("min_paint_charges") or 30))
 
         max_charges = user.get("max_paint_charges")
@@ -299,6 +311,7 @@ class UserDetailCard(ElevatedCardWidget):
             },
             "selected_area": selected_area,
             "preferred_colors": self.preferred_colors_editor.colors(),
+            "paint_input_mode": self._paint_input_mode_values[self.paint_input_mode_cb.currentIndex()],
             "auto_purchase": auto_purchase,
             "min_paint_charges": int(self.min_charges_spin.value()),
             "max_paint_charges": int(self.max_charges_spin.value()) if self.max_enable_cb.isChecked() else None,
