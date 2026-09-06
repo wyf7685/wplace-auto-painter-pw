@@ -43,7 +43,7 @@ class WplacePage:
     def __init__(self, context: UserContext, key: str) -> None:
         self.log = context.log
         self._key = key
-        self._btn_id = f"btn-{key}"
+        self._bridge_id = f"bridge-{key}"
         self.has_captcha = False
         self.captcha_resolved = anyio.Event()
         self._paint_response_tasks: set[asyncio.Task[None]] = set()
@@ -52,15 +52,15 @@ class WplacePage:
         self._submit_succeeded = False
 
     @property
-    def submit_btn_selector(self) -> str:
-        return f"#{self._btn_id}"
+    def submit_bridge_selector(self) -> str:
+        return f"#{self._bridge_id}"
 
     @classmethod
     @contextlib.asynccontextmanager
     async def create(cls, context: UserContext, script_data: list[Any]) -> AsyncGenerator[Self]:
         self = cls(context, script_data[0])
 
-        self.log.debug(f"Using paint button ID: <c>{escape_tag(self._btn_id)}</>")
+        self.log.debug(f"Using submit bridge ID: <c>{escape_tag(self._bridge_id)}</>")
 
         async with context.new_page() as page:
             page.on("console", self._on_console_log)
@@ -70,9 +70,11 @@ class WplacePage:
 
             try:
                 await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10_000, state="visible")
-                await page.wait_for_selector(self.submit_btn_selector, timeout=10_000, state="attached")
+                await page.wait_for_selector(self.submit_bridge_selector, timeout=10_000, state="attached")
             except pw_timeout_error() as e:
-                raise ElementNotFound("Required buttons not found on the page, is the injected script broken?") from e
+                raise ElementNotFound(
+                    "Required paint button or submit bridge not found, is the injected script broken?"
+                ) from e
 
             self.page = page
             try:

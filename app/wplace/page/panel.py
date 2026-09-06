@@ -50,20 +50,20 @@ class PaintPanel:
         self.log.debug(f"Selected color <g>{COLORS_NAME[color_id]}</>(id=<c>{color_id}</>)")
 
     async def submit(self) -> None:
-        selector = self.wplace_page.submit_btn_selector
-        btn = await self.page.query_selector(selector)
-        if btn is None:
-            raise ElementNotFound("Submit button not found, is the injected script broken?")
+        selector = self.wplace_page.submit_bridge_selector
+        bridge = await self.page.query_selector(selector)
+        if bridge is None:
+            raise ElementNotFound("Submit bridge not found, is the injected script broken?")
 
-        self.log.debug(f"Found submit button <c>{selector}</>: {escape_tag(repr(btn))}")
-        await btn.click()
-        self.log.info("Clicked submit button")
+        self.log.debug(f"Found submit bridge <c>{selector}</>: {escape_tag(repr(bridge))}")
+        await bridge.evaluate("(element) => element.runSubmit()")
+        self.log.info("Triggered submit bridge")
 
         self.log.debug("Waiting for submit to complete...")
         try:
             await self.page.wait_for_selector(selector, timeout=10_000, state="detached")
         except pw_timeout_error():
-            self.log.warning("Submit button still present after timeout")
+            self.log.warning("Submit bridge still present after timeout")
         else:
             await self.wplace_page.wait_for_paint_responses()
             self.wplace_page.raise_for_paint_error()
@@ -79,7 +79,7 @@ class PaintPanel:
         try:
             await self.page.wait_for_selector(selector, timeout=5_000, state="detached")
         except pw_timeout_error():
-            self.log.warning("Submit button still present after captcha resolution")
+            self.log.warning("Submit bridge still present after captcha resolution")
         else:
             await self.wplace_page.wait_for_paint_responses()
             self.wplace_page.raise_for_paint_error()
@@ -95,7 +95,7 @@ class PaintPanel:
         if not self.wplace_page.has_captcha:
             return
 
-        self.log.warning("Captcha detected after clicking submit, manual intervention is required")
+        self.log.warning("Captcha detected after triggering submit, manual intervention is required")
 
         from app.utils import toast
 
