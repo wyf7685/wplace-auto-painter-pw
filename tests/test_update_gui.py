@@ -12,6 +12,7 @@ def test_update_card_state_and_action() -> None:
     app = QApplication.instance() or QApplication([])
     invoked: list[bool] = []
     page = AboutPage(QIcon(), lambda: invoked.append(True))
+    assert page.update_progress_bar.isHidden()
 
     page.set_update_state("available", "1.2.3")
     assert "1.2.3" in page.update_card.button.text()
@@ -21,9 +22,15 @@ def test_update_card_state_and_action() -> None:
     assert invoked == [True]
 
     page.set_update_state("downloading", "1.2.3")
+    assert not page.update_progress_bar.isHidden()
+    assert page.update_progress_bar.value() == 0
     page.set_update_progress(50, 100)
     assert "50%" in page.update_card.contentLabel.text()
+    assert page.update_progress_bar.value() == 50
     assert not page.update_card.button.isEnabled()
+
+    page.set_update_state("ready", "1.2.3")
+    assert page.update_progress_bar.isHidden()
 
     page.deleteLater()
     app.processEvents()
