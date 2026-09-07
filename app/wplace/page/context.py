@@ -11,8 +11,9 @@ from pydantic import SecretStr
 
 from app.browser import get_persistent_context
 from app.config import Config
-from app.const import APP_NAME, USER_CONTEXT_DIR, assets
+from app.const import APP_NAME_HUMAN_READABLE, USER_CONTEXT_DIR, assets
 from app.exception import FetchFailed, TokenExpired
+from app.i18n import tr
 from app.log import logger
 from app.schemas import UserConfig, WplaceCredentials, WplaceUserInfo
 from app.utils import Highlight, logger_wrapper
@@ -66,9 +67,9 @@ class UserContext:
         clicked = await anyio.to_thread.run_sync(
             functools.partial(
                 toast.notify_with_button,
-                APP_NAME,
-                "即将打开浏览器窗口进行绘制操作。",
-                button="确认",
+                APP_NAME_HUMAN_READABLE,
+                tr("notification.open_browser.body"),
+                button=tr("notification.open_browser.confirm"),
             ),
             abandon_on_cancel=True,
         )

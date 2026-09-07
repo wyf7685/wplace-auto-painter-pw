@@ -23,7 +23,7 @@ from qfluentwidgets import (
 
 from app.config import Config, export_config_schema
 from app.const import CONFIG_FILE, TEMPLATES_DIR
-from app.gui.i18n import lang, tr
+from app.i18n import lang, tr
 from app.schemas import WplacePixelCoords
 
 from .constants import BROWSER_TYPES, LANGUAGE_CODES, LOG_LEVELS

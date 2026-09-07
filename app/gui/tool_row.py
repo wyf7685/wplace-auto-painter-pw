@@ -4,7 +4,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QWidget
 from qfluentwidgets import CaptionLabel, PrimaryPushButton, PushButton
 
-from .i18n import tr
+from app.i18n import tr
 
 
 class ToolRowWidget(QWidget):

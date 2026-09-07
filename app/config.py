@@ -28,7 +28,7 @@ class Config(BaseModel):
     )
     language: Literal["zh_CN", "en_US"] = Field(
         default="zh_CN",
-        description="GUI language code",
+        description="Application language code",
     )
 
     @model_validator(mode="after")

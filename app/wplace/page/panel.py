@@ -3,8 +3,9 @@ from typing import TYPE_CHECKING, Self
 from bot7685_ext.wplace.consts import COLORS_NAME
 
 from app.browser import pw_timeout_error
-from app.const import APP_NAME
+from app.const import APP_NAME_HUMAN_READABLE
 from app.exception import ElementNotFound
+from app.i18n import tr
 from app.log import escape_tag
 
 if TYPE_CHECKING:
@@ -100,7 +101,11 @@ class PaintPanel:
         from app.utils import toast
 
         self.log.debug("Notifying user to resolve captcha...")
-        toast.notify(APP_NAME, "检测到验证码，请打开浏览器完成验证后继续。", duration=toast.Duration.Long)
+        toast.notify(
+            APP_NAME_HUMAN_READABLE,
+            tr("notification.captcha.body"),
+            duration=toast.Duration.Long,
+        )
 
         self.log.info("Waiting for captcha to be resolved...")
         await self.wplace_page.captcha_resolved.wait()

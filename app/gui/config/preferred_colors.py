@@ -4,7 +4,7 @@ from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import QAbstractItemView, QHBoxLayout, QListWidgetItem, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, ElevatedCardWidget, LineEdit, ListWidget, PushButton
 
-from app.gui.i18n import tr
+from app.i18n import tr
 
 
 class PreferredColorsEditor(QWidget):
