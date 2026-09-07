@@ -41,6 +41,8 @@ else:
         DISABLED_BY_MANIFEST = 4
 
 
+ERROR_NOT_FOUND = 1168  # winerror.ERROR_NOT_FOUND
+
 # windows_toasts is a Windows-only optional dependency; import is guarded below.
 _wt = None
 
@@ -113,11 +115,9 @@ def _get_notification_setting() -> NotificationSetting:
         toaster = _wt.InteractableWindowsToaster(APP_NAME_HUMAN_READABLE, APP_ID)
         setting = toaster.toastNotifier.setting
     except OSError as e:
-        import winerror
-
         # The notification settings key may not exist before the first toast is shown.
         # Treat ERROR_NOT_FOUND as enabled so Windows can create the key on first delivery.
-        if e.winerror == winerror.ERROR_NOT_FOUND:
+        if e.winerror == ERROR_NOT_FOUND:
             setting = NotificationSetting.ENABLED
         else:
             _warn_failed_get_setting()
