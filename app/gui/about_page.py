@@ -10,6 +10,7 @@ from qfluentwidgets import (
     FluentIcon,
     HyperlinkCard,
     PrimaryPushSettingCard,
+    ProgressBar,
     SettingCard,
     SettingCardGroup,
     SmoothScrollArea,
@@ -116,6 +117,11 @@ class AboutPage(SmoothScrollArea):
             tr("update.state.idle"),
             group,
         )
+        self.update_progress_bar = ProgressBar(self.update_card)
+        self.update_progress_bar.setRange(0, 100)
+        self.update_progress_bar.setMinimumWidth(240)
+        self.update_progress_bar.hide()
+        self.update_card.vBoxLayout.addWidget(self.update_progress_bar)
         self.update_card.clicked.connect(self._on_update)
         releases_card = HyperlinkCard(
             REPOSITORY_RELEASES_URL,
@@ -150,9 +156,15 @@ class AboutPage(SmoothScrollArea):
         content_key = f"update.state.{state}"
         self.update_card.button.setText(tr(button_key, version=version))
         self.update_card.contentLabel.setText(tr(content_key, version=version, percent=0))
+        is_downloading = state == "downloading"
+        self.update_progress_bar.setVisible(is_downloading)
+        if is_downloading:
+            self.update_progress_bar.setValue(0)
         self.update_card.button.setEnabled(state not in {"checking", "downloading", "applying"})
 
     def set_update_progress(self, downloaded: int, total: int) -> None:
         percent = min(100, round(downloaded * 100 / total)) if total > 0 else 0
         self.update_card.button.setText(tr("update.action.downloading"))
         self.update_card.contentLabel.setText(tr("update.state.downloading", percent=percent))
+        self.update_progress_bar.show()
+        self.update_progress_bar.setValue(percent)
