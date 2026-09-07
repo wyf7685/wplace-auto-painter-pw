@@ -1,13 +1,11 @@
-"""Windows toast notification helpers using windows_toasts.
+"""Windows toast notification helpers backed by windows_toasts.
 
-On non-Windows platforms every public function is a no-op so callers need
-not guard against the platform themselves.
-
-All three toasters share the same ``APP_NAME`` as the notification sender.
-``WindowsToaster`` is used for fire-and-forget notifications (no buttons /
-callbacks).  ``InteractableWindowsToaster`` is used whenever a callback or
-an action button is involved — it requires a recognised AUMID, defaulting
-to cmd.exe, which is enough for our purposes.
+Public helpers are no-ops when windows_toasts is unavailable, including on
+non-Windows platforms. Both notification types use the application's registered
+AUMID so Windows can associate them with the configured display name and icon.
+``InteractableWindowsToaster`` is used for both fire-and-forget notifications
+and notifications with action buttons because activation callbacks require a
+recognised AUMID.
 """
 
 import contextlib
@@ -15,18 +13,13 @@ import enum
 import functools
 import sys
 import threading
-from collections.abc import Callable
 from typing import TYPE_CHECKING, TypeGuard
 
-from app.const import APP_NAME, assets
+from app.const import APP_ID, APP_NAME_HUMAN_READABLE, assets
 from app.log import logger
 
 if TYPE_CHECKING:
-    from windows_toasts import (
-        Toast,
-        ToastActivatedEventArgs,
-        ToastDisplayImage,
-    )
+    from windows_toasts import Toast, ToastActivatedEventArgs, ToastDisplayImage
     from windows_toasts import ToastDuration as Duration
     from winrt.windows.ui.notifications import NotificationSetting
 else:
@@ -58,21 +51,18 @@ if sys.platform == "win32":
 
         try:
             import windows_toasts as wt
-            from winrt.windows.ui.notifications import (
-                NotificationSetting as Setting,
-            )
+            from winrt.windows.ui.notifications import NotificationSetting as Setting
         except ImportError:
             logger.debug("windows_toasts is not available; toast notifications will be disabled")
             return
 
         logger.debug("windows_toasts is available")
         _wt = wt
-        if not TYPE_CHECKING:
-            # type checker complains about using variable in type annotations
-            Duration = wt.ToastDuration
-            NotificationSetting = Setting
+        Duration = wt.ToastDuration
+        NotificationSetting = Setting
 
     _load_windows_toasts()
+    del _load_windows_toasts
 
 
 def _available[M](mod: M | None) -> TypeGuard[M]:
@@ -111,31 +101,56 @@ def _build_toast(title: str, body: str, duration: Duration = Duration.Default) -
 
 
 @functools.cache
-def _warn_failed_get_setting(interactive: bool) -> None:
-    exc = sys.exception()
-    toaster_type = "InteractableWindowsToaster" if interactive else "WindowsToaster"
-    logger.warning(f"Failed to get notification setting using {toaster_type}: {exc!r}")
+def _warn_failed_get_setting() -> None:
+    logger.warning(f"Failed to get notification setting: {sys.exception()!r}")
 
 
-def _get_notification_setting(interactive: bool = False) -> NotificationSetting:
+def _get_notification_setting() -> NotificationSetting:
     if not _available(_wt):
         return NotificationSetting.DISABLED_BY_MANIFEST
 
     try:
-        toaster = _wt.InteractableWindowsToaster(APP_NAME) if interactive else _wt.WindowsToaster(APP_NAME)
+        toaster = _wt.InteractableWindowsToaster(APP_NAME_HUMAN_READABLE, APP_ID)
         setting = toaster.toastNotifier.setting
+    except OSError as e:
+        import winerror
+
+        # The notification settings key may not exist before the first toast is shown.
+        # Treat ERROR_NOT_FOUND as enabled so Windows can create the key on first delivery.
+        if e.winerror == winerror.ERROR_NOT_FOUND:
+            setting = NotificationSetting.ENABLED
+        else:
+            _warn_failed_get_setting()
+            setting = NotificationSetting.DISABLED_BY_MANIFEST
+
     except Exception:
-        _warn_failed_get_setting(interactive)
+        _warn_failed_get_setting()
         setting = NotificationSetting.DISABLED_BY_MANIFEST
 
     return setting
 
 
-def _is_disabled(interactive: bool = False) -> bool:
+@functools.cache
+def _ensure_aumid() -> None:
+    import winreg
+
+    key_path = f"SOFTWARE\\Classes\\AppUserModelId\\{APP_ID}"
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path) as master_key:
+        winreg.SetValueEx(master_key, "DisplayName", 0, winreg.REG_SZ, APP_NAME_HUMAN_READABLE)
+        winreg.SetValueEx(master_key, "IconUri", 0, winreg.REG_SZ, str(assets.icon))
+
+
+def _is_disabled() -> bool:
     """Return ``True`` if notifications are disabled."""
     from app.config import Config
 
-    return Config.load().disable_notifications or _get_notification_setting(interactive) != NotificationSetting.ENABLED
+    try:
+        _ensure_aumid()
+    except Exception:
+        logger.opt(exception=True).warning("Failed to register AUMID for toast notifications")
+        return True
+
+    return Config.load().disable_notifications or _get_notification_setting() != NotificationSetting.ENABLED
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -156,39 +171,7 @@ def notify(
         return
 
     try:
-        _wt.WindowsToaster(APP_NAME).show_toast(_build_toast(title, body, duration))
-    except Exception:
-        logger.opt(exception=True).warning("Failed to show toast notification")
-
-
-async def toast_async(
-    title: str,
-    body: str = "",
-    *,
-    duration: Duration = Duration.Default,
-    on_click: Callable[[], None] | None = None,
-) -> None:
-    """Async fire-and-forget toast with an optional click callback.
-
-    Always non-blocking; the underlying ``show_toast`` call is synchronous
-    but near-instant.  The optional *on_click* callback is invoked on a
-    Windows thread when the user clicks the notification body.
-
-    Uses ``InteractableWindowsToaster`` when *on_click* is provided
-    (required for reliable ``on_activated`` delivery); falls back to
-    ``WindowsToaster`` otherwise.
-    """
-    if not _available(_wt) or _is_disabled():
-        return
-
-    try:
-        toast = _build_toast(title, body, duration)
-        if on_click is not None and not _is_disabled(interactive=True):
-            toast.on_activated = lambda _args: on_click()
-            toaster = _wt.InteractableWindowsToaster(APP_NAME)
-        else:
-            toaster = _wt.WindowsToaster(APP_NAME)
-        toaster.show_toast(toast)
+        _wt.InteractableWindowsToaster(APP_NAME_HUMAN_READABLE, APP_ID).show_toast(_build_toast(title, body, duration))
     except Exception:
         logger.opt(exception=True).warning("Failed to show toast notification")
 
@@ -211,10 +194,6 @@ def notify_with_button(
     if not _available(_wt) or _is_disabled():
         return False
 
-    if _is_disabled(interactive=True):
-        notify(title, body, duration=duration)
-        return False
-
     done = threading.Event()
     clicked = False
 
@@ -231,7 +210,7 @@ def notify_with_button(
         toast.on_activated = _on_activated
         toast.on_dismissed = _on_dismissed
         toast.AddAction(_wt.ToastButton(content=button, arguments=button))
-        _wt.InteractableWindowsToaster(APP_NAME).show_toast(toast)
+        _wt.InteractableWindowsToaster(APP_NAME_HUMAN_READABLE, APP_ID).show_toast(toast)
         done.wait()  # block until on_activated or on_dismissed fires
     except Exception:
         logger.opt(exception=True).warning("Failed to show toast notification")

@@ -6,6 +6,8 @@ from typing import ClassVar, NoReturn
 
 IS_FROZEN = bool(getattr(sys, "frozen", False))
 APP_NAME = "wplace-auto-painter"
+APP_ID = "com.wyf7685.wplace-auto-painter"
+APP_NAME_HUMAN_READABLE = "WPlace Auto Painter"
 REPOSITORY_OWNER = "wyf7685"
 REPOSITORY_NAME = "wplace-auto-painter-pw"
 REPOSITORY_URL = f"https://github.com/{REPOSITORY_OWNER}/{REPOSITORY_NAME}"
