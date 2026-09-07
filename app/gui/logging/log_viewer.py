@@ -2,7 +2,7 @@ from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CheckBox, PushButton, TextEdit
 
-from app.gui.i18n import tr
+from app.i18n import tr
 from app.utils.ansi_qt import LOG_BG, iter_segments
 
 

@@ -17,9 +17,8 @@ from qfluentwidgets import (
 )
 
 from app.const import APP_NAME, REPOSITORY_RELEASES_URL, REPOSITORY_URL
+from app.i18n import tr
 from app.version import get_commit_hash, get_version_display
-
-from .i18n import tr
 
 
 class AboutPage(SmoothScrollArea):

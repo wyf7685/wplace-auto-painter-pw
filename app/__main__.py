@@ -23,9 +23,13 @@ def main() -> None:
 
     ensure_runtime_directories()
 
-    from app.config import export_config_schema
+    from app.config import Config, export_config_schema
+    from app.i18n import lang
 
     export_config_schema()
+    lang.set_language(None)
+    with contextlib.suppress(Exception):
+        lang.set_language(Config.load().language)
     sys.argv[1:] = qt_args
 
     with contextlib.suppress(KeyboardInterrupt):

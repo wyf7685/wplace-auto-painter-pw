@@ -7,10 +7,10 @@ from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 
 from app.const import APP_NAME
+from app.i18n import tr
 
 from .about_page import AboutPage
 from .config import ConfigEditorWidget
-from .i18n import tr
 from .logging import AnsiLogViewer
 from .state import GUIState
 from .tool_row import ToolRowWidget

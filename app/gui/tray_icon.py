@@ -3,7 +3,7 @@ from collections.abc import Callable
 from PySide6.QtWidgets import QSystemTrayIcon
 from qfluentwidgets import Action, FluentIcon, SystemTrayMenu
 
-from .i18n import tr
+from app.i18n import tr
 
 
 class AppTrayIcon(QSystemTrayIcon):

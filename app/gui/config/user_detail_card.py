@@ -17,7 +17,7 @@ from qfluentwidgets import (
     TextEdit,
 )
 
-from app.gui.i18n import tr
+from app.i18n import tr
 
 from .area_editor_dialog import AreaEditorDialog
 from .preferred_colors import PreferredColorsEditor

@@ -15,10 +15,10 @@ from qfluentwidgets import InfoBar, InfoBarPosition, Theme, setTheme
 from app.config import Config
 from app.const import APP_NAME, DATA_DIR, REPOSITORY_RELEASES_URL, assets
 from app.exception import ConfigError
+from app.i18n import tr
 from app.log import logger
 from app.version import get_version_display
 
-from .i18n import lang, tr
 from .logging import LogBridge
 from .main_window import MainWindow
 from .runtime import TaskRuntime
@@ -42,9 +42,6 @@ class Controller:
             raise RuntimeError("Another application instance is already running")
 
         setTheme(Theme.AUTO)
-        lang.set_language(None)
-        with contextlib.suppress(Exception):
-            lang.set_language(Config.load().language)
 
         self.icon = self._load_icon()
         self.bridge = LogBridge()

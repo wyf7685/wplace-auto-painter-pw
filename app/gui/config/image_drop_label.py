@@ -16,7 +16,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 from qfluentwidgets import isDarkTheme, qconfig, themeColor
 
-from app.gui.i18n import tr
+from app.i18n import tr
 
 _MIN_SCALE = 0.1
 _MAX_SCALE = 8.0
