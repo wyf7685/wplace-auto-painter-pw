@@ -1,5 +1,5 @@
 import contextlib
-from collections.abc import Iterator
+from collections.abc import Generator
 
 import httpx
 from packaging.version import InvalidVersion, Version
@@ -79,7 +79,7 @@ class ReleaseClient:
         )
 
     @contextlib.contextmanager
-    def stream_download(self, info: UpdateInfo) -> Iterator[httpx.Response]:
+    def stream_download(self, info: UpdateInfo) -> Generator[httpx.Response]:
         with self._client() as client, client.stream("GET", info.asset_url) as response:
             response.raise_for_status()
             yield response
