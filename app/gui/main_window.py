@@ -92,8 +92,8 @@ class MainWindow(FluentWindow):
     def goto_logs_page(self) -> None:
         self.switchTo(self.logs_page)
 
-    def set_update_state(self, state: str, version: str = "") -> None:
-        self.about_page.set_update_state(state, version)
+    def set_update_state(self, state: str, version: str = "", release_notes: str = "") -> None:
+        self.about_page.set_update_state(state, version, release_notes)
 
     def set_update_progress(self, downloaded: int, total: int) -> None:
         self.about_page.set_update_progress(downloaded, total)

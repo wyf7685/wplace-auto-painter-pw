@@ -93,6 +93,7 @@ class GitHubRelease(BaseModel):
     html_url: str
     draft: bool
     prerelease: bool
+    body: str | None = None
     assets: list[GitHubReleaseAsset]
 
 
@@ -102,6 +103,7 @@ class UpdateInfo:
     asset: ReleaseAssetSpec
     asset_url: str
     release_url: str
+    release_notes: str
 
 
 @dataclass(frozen=True)

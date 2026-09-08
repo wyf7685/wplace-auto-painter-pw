@@ -9,7 +9,7 @@ from app.update import PreparedUpdate, UpdateInfo, UpdateService
 
 
 class GuiUpdateController(QObject):
-    state_changed = Signal(str, str)
+    state_changed = Signal(str, str, str)
     progress_changed = Signal(int, int)
     error_occurred = Signal(str)
     restart_requested = Signal()
@@ -32,8 +32,12 @@ class GuiUpdateController(QObject):
     def version(self) -> str:
         return self._info.manifest.version if self._info else ""
 
+    @property
+    def release_notes(self) -> str:
+        return self._info.release_notes if self._info else ""
+
     def emit_current_state(self) -> None:
-        self.state_changed.emit(self._state, self.version)
+        self.state_changed.emit(self._state, self.version, self.release_notes)
 
     def check(self, *, notify_errors: bool) -> None:
         if not IS_FROZEN:
@@ -107,4 +111,4 @@ class GuiUpdateController(QObject):
 
     def _set_state(self, state: str) -> None:
         self._state = state
-        self.state_changed.emit(state, self.version)
+        self.state_changed.emit(state, self.version, self.release_notes)

@@ -76,6 +76,7 @@ class ReleaseClient:
             asset=asset_spec,
             asset_url=release_asset.browser_download_url,
             release_url=release.html_url,
+            release_notes=release.body or "",
         )
 
     @contextlib.contextmanager

@@ -158,7 +158,7 @@ class Controller:
             case "ready":
                 if self.runtime.is_running:
                     self._pending_update_install = True
-                    self.window.set_update_state("applying", self.updater.version)
+                    self.window.set_update_state("applying", self.updater.version, self.updater.release_notes)
                     self.runtime.stop()
                 else:
                     self.updater.install()

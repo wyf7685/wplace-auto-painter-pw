@@ -27,6 +27,8 @@
   "update.state.ready": "v{version} is ready to install after restart",
   "update.state.applying": "Stopping the runtime and preparing to restart",
   "update.state.error": "Update failed; retry or inspect the error details",
+  "update.release_notes.title": "Release Notes for v{version}",
+  "update.release_notes.empty": "No release notes were provided for this version.",
   "update.action.check": "Check for Updates",
   "update.action.open_releases": "Open Releases",
   "update.action.checking": "Checking",

@@ -14,6 +14,8 @@ from qfluentwidgets import (
     SettingCard,
     SettingCardGroup,
     SmoothScrollArea,
+    StrongBodyLabel,
+    TextBrowser,
     TitleLabel,
 )
 
@@ -44,6 +46,7 @@ class AboutPage(SmoothScrollArea):
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self._build_header(icon))
         layout.addWidget(self._build_application_group())
+        layout.addWidget(self._build_release_notes_card())
         layout.addStretch()
 
     @staticmethod
@@ -140,7 +143,36 @@ class AboutPage(SmoothScrollArea):
         group.addSettingCards([commit_card, self.update_card, repository_card, releases_card, license_card])
         return group
 
-    def set_update_state(self, state: str, version: str = "") -> None:
+    def _build_release_notes_card(self) -> ElevatedCardWidget:
+        card = ElevatedCardWidget(self)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+
+        self.release_notes_title = StrongBodyLabel("", card)
+        layout.addWidget(self.release_notes_title)
+
+        self.release_notes_browser = TextBrowser(card)
+        self.release_notes_browser.setOpenExternalLinks(True)
+        self.release_notes_browser.setMinimumHeight(180)
+        self.release_notes_browser.setMaximumHeight(360)
+        layout.addWidget(self.release_notes_browser)
+
+        self.release_notes_card = card
+        card.hide()
+        return card
+
+    def _set_release_notes(self, state: str, version: str, release_notes: str) -> None:
+        if not version or state not in {"available", "downloading", "ready", "applying"}:
+            self.release_notes_card.hide()
+            self.release_notes_browser.clear()
+            return
+
+        self.release_notes_title.setText(tr("update.release_notes.title", version=version))
+        self.release_notes_browser.setMarkdown(release_notes.strip() or tr("update.release_notes.empty"))
+        self.release_notes_card.show()
+
+    def set_update_state(self, state: str, version: str = "", release_notes: str = "") -> None:
         button_key = {
             "idle": "update.action.check",
             "unsupported": "update.action.open_releases",
@@ -160,6 +192,7 @@ class AboutPage(SmoothScrollArea):
         if is_downloading:
             self.update_progress_bar.setValue(0)
         self.update_card.button.setEnabled(state not in {"checking", "downloading", "applying"})
+        self._set_release_notes(state, version, release_notes)
 
     def set_update_progress(self, downloaded: int, total: int) -> None:
         percent = min(100, round(downloaded * 100 / total)) if total > 0 else 0

@@ -134,6 +134,7 @@ def test_release_client_selects_newer_platform_asset() -> None:
                 json={
                     "tag_name": "v1.1.0",
                     "html_url": "https://github.test/releases/v1.1.0",
+                    "body": "## Highlights\n\n- Faster updates",
                     "draft": False,
                     "prerelease": False,
                     "assets": [
@@ -166,3 +167,4 @@ def test_release_client_selects_newer_platform_asset() -> None:
     assert update is not None
     assert update.manifest.version == "1.1.0"
     assert update.asset.name == archive_name
+    assert update.release_notes == "## Highlights\n\n- Faster updates"

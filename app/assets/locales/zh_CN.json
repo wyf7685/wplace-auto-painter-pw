@@ -27,6 +27,8 @@
   "update.state.ready": "v{version} 已就绪，重启后安装",
   "update.state.applying": "正在停止任务并准备重启",
   "update.state.error": "更新操作失败，可重试或查看错误信息",
+  "update.release_notes.title": "v{version} 更新说明",
+  "update.release_notes.empty": "此版本未提供更新说明。",
   "update.action.check": "检查更新",
   "update.action.open_releases": "打开 Releases",
   "update.action.checking": "检查中",
