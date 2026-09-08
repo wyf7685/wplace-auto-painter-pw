@@ -4,11 +4,12 @@ from typing import override
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import QCloseEvent, QIcon
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
-from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
+from qfluentwidgets import FluentIcon, NavigationItemPosition
 
 from app.const import APP_NAME
 from app.i18n import tr
 
+from ._window import FluentWindow
 from .about_page import AboutPage
 from .config import ConfigEditorWidget
 from .logging import AnsiLogViewer

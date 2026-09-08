@@ -2,12 +2,3 @@
 root = ["."]
 python-version = "3.14"
 python-platform = "all"
-
-[[overrides]]
-include = ["app/utils/toast.py"]
-
-[overrides.analysis]
-allowed-unresolved-imports = [
-  "windows_toasts",
-  "winrt.windows.ui.notifications",
-]
