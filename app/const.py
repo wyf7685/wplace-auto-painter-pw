@@ -37,9 +37,7 @@ class Assets:
     icon: ClassVar[Path] = ASSETS_DIR / "icon" / "gui.ico"
     locales: ClassVar[Path] = ASSETS_DIR / "locales"
     update_helper: ClassVar[Path] = (
-        ASSETS_DIR
-        / "updater"
-        / ("wplace-auto-painter-updater.exe" if sys.platform == "win32" else "wplace-auto-painter-updater")
+        ASSETS_DIR / "updater" / f"wplace-auto-painter-updater{'.exe' if sys.platform == 'win32' else ''}"
     )
     # Keyed by path, holding (mtime_ns, content) so edits are picked up without a restart.
     _cache: ClassVar[dict[tuple[str, ...], tuple[int, str]]] = {}

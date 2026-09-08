@@ -20,17 +20,13 @@ from app.version import UPDATER_PROTOCOL
 
 APP_NAME = "wplace-auto-painter"
 UPDATER_NAME = "wplace-auto-painter-updater"
+EXECUTABLE_SUFFIX = ".exe" if sys.platform == "win32" else ""
 ENTRYPOINT = ROOT / "main.py"
 ASSETS = ROOT / "app" / "assets"
 ICON = ASSETS / "icon" / "gui.ico"
 GENERATED_DIR = ROOT / "build" / "generated"
 BUILD_INFO_FILE = GENERATED_DIR / "build_info.json"
-UPDATER_FILE = Path(
-    os.getenv(
-        "UPDATE_HELPER_PATH",
-        ROOT / "dist" / f"{UPDATER_NAME}{'.exe' if sys.platform == 'win32' else ''}",
-    )
-)
+UPDATER_FILE = Path(os.getenv("UPDATE_HELPER_PATH", ROOT / "dist" / f"{UPDATER_NAME}{EXECUTABLE_SUFFIX}"))
 
 
 def read_project_version() -> str:
@@ -103,8 +99,8 @@ with ignore_env_path():
         binaries=[],
         datas=[
             (ASSETS, ASSETS.relative_to(ROOT)),
-            (BUILD_INFO_FILE, "app/assets"),
-            (UPDATER_FILE, "app/assets/updater"),
+            (BUILD_INFO_FILE, ASSETS.relative_to(ROOT)),
+            (UPDATER_FILE, ASSETS.relative_to(ROOT) / "updater"),
         ],
         hiddenimports=[],
         hookspath=[],
@@ -149,9 +145,9 @@ collection = COLLECT(
 bundle_dir = Path(str(CONF["distpath"])) / APP_NAME
 package_manifest = build_info | {
     "schema_version": 1,
-    "executable": f"{APP_NAME}{'.exe' if sys.platform == 'win32' else ''}",
+    "executable": f"{APP_NAME}{EXECUTABLE_SUFFIX}",
     "managed_entries": [
-        f"{APP_NAME}{'.exe' if sys.platform == 'win32' else ''}",
+        f"{APP_NAME}{EXECUTABLE_SUFFIX}",
         "_internal",
         "package-manifest.json",
     ],
