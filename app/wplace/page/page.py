@@ -36,7 +36,7 @@ CANVAS_ZOOM = 15
 # live site. Only valid for `CANVAS_ZOOM`: every mouse offset below is scaled by
 # it, so a stale value silently paints at the wrong coordinates. Re-measure if
 # `CANVAS_ZOOM` changes or wplace alters its map projection.
-CANVAS_PX_PER_PIXEL = 7.65
+CANVAS_PX_PER_PIXEL = 8.192
 
 
 class WplacePage:
@@ -256,8 +256,9 @@ class WplacePage:
         center_x, center_y = self.current_center_px
         start_x = center_x + random.uniform(-2.5, 2.5)
         start_y = center_y + random.uniform(-2.5, 2.5)
-        target_x = center_x - dx * CANVAS_PX_PER_PIXEL
-        target_y = center_y - dy * CANVAS_PX_PER_PIXEL
+        # Randomize the path, not the requested displacement.
+        target_x = start_x - dx * CANVAS_PX_PER_PIXEL
+        target_y = start_y - dy * CANVAS_PX_PER_PIXEL
         vec_x = target_x - start_x
         vec_y = target_y - start_y
         distance = math.hypot(vec_x, vec_y)
@@ -306,7 +307,7 @@ class WplacePage:
                 steps=random.randint(2, 4),
             )
             await anyio.sleep(random.uniform(0.01, 0.04))
-            await self.page.mouse.move(target_x, target_y, steps=random.randint(2, 4))
+        await self.page.mouse.move(target_x, target_y, steps=random.randint(2, 4))
 
         await anyio.sleep(random.uniform(0.03, 0.11))
         await self.page.mouse.up(button="left")

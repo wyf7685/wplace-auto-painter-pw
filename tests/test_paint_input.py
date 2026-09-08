@@ -69,7 +69,10 @@ class FakeMouse:
     async def up(self, *, button: str) -> None:
         self.events.append(("mouse_up", button))
 
-    async def move(self, x: float, y: float, *, steps: int) -> None:
+    async def down(self, *, button: str) -> None:
+        self.events.append(("mouse_down", button))
+
+    async def move(self, x: float, y: float, *, steps: int = 1) -> None:
         self.move_count += 1
         self.events.append(("mouse_move", x, y, steps))
         if self.move_count == self.fail_on_move:
@@ -120,6 +123,36 @@ def _wplace_page(
     return page
 
 
+@pytest.mark.parametrize("overshoot", [False, True])
+def test_map_drag_preserves_requested_displacement(monkeypatch: pytest.MonkeyPatch, overshoot: bool) -> None:
+    from app.wplace.page import page as page_module
+
+    async def no_sleep(delay: float) -> None:
+        pass
+
+    monkeypatch.setattr(page_module.anyio, "sleep", no_sleep)
+    monkeypatch.setattr(page_module.random, "uniform", lambda _low, high: high)
+    monkeypatch.setattr(page_module.random, "randint", lambda low, _high: low)
+    monkeypatch.setattr(page_module.random, "random", lambda: 0.0 if overshoot else 1.0)
+    events: list[tuple[object, ...]] = []
+    asyncio.run(_wplace_page(events).move_by_pixel(67, -43))
+
+    position = (0.0, 0.0)
+    start: tuple[float, float] | None = None
+    displacement = [0.0, 0.0]
+    for event in events:
+        if event[0] == "mouse_move":
+            position = (cast("float", event[1]), cast("float", event[2]))
+        elif event[0] == "mouse_down":
+            start = position
+        elif event[0] == "mouse_up" and start is not None:
+            displacement[0] += position[0] - start[0]
+            displacement[1] += position[1] - start[1]
+            start = None
+
+    assert displacement == pytest.approx([-67 * 8.192, 43 * 8.192])
+
+
 def test_space_drag_uses_key_hold_around_mouse_movement() -> None:
     events: list[tuple[object, ...]] = []
 
@@ -128,7 +161,7 @@ def test_space_drag_uses_key_hold_around_mouse_movement() -> None:
     assert events[0] == ("mouse_up", "left")
     assert events[1][0:3] == ("mouse_move", 640.0, 360.0)
     assert events[2] == ("key_down", "Space")
-    assert events[3][0:3] == ("mouse_move", 647.65, 360.0)
+    assert events[3][0:3] == ("mouse_move", 648.192, 360.0)
     assert events[4] == ("key_up", "Space")
 
 
