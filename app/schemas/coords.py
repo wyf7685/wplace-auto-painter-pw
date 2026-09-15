@@ -35,18 +35,12 @@ class LatLon(NamedTuple):
         return WplacePixelCoords.from_lat_lon(self.lat, self.lon)
 
 
-# Blue Marble 格式
-# f"Tl X: {self.tlx}, Tl Y: {self.tly}, Px X: {self.pxx}, Px Y: {self.pxy}"
-BLUE_MARBLE_COORDS_PATTERN = re.compile(r".*Tl X: (\d+), Tl Y: (\d+), Px X: (\d+), Px Y: (\d+).*")
-
-
 @dataclass
 class WplacePixelCoords:
-    # each tile contains 1000x1000 pixels, from 0 to 999
-    tlx: int  # tile X
-    tly: int  # tile Y
-    pxx: int  # pixel X
-    pxy: int  # pixel Y
+    tlx: int  # tile X, 0 to 2047
+    tly: int  # tile Y, 0 to 2047
+    pxx: int  # pixel X within the tile, 0 to 999
+    pxy: int  # pixel Y within the tile, 0 to 999
 
     def human_repr(self) -> str:
         return f"({self.tlx}, {self.tly}) + ({self.pxx}, {self.pxy})"
@@ -94,9 +88,16 @@ class WplacePixelCoords:
 
     @classmethod
     def parse(cls, s: str) -> Self:
-        if not (m := BLUE_MARBLE_COORDS_PATTERN.match(s)):
+        number_texts = re.findall(r"-?\d+", s)
+        if len(number_texts) != 4:
             raise ValueError(f"Invalid coords: {s}")
-        return cls(int(m[1]), int(m[2]), int(m[3]), int(m[4]))
+
+        tlx, tly, pxx, pxy = (int(value) for value in number_texts)
+        if not (0 <= tlx <= 2047 and 0 <= tly <= 2047):
+            raise ValueError(f"Invalid coords: {s}")
+        if not (0 <= pxx <= 999 and 0 <= pxy <= 999):
+            raise ValueError(f"Invalid coords: {s}")
+        return cls(tlx, tly, pxx, pxy)
 
     def fix_with(self, other: WplacePixelCoords) -> tuple[WplacePixelCoords, WplacePixelCoords]:
         (x1, y1), (x2, y2) = self.to_abs(), other.to_abs()

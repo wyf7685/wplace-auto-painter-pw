@@ -105,7 +105,7 @@
   "config.placeholder.token": "Cookie j token",
   "config.placeholder.cf_clearance": "Cookie cf_clearance",
   "config.placeholder.file_id": "模板文件 id",
-  "config.placeholder.coords": "(Tl X: 1, Tl Y: 2, Px X: 3, Px Y: 4)",
+  "config.placeholder.coords": "tlx, tly, pxx, pxy（例如：1, 2, 3, 4）",
   "config.placeholder.template_source": "可选：本地模板图片路径",
   "config.placeholder.selected_area": "x,y,w,h 或留空",
   "config.selected_area.title": "选区",
