@@ -25,6 +25,7 @@ dev = [
   { include-group = "lint" },
   { include-group = "build" },
   { include-group = "test" },
+  "poethepoet>=0.48.0",
 ]
 lint = ["ruff>=0.16.5", "prek>=0.5.0", "ty>=0.0.79"]
 build = ["pyinstaller>=6.16.0"]
@@ -32,3 +33,19 @@ test = ["pytest>=8.4.0"]
 
 [tool.uv]
 package = false
+
+[tool.poe]
+verbosity = -1
+
+[tool.poe.tasks]
+lint.parallel = [
+  { cmd = "ruff check ." },
+  { cmd = "ruff format --check ." },
+  { cmd = "ty check --python-platform all ." },
+]
+lint.ignore_fail = "return_non_zero"
+test.cmd = "python -m pytest -q tests"
+check.sequence = ["lint", "test"]
+build-updater.cmd = "pyinstaller --clean --noconfirm updater.spec"
+build-app.cmd = "pyinstaller --clean --noconfirm build.spec"
+build.sequence = ["check", "build-updater", "build-app"]

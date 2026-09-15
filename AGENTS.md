@@ -32,19 +32,17 @@ uv run main.py
 uv run main.py --no-gui
 uv run main.py --version
 
-uv run ruff check .
-uv run ruff format --check .
-uv run ty check --python-platform all
-uv run python -m pytest tests
+uv run poe lint
+uv run poe test
+uv run poe check
 ```
 
 Use `uv run ruff check --fix .` and `uv run ruff format .` only when applying fixes. CI uses `uv sync --frozen`; dependency changes must update both `pyproject.toml` and `uv.lock`.
 
-Build the standalone updater before the onedir application:
+`uv run poe build` runs checks, builds the standalone updater, and then builds the onedir application:
 
 ```bash
-uv run pyinstaller --clean --noconfirm updater.spec
-uv run pyinstaller --clean --noconfirm build.spec
+uv run poe build
 uv run python scripts/release.py package --bundle-dir dist/wplace-auto-painter --platform windows-x86_64 --output-dir release
 ```
 
@@ -115,7 +113,7 @@ Updater code is security-sensitive:
 
 ## Verification and Completion
 
-- Run the narrowest relevant tests first, then the applicable Ruff, format, type, and test commands above.
+- Run the narrowest relevant tests first, then run `uv run poe check`.
 - Keep tests deterministic and isolated from real accounts, credentials, browsers, GitHub releases, and network access unless an integration check is explicitly required.
 - Mock browser, network, and process boundaries while testing repository-owned validation and policy logic.
 - Updater changes require success, rollback, and malicious-input coverage in `tests/test_update.py`.
