@@ -8,7 +8,6 @@ and notifications with action buttons because activation callbacks require a
 recognised AUMID.
 """
 
-import contextlib
 import enum
 import functools
 import sys
@@ -42,9 +41,7 @@ if sys.platform == "win32":
             Toast,
             ToastActivatedEventArgs,
             ToastButton,
-            ToastDisplayImage,
             ToastDuration,
-            ToastImagePosition,
         )
         from winrt.windows.ui.notifications import NotificationSetting
     except ImportError:
@@ -58,24 +55,17 @@ if _WINDOWS_TOASTS_AVAILABLE:
 
     # ── Internal helpers ───────────────────────────────────────────────────────────
 
-    def _logo_image() -> ToastDisplayImage | None:
-        """Return a ``ToastDisplayImage`` for the app icon, or ``None`` if unavailable."""
-        if not assets.icon.is_file():
-            return None
-        with contextlib.suppress(Exception):
-            return ToastDisplayImage.fromPath(
-                assets.icon,
-                position=ToastImagePosition.AppLogo,
-            )
-        return None
-
     def _build_toast(title: str, body: str, duration: ToastDuration = ToastDuration.Default) -> Toast:
-        """Construct a ``Toast`` with text, optional app logo, and duration."""
-        toast = Toast([title, body], duration=duration)
-        logo = _logo_image()
-        if logo is not None:
-            toast.AddImage(logo)
-        return toast
+        """Construct a toast without repeating the app identity rendered by Windows."""
+        text_fields: list[str | None]
+        if body and (not title or title == APP_NAME_HUMAN_READABLE):
+            text_fields = [body]
+        elif body:
+            text_fields = [title, body]
+        else:
+            text_fields = [title]
+
+        return Toast(text_fields, duration=duration)
 
     @functools.cache
     def _warn_failed_get_setting() -> None:
