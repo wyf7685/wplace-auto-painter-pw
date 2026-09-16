@@ -7,7 +7,7 @@ from contextvars import ContextVar
 from enum import Enum
 from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, cast
 
-from bot7685_ext import LRU
+from lru import LRU
 from pydantic import BaseModel
 
 from app.log import escape_tag
