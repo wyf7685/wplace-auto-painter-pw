@@ -1,14 +1,11 @@
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+from bot7685_ext.wplace import template_dimensions
 from pydantic import BaseModel, Field, field_validator
 
 from app.const import TEMPLATES_DIR
 
 from .coords import WplacePixelCoords
-
-if TYPE_CHECKING:
-    from PIL import Image
 
 
 class TemplateConfig(BaseModel):
@@ -27,13 +24,15 @@ class TemplateConfig(BaseModel):
     def file(self) -> Path:
         return TEMPLATES_DIR / f"{self.file_id}.png"
 
-    def load_im(self) -> Image.Image:
-        from PIL import Image
+    def read_bytes(self) -> bytes:
+        return self.file.read_bytes()
 
-        return Image.open(self.file)
+    @property
+    def crop_area(self) -> tuple[int, int, int, int] | None:
+        return None
 
     def get_coords(self) -> tuple[WplacePixelCoords, WplacePixelCoords]:
-        w, h = self.load_im().size
+        w, h = template_dimensions(self.read_bytes())
         return self.coords, self.coords.offset(w - 1, h - 1)
 
     def crop(self, selected: tuple[int, int, int, int]) -> CroppedTemplateConfig:
@@ -57,9 +56,9 @@ class CroppedTemplateConfig(TemplateConfig):
             raise ValueError("selected_area width/height must be > 0")
         return value
 
-    def load_im(self) -> Image.Image:
-        x, y, w, h = self.selected
-        return super().load_im().crop((x, y, x + w, y + h))
+    @property
+    def crop_area(self) -> tuple[int, int, int, int]:
+        return self.selected
 
     def get_coords(self) -> tuple[WplacePixelCoords, WplacePixelCoords]:
         x, y, w, h = self.selected

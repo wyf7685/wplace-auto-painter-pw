@@ -1,5 +1,3 @@
-from io import BytesIO
-
 import anyio
 import bot7685_ext.wplace
 import httpx
@@ -57,11 +55,16 @@ async def calc_template_diff(
     *,
     include_pixels: bool = False,
 ) -> list[bot7685_ext.wplace.ColorEntry]:
-    template_bytes = cfg.load_im().save(buf := BytesIO(), format="PNG") or buf.getvalue()
+    template_bytes = cfg.read_bytes()
     actual_bytes = await download_preview(*cfg.get_coords())
 
     with PerfLog.for_action("calculating template diff") as perf:
-        diff = await bot7685_ext.wplace.compare(template_bytes, actual_bytes, include_pixels)
+        diff = await bot7685_ext.wplace.compare(
+            template_bytes,
+            actual_bytes,
+            include_pixels,
+            template_crop=cfg.crop_area,
+        )
     logger.info(f"Calculated template diff in <y>{perf.elapsed:.3f}</>s")
     logger.info(f"Template diff count: <y>{sum(e.count for e in diff)}</> pixels")
 

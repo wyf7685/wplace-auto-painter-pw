@@ -1,41 +1,38 @@
 import shutil
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Protocol, cast
 
-if TYPE_CHECKING:
-    from PIL.Image import Image
+from bot7685_ext.wplace import template_dimensions, template_thumbnail_rgba
 
 type Cols = int
 type Rows = int
-type RGBA = tuple[int, int, int, int]
 
 
-class PixelAccess[TPixel](Protocol):
-    def __getitem__(self, xy: tuple[int, int]) -> TPixel: ...
-    def __setitem__(self, xy: tuple[int, int], color: TPixel) -> None: ...
-
-
-def draw_ansi(
-    img: Image,
+async def draw_ansi(
+    image_bytes: bytes,
     write_line: Callable[[str], object],
     max_size: tuple[Cols, Rows] | None = None,
     prefix_length: int = 0,
+    *,
+    template_crop: tuple[int, int, int, int] | None = None,
 ) -> None:
-    img = img.convert("RGBA")
+    width, height = template_crop[2:] if template_crop is not None else template_dimensions(image_bytes)
 
-    width, height = img.size
     cols, rows = shutil.get_terminal_size() if max_size is None else max_size
     cols = max(1, cols - prefix_length)
-    img = img.resize(
-        (cols, int(height / width * cols * 0.55))
+    rows = max(2, rows)
+    target_size = (
+        (cols, max(1, int(height / width * cols * 0.55)))
         if width / cols > height / (rows - 1) * 0.55
-        else (int(width / height * (rows - 1) / 0.55), rows - 1)
+        else (max(1, int(width / height * (rows - 1) / 0.55)), rows - 1)
     )
+    pixels = await template_thumbnail_rgba(image_bytes, target_size, template_crop=template_crop)
 
-    data = cast("PixelAccess[RGBA]", img.load())
-    for y in range(img.height):
-        chars = [
-            (f"<fg #{r:02x}{g:02x}{b:02x}>█</>" if a > 0 else " ")
-            for r, g, b, a in (data[x, y] for x in range(img.width))
-        ]
+    width, height = target_size
+    for y in range(height):
+        row_start = y * width * 4
+        chars: list[str] = []
+        for x in range(width):
+            offset = row_start + x * 4
+            r, g, b, a = pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]
+            chars.append(f"<fg #{r:02x}{g:02x}{b:02x}>█</>" if a > 0 else " ")
         write_line("".join(chars))

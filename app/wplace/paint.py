@@ -181,10 +181,11 @@ class Painter:
         base = template.get_coords()[0]
 
         self.log.info("Template preview:")
-        draw_ansi(
-            template.load_im(),
+        await draw_ansi(
+            template.read_bytes(),
             write_line=self.log.info,
             prefix_length=log_prefix_width(__name__, "INFO", self.user.identifier),
+            template_crop=template.crop_area,
         )
 
         async with self.claim_painting_color(entry.name for entry in entries) as claimed:
