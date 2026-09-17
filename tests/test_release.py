@@ -43,25 +43,24 @@ def test_publish_release_retries_timeout_and_resumes_verified_assets(
         capture_output: bool = False,
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        del check, capture_output
+        del check, capture_output, timeout
         if arguments[:2] == ("release", "view"):
             payload = {"isDraft": not state["published"], "assets": list(remote_assets.values())}
             return subprocess.CompletedProcess(arguments, 0, json.dumps(payload), "")
-        if arguments[:2] == ("release", "upload"):
-            asset = next(item for item in assets if item.path == Path(arguments[3]))
-            attempts[asset.path.name] += 1
-            if asset == windows and attempts[asset.path.name] == 1:
-                assert timeout is not None
-                raise subprocess.TimeoutExpired(arguments, timeout)
-            remote_assets[asset.path.name] = remote_asset(asset)
-            return subprocess.CompletedProcess(arguments, 0, "", "")
         if arguments[:2] == ("release", "edit"):
             assert all(asset.path.name in remote_assets for asset in assets)
             state["published"] = True
             return subprocess.CompletedProcess(arguments, 0, "", "")
         raise AssertionError(f"Unexpected GitHub CLI call: {arguments}")
 
+    def fake_upload(_release: dict[str, object], asset: release.ReleaseAsset) -> None:
+        attempts[asset.path.name] += 1
+        if asset == windows and attempts[asset.path.name] == 1:
+            raise subprocess.TimeoutExpired(["curl"], release.UPLOAD_TIMEOUT_SECONDS)
+        remote_assets[asset.path.name] = remote_asset(asset)
+
     monkeypatch.setattr(release, "run_gh", fake_run_gh)
+    monkeypatch.setattr(release, "upload_release_asset_data", fake_upload)
     monkeypatch.setattr(release.time, "sleep", lambda _seconds: None)
 
     release.publish_release(argparse.Namespace(assets_dir=tmp_path, tag=f"v{release.read_project_version()}"))
@@ -84,18 +83,19 @@ def test_publish_release_does_not_publish_after_upload_retries_fail(
         capture_output: bool = False,
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        del check, capture_output
+        del check, capture_output, timeout
         if arguments[:2] == ("release", "view"):
             return subprocess.CompletedProcess(arguments, 0, json.dumps({"isDraft": True, "assets": []}), "")
-        if arguments[:2] == ("release", "upload"):
-            assert timeout is not None
-            raise subprocess.TimeoutExpired(arguments, timeout)
         if arguments[:2] == ("release", "edit"):
             state["published"] = True
             return subprocess.CompletedProcess(arguments, 0, "", "")
         raise AssertionError(f"Unexpected GitHub CLI call: {arguments}")
 
+    def fake_upload(_release: dict[str, object], _asset: release.ReleaseAsset) -> None:
+        raise subprocess.TimeoutExpired(["curl"], release.UPLOAD_TIMEOUT_SECONDS)
+
     monkeypatch.setattr(release, "run_gh", fake_run_gh)
+    monkeypatch.setattr(release, "upload_release_asset_data", fake_upload)
     monkeypatch.setattr(release.time, "sleep", lambda _seconds: None)
 
     with pytest.raises(RuntimeError, match="upload exhausted retries"):

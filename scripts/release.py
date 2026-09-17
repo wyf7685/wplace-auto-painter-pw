@@ -11,6 +11,7 @@ import tomllib
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -35,6 +36,10 @@ class ReleaseAsset:
     path: Path
     size: int
     digest: str
+
+
+class ReleaseUploadError(RuntimeError):
+    pass
 
 
 def read_project_version() -> str:
@@ -95,7 +100,16 @@ def run_gh(
 
 
 def read_release(tag: str) -> dict[str, object] | None:
-    process = run_gh("release", "view", tag, "--json", "isDraft,assets", check=False, capture_output=True)
+    process = run_gh(
+        "release",
+        "view",
+        tag,
+        "--json",
+        "isDraft,assets,uploadUrl",
+        check=False,
+        capture_output=True,
+        timeout=30,
+    )
     if process.returncode != 0:
         message = (process.stderr or "").strip()
         if "release not found" in message.lower():
@@ -124,25 +138,78 @@ def get_release_assets(assets_dir: Path) -> list[ReleaseAsset]:
     return assets
 
 
-def release_asset_matches(asset: ReleaseAsset, release: dict[str, object]) -> bool:
+def get_remote_release_asset(name: str, release: dict[str, object]) -> dict[str, object] | None:
     remote_assets = release.get("assets")
     if not isinstance(remote_assets, list):
         raise TypeError("GitHub release assets must be a list")
-    return any(
-        isinstance(remote, dict)
-        and remote.get("name") == asset.path.name
+    return next(
+        (remote for remote in remote_assets if isinstance(remote, dict) and remote.get("name") == name),
+        None,
+    )
+
+
+def release_asset_matches(asset: ReleaseAsset, release: dict[str, object]) -> bool:
+    remote = get_remote_release_asset(asset.path.name, release)
+    return (
+        remote is not None
         and remote.get("size") == asset.size
         and remote.get("digest") == asset.digest
         and remote.get("state") == "uploaded"
-        for remote in remote_assets
     )
+
+
+def upload_release_asset_data(release: dict[str, object], asset: ReleaseAsset) -> None:
+    upload_url = release.get("uploadUrl")
+    if not isinstance(upload_url, str) or not upload_url:
+        raise TypeError("GitHub release upload URL is unavailable")
+    token = os.getenv("GH_TOKEN")
+    if not token:
+        raise RuntimeError("GH_TOKEN is unavailable")
+    executable = shutil.which("curl")
+    if executable is None:
+        raise RuntimeError("curl is unavailable")
+
+    endpoint = f"{upload_url.partition('{')[0]}?name={quote(asset.path.name, safe='')}"
+    process = subprocess.run(  # noqa: S603
+        [
+            executable,
+            "--fail-with-body",
+            "--silent",
+            "--show-error",
+            "--http1.1",
+            "--connect-timeout",
+            "30",
+            "--max-time",
+            str(UPLOAD_TIMEOUT_SECONDS),
+            "--request",
+            "POST",
+            "--header",
+            "Accept: application/vnd.github+json",
+            "--header",
+            f"Authorization: Bearer {token}",
+            "--header",
+            "X-GitHub-Api-Version: 2022-11-28",
+            "--header",
+            "Content-Type: application/octet-stream",
+            "--data-binary",
+            f"@{asset.path}",
+            endpoint,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=UPLOAD_TIMEOUT_SECONDS + 30,
+    )
+    if process.returncode != 0:
+        message = (process.stderr or process.stdout or "unknown curl error").strip()
+        raise ReleaseUploadError(message)
 
 
 def prepare_draft_release(tag: str) -> None:
     release = read_release(tag)
     if release is None:
         print(f"Creating draft release: {tag}", flush=True)
-        run_gh("release", "create", tag, "--draft", "--verify-tag", "--generate-notes", "--title", tag)
+        run_gh("release", "create", tag, "--draft", "--verify-tag", "--generate-notes", "--title", tag, timeout=30)
         return
     if release.get("isDraft") is not True:
         raise RuntimeError(f"Published release already exists: {tag}")
@@ -158,24 +225,20 @@ def upload_release_asset(tag: str, asset: ReleaseAsset) -> None:
             print(f"Release asset already verified: {asset.path.name}", flush=True)
             return
 
+        remote = get_remote_release_asset(asset.path.name, release)
+        if remote is not None:
+            run_gh("release", "delete-asset", tag, asset.path.name, "--yes", timeout=30)
+            release = read_release(tag)
+            if release is None:
+                raise RuntimeError(f"Draft release disappeared during upload: {tag}")
+
         print(f"Uploading {asset.path.name} (attempt {attempt}/{UPLOAD_ATTEMPTS})", flush=True)
         try:
-            run_gh(
-                "release",
-                "upload",
-                tag,
-                str(asset.path),
-                "--clobber",
-                timeout=UPLOAD_TIMEOUT_SECONDS,
-            )
+            upload_release_asset_data(release, asset)
         except subprocess.TimeoutExpired:
             print(f"Release asset upload timed out: {asset.path.name}", file=sys.stderr, flush=True)
-        except subprocess.CalledProcessError as exc:
-            print(
-                f"Release asset upload failed with exit code {exc.returncode}: {asset.path.name}",
-                file=sys.stderr,
-                flush=True,
-            )
+        except ReleaseUploadError as exc:
+            print(f"Release asset upload failed: {asset.path.name}: {exc}", file=sys.stderr, flush=True)
         else:
             release = read_release(tag)
             if release is not None and release_asset_matches(asset, release):
@@ -210,7 +273,7 @@ def publish_release(args: argparse.Namespace) -> None:
     for asset in assets:
         upload_release_asset(args.tag, asset)
     verify_release_assets(args.tag, assets)
-    run_gh("release", "edit", args.tag, "--draft=false", "--latest")
+    run_gh("release", "edit", args.tag, "--draft=false", "--latest", timeout=30)
 
 
 def build_manifest(args: argparse.Namespace) -> None:
