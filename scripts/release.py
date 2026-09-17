@@ -2,10 +2,14 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tarfile
+import time
 import tomllib
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +24,17 @@ PLATFORM_SUFFIXES = {
     "windows-x86_64": ".zip",
     "linux-x86_64": ".tar.gz",
 }
+
+UPLOAD_ATTEMPTS = 3
+UPLOAD_TIMEOUT_SECONDS = 120
+UPLOAD_RETRY_DELAY_SECONDS = 10
+
+
+@dataclass(frozen=True)
+class ReleaseAsset:
+    path: Path
+    size: int
+    digest: str
 
 
 def read_project_version() -> str:
@@ -59,6 +74,143 @@ def sha256_file(path: Path) -> str:
         while chunk := file.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def run_gh(
+    *arguments: str,
+    check: bool = True,
+    capture_output: bool = False,
+    timeout: int | None = None,
+) -> subprocess.CompletedProcess[str]:
+    executable = shutil.which("gh")
+    if executable is None:
+        raise RuntimeError("GitHub CLI is unavailable")
+    return subprocess.run(  # noqa: S603
+        [executable, *arguments],
+        check=check,
+        capture_output=capture_output,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def read_release(tag: str) -> dict[str, object] | None:
+    process = run_gh("release", "view", tag, "--json", "isDraft,assets", check=False, capture_output=True)
+    if process.returncode != 0:
+        message = (process.stderr or "").strip()
+        if "release not found" in message.lower():
+            return None
+        raise RuntimeError(f"Unable to inspect release {tag}: {message or 'unknown GitHub CLI error'}")
+
+    release = json.loads(process.stdout)
+    if not isinstance(release, dict):
+        raise TypeError("GitHub release metadata must be an object")
+    return release
+
+
+def get_release_assets(assets_dir: Path) -> list[ReleaseAsset]:
+    version = read_project_version()
+    paths = [
+        assets_dir / f"{APP_NAME}-v{version}-{platform_key}{suffix}"
+        for platform_key, suffix in PLATFORM_SUFFIXES.items()
+    ]
+    paths.append(assets_dir / "update-manifest.json")
+
+    assets: list[ReleaseAsset] = []
+    for path in paths:
+        if not path.is_file():
+            raise FileNotFoundError(f"Release asset is missing: {path}")
+        assets.append(ReleaseAsset(path, path.stat().st_size, f"sha256:{sha256_file(path)}"))
+    return assets
+
+
+def release_asset_matches(asset: ReleaseAsset, release: dict[str, object]) -> bool:
+    remote_assets = release.get("assets")
+    if not isinstance(remote_assets, list):
+        raise TypeError("GitHub release assets must be a list")
+    return any(
+        isinstance(remote, dict)
+        and remote.get("name") == asset.path.name
+        and remote.get("size") == asset.size
+        and remote.get("digest") == asset.digest
+        and remote.get("state") == "uploaded"
+        for remote in remote_assets
+    )
+
+
+def prepare_draft_release(tag: str) -> None:
+    release = read_release(tag)
+    if release is None:
+        print(f"Creating draft release: {tag}", flush=True)
+        run_gh("release", "create", tag, "--draft", "--verify-tag", "--generate-notes", "--title", tag)
+        return
+    if release.get("isDraft") is not True:
+        raise RuntimeError(f"Published release already exists: {tag}")
+    print(f"Reusing existing draft release: {tag}", flush=True)
+
+
+def upload_release_asset(tag: str, asset: ReleaseAsset) -> None:
+    for attempt in range(1, UPLOAD_ATTEMPTS + 1):
+        release = read_release(tag)
+        if release is None:
+            raise RuntimeError(f"Draft release disappeared during upload: {tag}")
+        if release_asset_matches(asset, release):
+            print(f"Release asset already verified: {asset.path.name}", flush=True)
+            return
+
+        print(f"Uploading {asset.path.name} (attempt {attempt}/{UPLOAD_ATTEMPTS})", flush=True)
+        try:
+            run_gh(
+                "release",
+                "upload",
+                tag,
+                str(asset.path),
+                "--clobber",
+                timeout=UPLOAD_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            print(f"Release asset upload timed out: {asset.path.name}", file=sys.stderr, flush=True)
+        except subprocess.CalledProcessError as exc:
+            print(
+                f"Release asset upload failed with exit code {exc.returncode}: {asset.path.name}",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            release = read_release(tag)
+            if release is not None and release_asset_matches(asset, release):
+                print(f"Release asset uploaded and verified: {asset.path.name}", flush=True)
+                return
+            print(f"Uploaded asset metadata does not match: {asset.path.name}", file=sys.stderr, flush=True)
+
+        if attempt < UPLOAD_ATTEMPTS:
+            time.sleep(attempt * UPLOAD_RETRY_DELAY_SECONDS)
+
+    raise RuntimeError(f"Release asset upload exhausted retries: {asset.path.name}")
+
+
+def verify_release_assets(tag: str, assets: list[ReleaseAsset]) -> None:
+    release = read_release(tag)
+    if release is None:
+        raise RuntimeError(f"Draft release is missing: {tag}")
+    mismatches = [asset.path.name for asset in assets if not release_asset_matches(asset, release)]
+    if mismatches:
+        raise RuntimeError(f"Release asset verification failed: {', '.join(mismatches)}")
+    for asset in assets:
+        print(f"Release asset verified: {asset.path.name}", flush=True)
+
+
+def publish_release(args: argparse.Namespace) -> None:
+    version = read_project_version()
+    if args.tag != f"v{version}":
+        raise ValueError(f"Tag {args.tag!r} does not match project version {version!r}")
+
+    assets = get_release_assets(args.assets_dir)
+    prepare_draft_release(args.tag)
+    for asset in assets:
+        upload_release_asset(args.tag, asset)
+    verify_release_assets(args.tag, assets)
+    run_gh("release", "edit", args.tag, "--draft=false", "--latest")
 
 
 def build_manifest(args: argparse.Namespace) -> None:
@@ -155,6 +307,11 @@ def parse_args() -> argparse.Namespace:
     package_parser.add_argument("--output-dir", type=Path, required=True)
     package_parser.add_argument("--github-output", type=Path, default=os.getenv("GITHUB_OUTPUT"))
     package_parser.set_defaults(handler=package_asset)
+
+    publish_parser = subparsers.add_parser("publish-release")
+    publish_parser.add_argument("--assets-dir", type=Path, required=True)
+    publish_parser.add_argument("--tag", required=True)
+    publish_parser.set_defaults(handler=publish_release)
 
     return parser.parse_args()
 

@@ -7,6 +7,11 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to build and publish
+        required: false
+        type: string
 
 jobs:
   lint:
@@ -22,6 +27,8 @@ jobs:
             runner: windows-2022
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -61,6 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.release_tag || github.ref }}
           fetch-depth: 0
 
       - name: Setup uv
@@ -76,12 +84,19 @@ jobs:
         id: metadata
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag || '' }}
         run: |
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            git fetch origin master
-            git merge-base --is-ancestor "$GITHUB_SHA" origin/master
+          if [ -n "$RELEASE_TAG" ]; then
+            git fetch origin master "$RELEASE_TAG"
+            release_commit="$(git rev-parse "$RELEASE_TAG^{commit}")"
+            current_commit="$(git rev-parse HEAD)"
+            if [ "$current_commit" != "$release_commit" ]; then
+              echo "Checked out commit does not match release tag: $RELEASE_TAG" >&2
+              exit 1
+            fi
+            git merge-base --is-ancestor "$release_commit" origin/master
           fi
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           uv run python scripts/release.py build-info --tag "$RELEASE_TAG"
 
       - name: Install UPX
@@ -97,7 +112,7 @@ jobs:
       - name: Build onedir application
         env:
           BUILD_CI: "true"
-          BUILD_COMMIT: ${{ github.sha }}
+          BUILD_COMMIT: ${{ steps.metadata.outputs.commit }}
           BUILD_TAG: ${{ steps.metadata.outputs.tag }}
         run: uv run pyinstaller --clean --noconfirm build.spec
 
@@ -122,13 +137,22 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
     needs: build
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+
+      - name: Load current release tooling
+        if: inputs.release_tag != ''
+        shell: bash
+        run: |
+          git fetch origin master
+          git show FETCH_HEAD:scripts/release.py > scripts/release.py
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -150,23 +174,15 @@ jobs:
         run: >-
           uv run python scripts/release.py build-manifest
           --assets-dir release
-          --tag "${{ github.ref_name }}"
-          --commit "${{ github.sha }}"
+          --tag "${{ inputs.release_tag || github.ref_name }}"
+          --commit "$(git rev-parse HEAD)"
           --output release/update-manifest.json
 
-      - name: Publish release atomically
-        shell: bash
+      - name: Publish release
+        timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          existing="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || true)"
-          if [ "$existing" = "false" ]; then
-            echo "Published release already exists: $TAG" >&2
-            exit 1
-          fi
-          if [ "$existing" = "true" ]; then
-            gh release delete "$TAG" --yes
-          fi
-          gh release create "$TAG" release/* --draft --verify-tag --generate-notes --title "$TAG"
-          gh release edit "$TAG" --draft=false --latest
+        run: >-
+          uv run python scripts/release.py publish-release
+          --assets-dir release
+          --tag "${{ inputs.release_tag || github.ref_name }}"

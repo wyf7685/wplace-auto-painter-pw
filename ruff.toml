@@ -95,3 +95,6 @@ keep-runtime-typing = true
   "T201",   # print
   "SLF001", # private-member-access  # regression tests pin internal invariants
 ]
+"scripts/*.py" = [
+  "T201",   # print
+]
