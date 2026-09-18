@@ -1,12 +1,13 @@
 import json
 import shutil
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import ValidationError
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QHBoxLayout, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QSplitter, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
     CheckBox,
@@ -31,7 +32,18 @@ from .constants import BROWSER_TYPES, LANGUAGE_CODES, LOG_LEVELS
 from .user_detail_card import UserDetailCard
 from .user_draft import default_user, normalize_user
 
-ConfigField = Literal["identifier", "token", "template_file_id", "template_coords", "template_source"]
+ConfigField = Literal[
+    "identifier",
+    "token",
+    "template_file_id",
+    "template_coords",
+    "template_source",
+    "selected_area",
+    "preferred_colors",
+    "min_paint_charges",
+    "max_paint_charges",
+    "auto_purchase",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +71,7 @@ class ConfigEditorWidget(QWidget):
         super().__init__()
         self._users: list[dict[str, Any]] = []
         self._current_user_row = -1
+        self._saved_snapshot: dict[str, Any] = {}
 
         self._build_widgets()
         self._build_layout()
@@ -193,6 +206,11 @@ class ConfigEditorWidget(QWidget):
             "template_file_id": self.user_detail_card.file_id_edit,
             "template_coords": self.user_detail_card.coords_edit,
             "template_source": self.user_detail_card.template_source_edit,
+            "selected_area": self.user_detail_card.selected_area_edit,
+            "preferred_colors": self.user_detail_card.preferred_colors_editor,
+            "min_paint_charges": self.user_detail_card.min_charges_spin,
+            "max_paint_charges": self.user_detail_card.max_charges_spin,
+            "auto_purchase": self.user_detail_card.auto_purchase_cb,
         }
         QTimer.singleShot(0, field_widgets[result.field].setFocus)
 
@@ -201,6 +219,62 @@ class ConfigEditorWidget(QWidget):
         if 0 <= index < len(self._language_codes):
             return self._language_codes[index]
         return "zh_CN"
+
+    def _validation_result(self, exc: ValidationError) -> ConfigSaveResult:
+        error = exc.errors(include_url=False, include_context=False, include_input=False)[0]
+        location = error.get("loc", ())
+        detail = str(error.get("msg") or tr("config.validation.invalid_value"))
+        user_index = (
+            location[1] if len(location) > 1 and location[0] == "users" and isinstance(location[1], int) else None
+        )
+        if user_index is None or not 0 <= user_index < len(self._users):
+            return ConfigSaveResult(error=tr("config.validation.invalid_value", detail=detail))
+
+        location_parts = {str(part) for part in location[2:]}
+        field: ConfigField | None = None
+        if "identifier" in location_parts:
+            field = "identifier"
+        elif "token" in location_parts or "credentials" in location_parts:
+            field = "token"
+        elif "file_id" in location_parts:
+            field = "template_file_id"
+        elif "coords" in location_parts:
+            field = "template_coords"
+        elif "selected_area" in location_parts:
+            field = "selected_area"
+        elif "preferred_colors" in location_parts:
+            field = "preferred_colors"
+        elif "min_paint_charges" in location_parts:
+            field = "min_paint_charges"
+        elif "max_paint_charges" in location_parts:
+            field = "max_paint_charges"
+        elif "auto_purchase" in location_parts:
+            field = "auto_purchase"
+
+        identifier = str(self._users[user_index].get("identifier") or user_index + 1)
+        return ConfigSaveResult(
+            error=tr("config.validation.user_invalid", identifier=identifier, detail=detail),
+            user_index=user_index,
+            field=field,
+        )
+
+    def _snapshot(self) -> dict[str, Any]:
+        return {
+            "users": deepcopy(self._users),
+            "browser": self.browser_cb.currentText(),
+            "proxy": self.proxy_edit.text().strip(),
+            "log_level": self.log_level_cb.currentText(),
+            "check_update": self.check_update_cb.isChecked(),
+            "disable_notifications": self.disable_notifications_cb.isChecked(),
+            "language": self._current_language_code(),
+        }
+
+    def has_unsaved_changes(self) -> bool:
+        try:
+            self._store_current_user()
+        except Exception:
+            return True
+        return self._snapshot() != self._saved_snapshot
 
     def load_from_disk(self) -> None:
         raw: dict[str, Any] = {}
@@ -238,6 +312,7 @@ class ConfigEditorWidget(QWidget):
             self.users_list.addItem(str(user["identifier"]))
 
         self.users_list.setCurrentRow(0)
+        self._saved_snapshot = self._snapshot()
 
     def _on_user_changed(self, row: int) -> None:
         if self._current_user_row >= 0:
@@ -270,7 +345,15 @@ class ConfigEditorWidget(QWidget):
         if row < 0 or row >= len(self._users):
             return
 
-        user = self.user_detail_card.save_to_user()
+        try:
+            user = self.user_detail_card.save_to_user()
+        except ValueError as exc:
+            raise _ConfigFieldError(
+                tr("config.validation.selected_area_format"),
+                user_index=row,
+                field="selected_area",
+            ) from exc
+
         if not user.get("identifier"):
             user["identifier"] = self._users[row].get("identifier", f"user-{row + 1}")
 
@@ -314,6 +397,16 @@ class ConfigEditorWidget(QWidget):
                 **self.infobar_options(),
             )
             return
+        identifier = str(self._users[row].get("identifier") or "")
+        choice = QMessageBox.question(
+            self,
+            tr("config.user.remove_confirm.title"),
+            tr("config.user.remove_confirm.content", identifier=identifier),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if choice != QMessageBox.StandardButton.Yes:
+            return
 
         # Mutating the list emits currentRowChanged, which would make _on_user_changed
         # flush the detail card (still holding the removed user) into a now-shifted row.
@@ -331,8 +424,10 @@ class ConfigEditorWidget(QWidget):
         selected_language = self._current_language_code()
         try:
             self._store_current_user()
+            source_user_indices: list[int] = []
 
             users_payload: list[dict[str, Any]] = []
+            seen_identifiers: set[str] = set()
             for user_index, user in enumerate(self._users):
                 identifier = str(user["identifier"] or "").strip()
                 token = str(user["credentials"]["token"] or "").strip()
@@ -346,6 +441,13 @@ class ConfigEditorWidget(QWidget):
                         user_index=user_index,
                         field="identifier",
                     )
+                if identifier in seen_identifiers:
+                    raise _ConfigFieldError(
+                        tr("config.validation.identifier_duplicate", identifier=identifier),
+                        user_index=user_index,
+                        field="identifier",
+                    )
+                seen_identifiers.add(identifier)
                 if not token:
                     raise _ConfigFieldError(
                         tr("config.validation.token_empty", identifier=identifier),
@@ -369,10 +471,35 @@ class ConfigEditorWidget(QWidget):
                     coords = WplacePixelCoords.parse(coords_text)
                 except ValueError as exc:
                     raise _ConfigFieldError(
-                        str(exc),
+                        tr("config.validation.template_coords_invalid", identifier=identifier),
                         user_index=user_index,
                         field="template_coords",
                     ) from exc
+
+                selected_area = user["selected_area"]
+                if selected_area is not None:
+                    x, y, width, height = selected_area
+                    if x < 0 or y < 0:
+                        raise _ConfigFieldError(
+                            tr("config.validation.selected_area_origin", identifier=identifier),
+                            user_index=user_index,
+                            field="selected_area",
+                        )
+                    if width <= 0 or height <= 0:
+                        raise _ConfigFieldError(
+                            tr("config.validation.selected_area_size", identifier=identifier),
+                            user_index=user_index,
+                            field="selected_area",
+                        )
+
+                min_charges = int(user["min_paint_charges"])
+                max_charges = user["max_paint_charges"]
+                if max_charges is not None and int(max_charges) < min_charges:
+                    raise _ConfigFieldError(
+                        tr("config.validation.max_charges_too_low", identifier=identifier),
+                        user_index=user_index,
+                        field="max_paint_charges",
+                    )
 
                 user_payload = {
                     "identifier": identifier,
@@ -389,12 +516,12 @@ class ConfigEditorWidget(QWidget):
                             "pxy": coords.pxy,
                         },
                     },
-                    "selected_area": user["selected_area"],
+                    "selected_area": selected_area,
                     "preferred_colors": user["preferred_colors"],
                     "paint_input_mode": user["paint_input_mode"],
                     "auto_purchase": user["auto_purchase"],
-                    "min_paint_charges": user["min_paint_charges"],
-                    "max_paint_charges": user["max_paint_charges"],
+                    "min_paint_charges": min_charges,
+                    "max_paint_charges": max_charges,
                 }
 
                 if source:
@@ -409,6 +536,7 @@ class ConfigEditorWidget(QWidget):
                     TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
                     if src.resolve() != dest.resolve():
                         shutil.copy2(src, dest)
+                    source_user_indices.append(user_index)
                 else:
                     dest = TEMPLATES_DIR / f"{file_id}.png"
                     if not dest.is_file() or dest.stat().st_size == 0:
@@ -433,6 +561,11 @@ class ConfigEditorWidget(QWidget):
             config = Config.model_validate(payload)
             export_config_schema()
             config.save()
+            for user_index in source_user_indices:
+                self._users[user_index]["_template_source"] = ""
+            if self._current_user_row in source_user_indices:
+                self.user_detail_card.template_source_edit.clear()
+            self._saved_snapshot = self._snapshot()
 
         except _ConfigFieldError as exc:
             result = ConfigSaveResult(error=str(exc), user_index=exc.user_index, field=exc.field)
@@ -445,7 +578,7 @@ class ConfigEditorWidget(QWidget):
                 self.focus_save_error(result)
             return result
         except ValidationError as exc:
-            result = ConfigSaveResult(error=str(exc))
+            result = self._validation_result(exc)
             if show_message:
                 InfoBar.error(
                     title=tr("config.save.validation_error.title"),

@@ -45,7 +45,6 @@ class ToolRowWidget(QWidget):
         self.state_changed.connect(self.set_runtime_state)
 
     def set_runtime_state(self, state: str) -> None:
-        is_running = state == "running"
-        self.start_btn.setEnabled(not is_running)
-        self.stop_btn.setEnabled(is_running)
+        self.start_btn.setEnabled(state not in {"running", "stopping"})
+        self.stop_btn.setEnabled(state == "running")
         self.status_label.setText(tr("main.status", state=tr(f"runtime.state.{state}", state=state)))

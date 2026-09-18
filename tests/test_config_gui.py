@@ -85,6 +85,10 @@ def test_save_derives_file_id_from_manually_entered_source(
     assert result.success
     assert card.file_id_edit.text() == "neuroFACE"
     assert (tmp_path / "templates" / "neuroFACE.png").read_bytes() == b"template"
+    assert card.template_source_edit.text() == ""
+
+    selected_path.unlink()
+    assert editor.save_to_disk(show_message=False).success
 
 
 def test_save_validation_error_remains_until_closed(
@@ -158,3 +162,41 @@ def test_start_shows_persistent_file_id_error_and_focuses_field(
         window.close()
         window.deleteLater()
         app.processEvents()
+
+
+def test_selected_area_validation_targets_field(
+    config_editor: tuple[QApplication, ConfigEditorWidget],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _, editor = config_editor
+    card = editor.user_detail_card
+    selected_path = tmp_path / "template.png"
+    selected_path.write_bytes(b"template")
+
+    card.identifier_edit.setText("area-user")
+    card.token_edit.setPlainText("redacted-token")
+    card.file_id_edit.setText("area-template")
+    card.coords_edit.setText("1,2,3,4")
+    card.template_source_edit.setText(str(selected_path))
+    card.selected_area_edit.setText("-1,0,4,5")
+
+    monkeypatch.setattr(editor_module, "export_config_schema", lambda: None)
+    monkeypatch.setattr(editor_module.Config, "save", lambda _self: None)
+
+    result = editor.save_to_disk(show_message=False)
+
+    assert not result.success
+    assert result.user_index == 0
+    assert result.field == "selected_area"
+    assert result.error == tr("config.validation.selected_area_origin", identifier="area-user")
+
+
+def test_editor_tracks_unsaved_widget_changes(
+    config_editor: tuple[QApplication, ConfigEditorWidget],
+) -> None:
+    _, editor = config_editor
+
+    assert not editor.has_unsaved_changes()
+    editor.user_detail_card.identifier_edit.setText("changed-user")
+    assert editor.has_unsaved_changes()

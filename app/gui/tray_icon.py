@@ -19,17 +19,29 @@ class AppTrayIcon(QSystemTrayIcon):
         self._on_show = on_show
 
         menu = SystemTrayMenu()
-        menu.addAction(show_act := Action(FluentIcon.APPLICATION, tr("tray.open")))
-        show_act.triggered.connect(on_show)
-        menu.addAction(start_act := Action(FluentIcon.PLAY, tr("tray.start")))
-        start_act.triggered.connect(on_start)
-        menu.addAction(stop_act := Action(FluentIcon.PAUSE, tr("tray.stop")))
-        stop_act.triggered.connect(on_stop)
+        show_action = Action(FluentIcon.APPLICATION, tr("tray.open"))
+        show_action.triggered.connect(on_show)
+        menu.addAction(show_action)
+
+        self.start_action = Action(FluentIcon.PLAY, tr("tray.start"))
+        self.start_action.triggered.connect(on_start)
+        menu.addAction(self.start_action)
+
+        self.stop_action = Action(FluentIcon.PAUSE, tr("tray.stop"))
+        self.stop_action.triggered.connect(on_stop)
+        menu.addAction(self.stop_action)
+
         menu.addSeparator()
-        menu.addAction(exit_act := Action(FluentIcon.POWER_BUTTON, tr("tray.exit")))
-        exit_act.triggered.connect(on_exit)
+        exit_action = Action(FluentIcon.POWER_BUTTON, tr("tray.exit"))
+        exit_action.triggered.connect(on_exit)
+        menu.addAction(exit_action)
         self.setContextMenu(menu)
+        self.set_runtime_state("stopped")
         self.activated.connect(self._on_activated)
+
+    def set_runtime_state(self, state: str) -> None:
+        self.start_action.setEnabled(state not in {"running", "stopping"})
+        self.stop_action.setEnabled(state == "running")
 
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
