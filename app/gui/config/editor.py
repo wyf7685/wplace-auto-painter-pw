@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import ValidationError
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QHBoxLayout, QSplitter, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
@@ -194,7 +194,7 @@ class ConfigEditorWidget(QWidget):
             "template_coords": self.user_detail_card.coords_edit,
             "template_source": self.user_detail_card.template_source_edit,
         }
-        field_widgets[result.field].setFocus()
+        QTimer.singleShot(0, field_widgets[result.field].setFocus)
 
     def _current_language_code(self) -> str:
         index = self.language_cb.currentIndex()
@@ -287,7 +287,7 @@ class ConfigEditorWidget(QWidget):
                 InfoBar.warning(
                     title=tr("config.title"),
                     content=tr("config.user.add_failed", detail=str(exc)),
-                    **self.infobar_options(duration=0),
+                    **self.infobar_options(duration=-1),
                 )
                 return
 
@@ -437,12 +437,12 @@ class ConfigEditorWidget(QWidget):
         except _ConfigFieldError as exc:
             result = ConfigSaveResult(error=str(exc), user_index=exc.user_index, field=exc.field)
             if show_message:
-                self.focus_save_error(result)
                 InfoBar.error(
                     title=tr("config.save.validation_error.title"),
                     content=result.error or tr("controller.invalid_config.content"),
-                    **self.infobar_options(duration=0),
+                    **self.infobar_options(duration=-1),
                 )
+                self.focus_save_error(result)
             return result
         except ValidationError as exc:
             result = ConfigSaveResult(error=str(exc))
@@ -450,7 +450,7 @@ class ConfigEditorWidget(QWidget):
                 InfoBar.error(
                     title=tr("config.save.validation_error.title"),
                     content=result.error,
-                    **self.infobar_options(duration=0),
+                    **self.infobar_options(duration=-1),
                 )
             return result
         except Exception as exc:
@@ -459,7 +459,7 @@ class ConfigEditorWidget(QWidget):
                 InfoBar.error(
                     title=tr("config.save.failed.title"),
                     content=result.error,
-                    **self.infobar_options(duration=0),
+                    **self.infobar_options(duration=-1),
                 )
             return result
         else:

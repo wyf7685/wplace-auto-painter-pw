@@ -179,15 +179,15 @@ class Controller:
         result = self.window.config_editor.save_to_disk(show_message=False)
         if not result.success:
             self.window.goto_config_page()
-            self.window.config_editor.focus_save_error(result)
             InfoBar.warning(
                 tr("controller.invalid_config.title"),
                 result.error or tr("controller.invalid_config.content"),
                 orient=Qt.Orientation.Horizontal,
                 position=InfoBarPosition.TOP,
-                duration=5000,
+                duration=-1,
                 parent=self.window,
             )
+            self.window.config_editor.focus_save_error(result)
             return
         if not self.runtime.start():
             InfoBar.info(

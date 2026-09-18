@@ -6,7 +6,7 @@ from typing import Any
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QApplication, QFileDialog, QVBoxLayout, QWidget
 
 import app.gui.config.editor as editor_module
 import app.gui.controller as controller_module
@@ -87,9 +87,8 @@ def test_save_derives_file_id_from_manually_entered_source(
     assert (tmp_path / "templates" / "neuroFACE.png").read_bytes() == b"template"
 
 
-def test_start_shows_specific_file_id_error_and_focuses_field(
+def test_save_validation_error_remains_until_closed(
     config_editor: tuple[QApplication, ConfigEditorWidget],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, editor = config_editor
     card = editor.user_detail_card
@@ -98,17 +97,34 @@ def test_start_shows_specific_file_id_error_and_focuses_field(
     card.file_id_edit.clear()
     card.template_source_edit.clear()
 
-    warnings: list[tuple[str, str]] = []
+    result = editor.save_to_disk(show_message=True)
+    app.processEvents()
 
-    def capture_warning(title: str, content: str, **_kwargs: Any) -> None:
-        warnings.append((title, content))
+    expected_error = tr("config.validation.template_file_id_empty", identifier="issue-12-user")
+    info_bars = editor.findChildren(editor_module.InfoBar)
+    assert not result.success
+    assert len(info_bars) == 1
+    assert info_bars[0].contentLabel.text() == expected_error
+    assert info_bars[0].duration < 0
 
-    monkeypatch.setattr(controller_module.InfoBar, "warning", capture_warning)
 
-    class WindowStub:
+def test_start_shows_persistent_file_id_error_and_focuses_field(
+    config_editor: tuple[QApplication, ConfigEditorWidget],
+) -> None:
+    app, editor = config_editor
+    card = editor.user_detail_card
+    card.identifier_edit.setText("issue-12-user")
+    card.token_edit.setPlainText("redacted-token")
+    card.file_id_edit.clear()
+    card.template_source_edit.clear()
+
+    class WindowStub(QWidget):
         def __init__(self) -> None:
+            super().__init__()
             self.config_editor = editor
             self.config_page_selected = False
+            layout = QVBoxLayout(self)
+            layout.addWidget(editor)
 
         def goto_config_page(self) -> None:
             self.config_page_selected = True
@@ -121,14 +137,24 @@ def test_start_shows_specific_file_id_error_and_focuses_field(
             raise AssertionError("Runtime must not start when configuration is invalid")
 
     window = WindowStub()
+    window.show()
     controller: Any = object.__new__(Controller)
     controller.window = window
     controller.runtime = RuntimeStub()
 
-    Controller.start_runtime(controller)
-    app.processEvents()
+    try:
+        Controller.start_runtime(controller)
+        app.processEvents()
 
-    expected_error = tr("config.validation.template_file_id_empty", identifier="issue-12-user")
-    assert warnings == [(tr("controller.invalid_config.title"), expected_error)]
-    assert window.config_page_selected
-    assert QApplication.focusWidget() is card.file_id_edit
+        expected_error = tr("config.validation.template_file_id_empty", identifier="issue-12-user")
+        info_bars = window.findChildren(controller_module.InfoBar)
+        assert len(info_bars) == 1
+        assert info_bars[0].contentLabel.text() == expected_error
+        assert info_bars[0].duration < 0
+        assert window.config_page_selected
+        assert QApplication.focusWidget() is card.file_id_edit
+    finally:
+        editor.setParent(None)
+        window.close()
+        window.deleteLater()
+        app.processEvents()
