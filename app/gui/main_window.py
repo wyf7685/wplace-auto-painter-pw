@@ -89,6 +89,9 @@ class MainWindow(FluentWindow):
     def append_log(self, line: str) -> None:
         self.log_viewer.append_line(line)
 
+    def goto_config_page(self) -> None:
+        self.switchTo(self.config_page)
+
     def goto_logs_page(self) -> None:
         self.switchTo(self.logs_page)
 

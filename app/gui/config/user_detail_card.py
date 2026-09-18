@@ -173,6 +173,11 @@ class UserDetailCard(ElevatedCardWidget):
 
         layout.addWidget(scroll, stretch=1)
 
+    def _set_template_source(self, file_path: str) -> None:
+        self.template_source_edit.setText(file_path)
+        if not self.file_id_edit.text().strip():
+            self.file_id_edit.setText(Path(file_path).stem)
+
     def _pick_template_source(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -181,7 +186,7 @@ class UserDetailCard(ElevatedCardWidget):
             tr("config.template_dialog.filter"),
         )
         if file_path:
-            self.template_source_edit.setText(file_path)
+            self._set_template_source(file_path)
 
     def _current_auto_purchase_value(self) -> str:
         index = self.auto_purchase_cb.currentIndex()
@@ -236,7 +241,7 @@ class UserDetailCard(ElevatedCardWidget):
 
         self.selected_area_edit.setText(format_selected_area(dialog.result_area))
         if dialog.result_image_path:
-            self.template_source_edit.setText(dialog.result_image_path)
+            self._set_template_source(dialog.result_image_path)
 
     def load_user(self, user: dict[str, Any]) -> None:
         self.identifier_edit.setText(str(user.get("identifier") or ""))
@@ -282,6 +287,11 @@ class UserDetailCard(ElevatedCardWidget):
     def save_to_user(self) -> dict[str, Any]:
         selected_area = parse_selected_area(self.selected_area_edit.text())
         self.selected_area_edit.setText(format_selected_area(selected_area))
+        source = self.template_source_edit.text().strip()
+        file_id = self.file_id_edit.text().strip()
+        if not file_id and source:
+            file_id = Path(source).stem
+            self.file_id_edit.setText(file_id)
 
         auto_choice = self._current_auto_purchase_value()
         auto_purchase: dict[str, Any] | None
@@ -306,7 +316,7 @@ class UserDetailCard(ElevatedCardWidget):
                 "cf_clearance": self.cf_clearance_edit.toPlainText().strip(),
             },
             "template": {
-                "file_id": self.file_id_edit.text().strip(),
+                "file_id": file_id,
                 "coords": self.coords_edit.text().strip(),
             },
             "selected_area": selected_area,
@@ -315,5 +325,5 @@ class UserDetailCard(ElevatedCardWidget):
             "auto_purchase": auto_purchase,
             "min_paint_charges": int(self.min_charges_spin.value()),
             "max_paint_charges": int(self.max_charges_spin.value()) if self.max_enable_cb.isChecked() else None,
-            "_template_source": self.template_source_edit.text().strip(),
+            "_template_source": source,
         }

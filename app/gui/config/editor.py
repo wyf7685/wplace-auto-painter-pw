@@ -1,10 +1,11 @@
 import json
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QHBoxLayout, QSplitter, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
@@ -29,6 +30,26 @@ from app.schemas import WplacePixelCoords
 from .constants import BROWSER_TYPES, LANGUAGE_CODES, LOG_LEVELS
 from .user_detail_card import UserDetailCard
 from .user_draft import default_user, normalize_user
+
+ConfigField = Literal["identifier", "token", "template_file_id", "template_coords", "template_source"]
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigSaveResult:
+    error: str | None = None
+    user_index: int | None = None
+    field: ConfigField | None = None
+
+    @property
+    def success(self) -> bool:
+        return self.error is None
+
+
+class _ConfigFieldError(ValueError):
+    def __init__(self, message: str, *, user_index: int, field: ConfigField) -> None:
+        super().__init__(message)
+        self.user_index = user_index
+        self.field = field
 
 
 class ConfigEditorWidget(QWidget):
@@ -161,6 +182,20 @@ class ConfigEditorWidget(QWidget):
             "parent": self,
         }
 
+    def focus_save_error(self, result: ConfigSaveResult) -> None:
+        if result.user_index is None or result.field is None:
+            return
+
+        self.users_list.setCurrentRow(result.user_index)
+        field_widgets: dict[ConfigField, QWidget] = {
+            "identifier": self.user_detail_card.identifier_edit,
+            "token": self.user_detail_card.token_edit,
+            "template_file_id": self.user_detail_card.file_id_edit,
+            "template_coords": self.user_detail_card.coords_edit,
+            "template_source": self.user_detail_card.template_source_edit,
+        }
+        QTimer.singleShot(0, field_widgets[result.field].setFocus)
+
     def _current_language_code(self) -> str:
         index = self.language_cb.currentIndex()
         if 0 <= index < len(self._language_codes):
@@ -252,7 +287,7 @@ class ConfigEditorWidget(QWidget):
                 InfoBar.warning(
                     title=tr("config.title"),
                     content=tr("config.user.add_failed", detail=str(exc)),
-                    **self.infobar_options(duration=0),
+                    **self.infobar_options(duration=-1),
                 )
                 return
 
@@ -292,22 +327,61 @@ class ConfigEditorWidget(QWidget):
         self._current_user_row = -1
         self._on_user_changed(target)
 
-    def save_to_disk(self, show_message: bool = True) -> bool:
+    def save_to_disk(self, show_message: bool = True) -> ConfigSaveResult:
         selected_language = self._current_language_code()
         try:
             self._store_current_user()
 
             users_payload: list[dict[str, Any]] = []
-            for user in self._users:
-                coords = WplacePixelCoords.parse(str(user["template"]["coords"]))
+            for user_index, user in enumerate(self._users):
+                identifier = str(user["identifier"] or "").strip()
+                token = str(user["credentials"]["token"] or "").strip()
+                file_id = str(user["template"]["file_id"] or "").strip()
+                coords_text = str(user["template"]["coords"] or "").strip()
+                source = str(user.get("_template_source") or "").strip()
+
+                if not identifier:
+                    raise _ConfigFieldError(
+                        tr("config.validation.identifier_empty"),
+                        user_index=user_index,
+                        field="identifier",
+                    )
+                if not token:
+                    raise _ConfigFieldError(
+                        tr("config.validation.token_empty", identifier=identifier),
+                        user_index=user_index,
+                        field="token",
+                    )
+                if not file_id:
+                    raise _ConfigFieldError(
+                        tr("config.validation.template_file_id_empty", identifier=identifier),
+                        user_index=user_index,
+                        field="template_file_id",
+                    )
+                if not coords_text:
+                    raise _ConfigFieldError(
+                        tr("config.validation.template_coords_empty", identifier=identifier),
+                        user_index=user_index,
+                        field="template_coords",
+                    )
+
+                try:
+                    coords = WplacePixelCoords.parse(coords_text)
+                except ValueError as exc:
+                    raise _ConfigFieldError(
+                        str(exc),
+                        user_index=user_index,
+                        field="template_coords",
+                    ) from exc
+
                 user_payload = {
-                    "identifier": user["identifier"],
+                    "identifier": identifier,
                     "credentials": {
-                        "token": user["credentials"]["token"],
+                        "token": token,
                         "cf_clearance": user["credentials"]["cf_clearance"] or None,
                     },
                     "template": {
-                        "file_id": user["template"]["file_id"],
+                        "file_id": file_id,
                         "coords": {
                             "tlx": coords.tlx,
                             "tly": coords.tly,
@@ -323,32 +397,26 @@ class ConfigEditorWidget(QWidget):
                     "max_paint_charges": user["max_paint_charges"],
                 }
 
-                if not str(user_payload["identifier"]).strip():
-                    raise ValueError(tr("config.validation.identifier_empty"))
-                if not str(user_payload["credentials"]["token"] or "").strip():
-                    raise ValueError(tr("config.validation.token_empty", identifier=user_payload["identifier"]))
-                if not str(user_payload["template"]["file_id"] or "").strip():
-                    raise ValueError(
-                        tr("config.validation.template_file_id_empty", identifier=user_payload["identifier"])
-                    )
-                if not str(user_payload["template"]["coords"] or "").strip():
-                    raise ValueError(
-                        tr("config.validation.template_coords_empty", identifier=user_payload["identifier"])
-                    )
-
-                source = str(user.get("_template_source") or "").strip()
                 if source:
                     src = Path(source)
                     if not src.is_file():
-                        raise ValueError(tr("config.validation.template_source_missing", path=source))
-                    dest = TEMPLATES_DIR / f"{user_payload['template']['file_id']}.png"
+                        raise _ConfigFieldError(
+                            tr("config.validation.template_source_missing", path=source),
+                            user_index=user_index,
+                            field="template_source",
+                        )
+                    dest = TEMPLATES_DIR / f"{file_id}.png"
                     TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
                     if src.resolve() != dest.resolve():
                         shutil.copy2(src, dest)
                 else:
-                    dest = TEMPLATES_DIR / f"{user_payload['template']['file_id']}.png"
+                    dest = TEMPLATES_DIR / f"{file_id}.png"
                     if not dest.is_file() or dest.stat().st_size == 0:
-                        raise ValueError(tr("config.validation.template_image_missing", path=dest))
+                        raise _ConfigFieldError(
+                            tr("config.validation.template_image_missing", path=dest),
+                            user_index=user_index,
+                            field="template_source",
+                        )
 
                 users_payload.append(user_payload)
 
@@ -366,22 +434,34 @@ class ConfigEditorWidget(QWidget):
             export_config_schema()
             config.save()
 
-        except ValidationError as exc:
+        except _ConfigFieldError as exc:
+            result = ConfigSaveResult(error=str(exc), user_index=exc.user_index, field=exc.field)
             if show_message:
                 InfoBar.error(
                     title=tr("config.save.validation_error.title"),
-                    content=str(exc),
-                    **self.infobar_options(duration=0),
+                    content=result.error or tr("controller.invalid_config.content"),
+                    **self.infobar_options(duration=-1),
                 )
-            return False
+                self.focus_save_error(result)
+            return result
+        except ValidationError as exc:
+            result = ConfigSaveResult(error=str(exc))
+            if show_message:
+                InfoBar.error(
+                    title=tr("config.save.validation_error.title"),
+                    content=result.error,
+                    **self.infobar_options(duration=-1),
+                )
+            return result
         except Exception as exc:
+            result = ConfigSaveResult(error=str(exc))
             if show_message:
                 InfoBar.error(
                     title=tr("config.save.failed.title"),
-                    content=str(exc),
-                    **self.infobar_options(duration=0),
+                    content=result.error,
+                    **self.infobar_options(duration=-1),
                 )
-            return False
+            return result
         else:
             if show_message:
                 InfoBar.success(
@@ -395,4 +475,4 @@ class ConfigEditorWidget(QWidget):
                         content=tr("config.language.change_pending.content"),
                         **self.infobar_options(),
                     )
-            return True
+            return ConfigSaveResult()
