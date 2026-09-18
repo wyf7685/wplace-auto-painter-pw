@@ -200,3 +200,17 @@ def test_editor_tracks_unsaved_widget_changes(
     assert not editor.has_unsaved_changes()
     editor.user_detail_card.identifier_edit.setText("changed-user")
     assert editor.has_unsaved_changes()
+
+
+def test_empty_identifier_is_unsaved_and_rejected(
+    config_editor: tuple[QApplication, ConfigEditorWidget],
+) -> None:
+    _, editor = config_editor
+    editor.user_detail_card.identifier_edit.clear()
+
+    assert editor.has_unsaved_changes()
+
+    result = editor.save_to_disk(show_message=False)
+    assert not result.success
+    assert result.field == "identifier"
+    assert result.error == tr("config.validation.identifier_empty")

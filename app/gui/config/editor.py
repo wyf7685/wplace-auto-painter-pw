@@ -354,13 +354,10 @@ class ConfigEditorWidget(QWidget):
                 field="selected_area",
             ) from exc
 
-        if not user.get("identifier"):
-            user["identifier"] = self._users[row].get("identifier", f"user-{row + 1}")
-
         self._users[row] = user
 
         if (item := self.users_list.item(row)) is not None:
-            item.setText(user["identifier"])
+            item.setText(str(user.get("identifier") or f"user-{row + 1}"))
 
     def _add_user(self) -> None:
         if self._current_user_row >= 0:

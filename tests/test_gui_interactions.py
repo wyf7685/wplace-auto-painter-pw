@@ -1,6 +1,7 @@
 import os
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -11,8 +12,10 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QFileDialog, QWidget
 
 import app.gui.config.editor as editor_module
+import app.gui.controller as controller_module
 import app.wplace as wplace_module
 from app.gui.config.area_editor_dialog import AreaEditorDialog
+from app.gui.controller import Controller
 from app.gui.main_window import MainWindow
 from app.gui.runtime import TaskRuntime
 from app.gui.tray_icon import AppTrayIcon
@@ -183,3 +186,99 @@ def test_tray_actions_follow_runtime_state(qt_app: QApplication) -> None:
     finally:
         tray.deleteLater()
         qt_app.processEvents()
+
+
+def test_update_helper_waits_for_unsaved_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+    class UpdaterStub:
+        state = "ready"
+
+        def __init__(self) -> None:
+            self.install_calls = 0
+            self.emit_calls = 0
+
+        def install(self) -> None:
+            self.install_calls += 1
+
+        def emit_current_state(self) -> None:
+            self.emit_calls += 1
+
+    updater = UpdaterStub()
+    controller: Any = object.__new__(Controller)
+    controller.updater = updater
+    controller._update_exit_preapproved = False
+    monkeypatch.setattr(controller, "_confirm_unsaved_changes", lambda: False)
+
+    Controller._install_update(controller)
+
+    assert updater.install_calls == 0
+    assert updater.emit_calls == 1
+    assert not controller._update_exit_preapproved
+
+
+def test_update_restart_reuses_completed_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+    confirmation_count = 0
+    controller: Any = object.__new__(Controller)
+
+    def confirm_unsaved_changes() -> bool:
+        nonlocal confirmation_count
+        confirmation_count += 1
+        return True
+
+    class UpdaterStub:
+        state = "ready"
+
+        def install(self) -> None:
+            self.state = "applying"
+            events.append("install")
+            Controller.exit_app(controller)
+
+    class RuntimeStub:
+        def stop(self) -> None:
+            events.append("stop")
+
+    class WindowStub:
+        def allow_exit(self) -> None:
+            events.append("allow_exit")
+
+    class ApplicationStub:
+        def quit(self) -> None:
+            events.append("quit")
+
+    controller.updater = UpdaterStub()
+    controller.runtime = RuntimeStub()
+    controller.window = WindowStub()
+    controller.app = ApplicationStub()
+    controller._update_exit_preapproved = False
+    monkeypatch.setattr(controller, "_confirm_unsaved_changes", confirm_unsaved_changes)
+
+    Controller._install_update(controller)
+
+    assert confirmation_count == 1
+    assert events == ["install", "stop", "allow_exit", "quit"]
+    assert not controller._update_exit_preapproved
+
+
+def test_tray_hint_honors_disabled_notifications(monkeypatch: pytest.MonkeyPatch) -> None:
+    class TrayStub:
+        def __init__(self) -> None:
+            self.messages: list[tuple[object, ...]] = []
+
+        def showMessage(self, *args: object) -> None:  # noqa: N802
+            self.messages.append(args)
+
+    tray = TrayStub()
+    controller: Any = object.__new__(Controller)
+    controller.tray = tray
+    controller._tray_available = True
+    controller._tray_hint_shown = False
+    monkeypatch.setattr(
+        controller_module.Config,
+        "load",
+        staticmethod(lambda: type("ConfigStub", (), {"disable_notifications": True})()),
+    )
+
+    Controller._show_tray_hint(controller)
+
+    assert tray.messages == []
+    assert not controller._tray_hint_shown

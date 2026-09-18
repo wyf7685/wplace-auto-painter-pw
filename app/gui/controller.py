@@ -41,6 +41,7 @@ class Controller:
         self._ready_file = ready_file
         self._pending_update_install = False
         self._tray_hint_shown = False
+        self._update_exit_preapproved = False
 
         self._instance_lock = QLockFile(str(DATA_DIR / f".{APP_NAME}.lock"))
         if not self._instance_lock.tryLock(0):
@@ -141,26 +142,41 @@ class Controller:
             logger.exception("Failed to report updated application readiness")
             self.app.exit(1)
 
+    @staticmethod
+    def _desktop_notifications_enabled() -> bool:
+        try:
+            return not Config.load().disable_notifications
+        except Exception:
+            return True
+
+    def _show_tray_message(
+        self,
+        message: str,
+        icon: QSystemTrayIcon.MessageIcon,
+        timeout: int,
+    ) -> bool:
+        if not self._tray_available or not self._desktop_notifications_enabled():
+            return False
+        self.tray.showMessage(APP_NAME, message, icon, timeout)
+        return True
+
     def _handle_runtime_state(self, state: str) -> None:
         self.window.set_runtime_state(state)
         self.tray.set_runtime_state(state)
-        if state == "error" and self._tray_available and not self.window.isVisible():
-            self.tray.showMessage(
-                APP_NAME,
+        if state == "error" and not self.window.isVisible():
+            self._show_tray_message(
                 tr("controller.runtime.failed"),
                 QSystemTrayIcon.MessageIcon.Warning,
                 10000,
             )
         if self._pending_update_install and state != "running":
             self._pending_update_install = False
-            self.updater.install()
+            self._install_update()
 
     def _show_tray_hint(self) -> None:
-        if self._tray_hint_shown or not self._tray_available:
+        if self._tray_hint_shown:
             return
-        self._tray_hint_shown = True
-        self.tray.showMessage(
-            APP_NAME,
+        self._tray_hint_shown = self._show_tray_message(
             tr("tray.background_hint"),
             QSystemTrayIcon.MessageIcon.Information,
             5000,
@@ -190,7 +206,17 @@ class Controller:
                     self.window.set_update_state("applying", self.updater.version, self.updater.release_notes)
                     self.stop_runtime()
                 else:
-                    self.updater.install()
+                    self._install_update()
+
+    def _install_update(self) -> None:
+        if not self._confirm_unsaved_changes():
+            self.updater.emit_current_state()
+            return
+
+        self._update_exit_preapproved = True
+        self.updater.install()
+        if self.updater.state != "applying":
+            self._update_exit_preapproved = False
 
     def handle_config_error(self, exc: ConfigError) -> None:
         logger.opt(exception=exc).error(f"Configuration error: {exc!r}")
@@ -244,27 +270,34 @@ class Controller:
     def save_config(self) -> None:
         self.window.config_editor.save_to_disk(show_message=True)
 
-    def exit_app(self) -> None:
+    def _confirm_unsaved_changes(self) -> bool:
         editor = self.window.config_editor
-        if editor.has_unsaved_changes():
-            self.window.show_main_window()
-            self.window.goto_config_page()
-            choice = QMessageBox.question(
-                self.window,
-                tr("config.unsaved.title"),
-                tr("config.unsaved.content"),
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Save,
-            )
-            if choice == QMessageBox.StandardButton.Cancel:
-                return
-            if choice == QMessageBox.StandardButton.Save:
-                result = editor.save_to_disk(show_message=True)
-                if not result.success:
-                    editor.focus_save_error(result)
-                    return
+        if not editor.has_unsaved_changes():
+            return True
+
+        self.window.show_main_window()
+        self.window.goto_config_page()
+        choice = QMessageBox.question(
+            self.window,
+            tr("config.unsaved.title"),
+            tr("config.unsaved.content"),
+            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if choice == QMessageBox.StandardButton.Cancel:
+            return False
+        if choice == QMessageBox.StandardButton.Save:
+            result = editor.save_to_disk(show_message=True)
+            if not result.success:
+                editor.focus_save_error(result)
+                return False
+        return True
+
+    def exit_app(self) -> None:
+        if self._update_exit_preapproved:
+            self._update_exit_preapproved = False
+        elif not self._confirm_unsaved_changes():
+            return
 
         self.runtime.stop()
         self.window.allow_exit()
