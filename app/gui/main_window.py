@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import override
 
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, Signal
 from PySide6.QtGui import QCloseEvent, QIcon
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, NavigationItemPosition
@@ -18,6 +18,8 @@ from .tool_row import ToolRowWidget
 
 
 class MainWindow(FluentWindow):
+    hidden_to_tray = Signal()
+
     def __init__(
         self,
         icon: QIcon,
@@ -30,6 +32,8 @@ class MainWindow(FluentWindow):
     ) -> None:
         super().__init__()
         self._allow_close = False
+        self._window_properties_loaded = False
+        self._close_to_tray = True
 
         self._on_start = on_start
         self._on_stop = on_stop
@@ -123,10 +127,15 @@ class MainWindow(FluentWindow):
             self._move_to_screen_center()
 
     def show_main_window(self) -> None:
-        self._load_window_properties()
+        if not self._window_properties_loaded:
+            self._load_window_properties()
+            self._window_properties_loaded = True
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def set_close_to_tray(self, enabled: bool) -> None:
+        self._close_to_tray = enabled
 
     def allow_exit(self) -> None:
         self._allow_close = True
@@ -143,4 +152,8 @@ class MainWindow(FluentWindow):
             return
 
         event.ignore()
-        self.hide()
+        if self._close_to_tray:
+            self.hide()
+            self.hidden_to_tray.emit()
+        else:
+            self._on_exit()

@@ -227,13 +227,6 @@ class UserDetailCard(ElevatedCardWidget):
             return
 
         image_path = self._get_current_editor_image_path()
-        if image_path is None:
-            InfoBar.warning(
-                title=tr("config.selected_area.title"),
-                content=tr("config.selected_area.no_template_image"),
-                **self.editor.infobar_options(),
-            )
-            return
 
         dialog = AreaEditorDialog(self.editor, image_path=image_path, selected_area=selected_area)
         if dialog.exec() != int(dialog.DialogCode.Accepted):

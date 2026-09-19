@@ -25,9 +25,8 @@ class AreaEditorDialog(MessageBoxBase):
 
         self._result_area: tuple[int, int, int, int] | None = selected_area
         self._result_image_path: str | None = image_path
-        # 仅当用户实际改动选区时才回写，否则保留传入值。
-        # 否则"打开-直接确定"会用一个未经编辑的选区覆盖已有配置。
         self._area_dirty = False
+        self._loading_initial_image = True
 
         title = SubtitleLabel(tr("area_editor.title"), self)
         hint = BodyLabel(tr("area_editor.hint"), self)
@@ -35,6 +34,8 @@ class AreaEditorDialog(MessageBoxBase):
 
         self._image_label = ImageDropLabel()
         self._image_label.selection_changed.connect(self._on_selection_changed)
+        self._image_label.image_changed.connect(self._on_image_changed)
+        self._image_label.image_requested.connect(self._pick_image)
 
         browse_btn = PushButton(tr("area_editor.browse"))
         browse_btn.clicked.connect(self._pick_image)
@@ -62,8 +63,12 @@ class AreaEditorDialog(MessageBoxBase):
 
         if image_path and Path(image_path).is_file():
             self._image_label.set_image(image_path)
-            if selected_area is not None:
+            if self._image_label.filepath is not None and selected_area is not None:
                 self._image_label.set_selection_from_original_rect(QRect(*selected_area))
+        if self._image_label.filepath is None:
+            self._result_image_path = None
+            self._result_area = None
+        self._loading_initial_image = False
 
     @property
     def result_area(self) -> tuple[int, int, int, int] | None:
@@ -83,8 +88,11 @@ class AreaEditorDialog(MessageBoxBase):
         if not file_path:
             return
         self._image_label.set_image(file_path)
-        self._result_image_path = file_path
-        # 换图后旧选区不再有意义，set_image 已清空它
+
+    def _on_image_changed(self, file_path: str) -> None:
+        if self._loading_initial_image:
+            return
+        self._result_image_path = file_path or None
         self._result_area = None
         self._area_dirty = True
 

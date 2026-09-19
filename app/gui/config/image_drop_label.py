@@ -33,6 +33,8 @@ class ImageDropLabel(QLabel):
     """
 
     selection_changed = Signal()
+    image_changed = Signal(str)
+    image_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -107,6 +109,7 @@ class ImageDropLabel(QLabel):
             self._orig_pixmap = None
             self._display_pixmap = None
             self.clear_selection()
+            self.image_changed.emit("")
             return
 
         self.filepath = path
@@ -118,6 +121,7 @@ class ImageDropLabel(QLabel):
 
         self.setPixmap(QPixmap())
         self.clear_selection()
+        self.image_changed.emit(path)
 
     def _rescale(self) -> None:
         """按当前 `_scale` 重建显示用 pixmap。仅在缩放或换图时调用。"""
@@ -233,6 +237,9 @@ class ImageDropLabel(QLabel):
     @override
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if self._display_pixmap is None:
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.image_requested.emit()
+                event.accept()
             return
 
         if event.button() == Qt.MouseButton.RightButton:
