@@ -84,11 +84,13 @@ def test_area_editor_rejects_invalid_replacement_image(
         qt_app.processEvents()
 
 
-def test_empty_image_preview_opens_file_picker(
+def test_empty_image_preview_opens_file_picker_from_config_editor(
     qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.setattr(editor_module, "CONFIG_FILE", tmp_path / "config.json")
+    monkeypatch.setattr(editor_module, "TEMPLATES_DIR", tmp_path / "templates")
     selected_image = tmp_path / "selected.png"
     _write_image(selected_image, Qt.GlobalColor.green)
     monkeypatch.setattr(
@@ -97,21 +99,27 @@ def test_empty_image_preview_opens_file_picker(
         lambda *_args, **_kwargs: (str(selected_image), ""),
     )
 
-    host = QWidget()
-    host.resize(900, 700)
-    host.show()
-    dialog = AreaEditorDialog(host, image_path=None, selected_area=None)
-    dialog.show()
+    editor = editor_module.ConfigEditorWidget()
+    editor.show()
     qt_app.processEvents()
-    try:
+
+    def choose_image(dialog: AreaEditorDialog) -> int:
+        dialog.show()
+        qt_app.processEvents()
         QTest.mouseClick(dialog._image_label, Qt.MouseButton.LeftButton)
         qt_app.processEvents()
+        assert dialog.validate()
+        return int(dialog.DialogCode.Accepted)
 
-        assert dialog.result_image_path == str(selected_image)
-        assert dialog._image_label.filepath == str(selected_image)
+    monkeypatch.setattr(AreaEditorDialog, "exec", choose_image)
+    try:
+        editor.user_detail_card.edit_area_btn.click()
+
+        assert editor.user_detail_card.template_source_edit.text() == str(selected_image)
+        assert editor.user_detail_card.file_id_edit.text() == "selected"
     finally:
-        dialog.deleteLater()
-        host.deleteLater()
+        editor.close()
+        editor.deleteLater()
         qt_app.processEvents()
 
 
@@ -155,7 +163,7 @@ def test_runtime_reports_failed_painter_as_error(
     qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def failed_painter() -> bool:
+    async def failed_painter(_on_user_failed: Any = None) -> bool:
         return False
 
     monkeypatch.setattr(wplace_module, "run_painter", failed_painter)
@@ -168,6 +176,51 @@ def test_runtime_reports_failed_painter_as_error(
     qt_app.processEvents()
 
     assert states == ["running", "error"]
+
+
+def test_runtime_emits_user_failure_without_error_state(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def partially_failed_painter(on_user_failed: Any = None) -> bool:
+        assert on_user_failed is not None
+        on_user_failed("failed-user")
+        return True
+
+    monkeypatch.setattr(wplace_module, "run_painter", partially_failed_painter)
+    runtime = TaskRuntime()
+    states: list[str] = []
+    failed_users: list[str] = []
+    runtime.signals.state_changed.connect(states.append)
+    runtime.signals.user_failed.connect(failed_users.append)
+
+    assert runtime.start()
+    runtime.join(timeout=5)
+    qt_app.processEvents()
+
+    assert failed_users == ["failed-user"]
+    assert states == ["running", "stopped"]
+
+
+def test_visible_user_failure_shows_warning(qt_app: QApplication) -> None:
+    window = QWidget()
+    window.show()
+    controller: Any = object.__new__(Controller)
+    controller.window = window
+
+    try:
+        Controller._handle_user_failure(controller, "failed-user")
+        qt_app.processEvents()
+
+        info_bars = window.findChildren(controller_module.InfoBar)
+        assert len(info_bars) == 1
+        actual = "".join(info_bars[0].contentLabel.text().split())
+        expected = "".join(tr("controller.runtime.user_failed", identifier="failed-user").split())
+        assert actual == expected
+    finally:
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()
 
 
 def test_tray_actions_follow_runtime_state(qt_app: QApplication) -> None:

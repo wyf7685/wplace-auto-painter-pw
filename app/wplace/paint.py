@@ -1,7 +1,7 @@
 import contextlib
 import random
 import uuid
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncGenerator, Callable, Iterable
 from datetime import datetime, timedelta
 from typing import NamedTuple
 
@@ -21,6 +21,7 @@ from app.wplace.resolver import resolve_js
 from app.wplace.template import calc_template_diff
 
 logger = logger.opt(colors=True)
+
 # Colors currently being painted, so concurrent users don't fight over the same
 # ones. Guarded by `COLORS_CLAIMER_LOCK`; a plain set avoids the task-ownership
 # semantics of `anyio.Lock`, which would reject a re-claim from the same task.
@@ -391,7 +392,7 @@ class Painter:
             await anyio.sleep(max(wait_secs, 0))
 
 
-async def setup_paint() -> bool:
+async def setup_paint(on_user_failed: Callable[[str], None] | None = None) -> bool:
     failed = False
 
     async def run_user(user: UserConfig) -> None:
@@ -402,6 +403,8 @@ async def setup_paint() -> bool:
         except Exception:
             failed = True
             logger.exception(f"Paint loop failed for user: <lm>{escape_tag(user.identifier)}</>")
+            if on_user_failed is not None:
+                on_user_failed(user.identifier)
 
     async with anyio.create_task_group() as tg:
         for index, user in enumerate(Config.load().users):

@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import anyio
 
 from app.browser import shutdown_idle_playwright_loop, shutdown_playwright
@@ -7,7 +9,7 @@ from app.log import logger
 from app.version import get_app_version
 
 
-async def run_painter() -> bool:
+async def run_painter(on_user_failed: Callable[[str], None] | None = None) -> bool:
     logger.opt(colors=True).info(f"Starting painter loop (version=<c>{get_app_version()}</>)")
 
     ensure_config_ready()
@@ -20,7 +22,7 @@ async def run_painter() -> bool:
             tg.start_soon(shutdown_idle_playwright_loop)
 
             try:
-                failed = not await setup_paint()
+                failed = not await setup_paint(on_user_failed)
             finally:
                 tg.cancel_scope.cancel()
 

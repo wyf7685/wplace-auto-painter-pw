@@ -58,6 +58,7 @@
   "controller.runtime.title": "Runtime",
   "controller.runtime.already_running": "Runtime is already running.",
   "controller.runtime.failed": "Painting stopped because of an error. Open Logs for details.",
+  "controller.runtime.user_failed": "Painting stopped for user {identifier} because of an error. Other users will continue. Open Logs for details.",
   "controller.update_blocked.title": "Update Unavailable",
   "controller.update_blocked.content": "Stop the running painting task before installing the update.",
   "tray.open": "Open",

@@ -13,6 +13,7 @@ class RuntimeSignals(QObject):
 
     state_changed = Signal(str)
     config_error_occurred = Signal(ConfigError)
+    user_failed = Signal(str)
 
 
 class TaskRuntime:
@@ -65,7 +66,7 @@ class TaskRuntime:
             async with anyio.create_task_group() as tg:
                 tg.start_soon(stop_waiter)
                 try:
-                    failed = not await run_painter()
+                    failed = not await run_painter(self.signals.user_failed.emit)
                 finally:
                     tg.cancel_scope.cancel()
 

@@ -3,6 +3,7 @@ from itertools import pairwise
 from types import SimpleNamespace
 from typing import Any, cast
 
+import anyio
 import pytest
 
 import app.wplace.paint as paint_module
@@ -80,6 +81,60 @@ def test_setup_paint_distinguishes_completion_from_failure(monkeypatch: pytest.M
 
     assert asyncio.run(run_with(PaintFinished("complete")))
     assert not asyncio.run(run_with(TokenExpired("expired")))
+
+
+def test_setup_paint_reports_failure_without_stopping_other_users(monkeypatch: pytest.MonkeyPatch) -> None:
+    failed_user = cast("Any", SimpleNamespace(identifier="failed-user"))
+    healthy_user = cast("Any", SimpleNamespace(identifier="healthy-user"))
+    monkeypatch.setattr(
+        paint_module.Config,
+        "load",
+        staticmethod(lambda: SimpleNamespace(users=[failed_user, healthy_user])),
+    )
+    original_sleep = paint_module.anyio.sleep
+
+    async def skip_stagger(delay: float) -> None:
+        if delay != 30:
+            await original_sleep(delay)
+
+    monkeypatch.setattr(paint_module.anyio, "sleep", skip_stagger)
+
+    async def exercise() -> None:
+        healthy_started = anyio.Event()
+        keep_healthy_running = anyio.Event()
+        failure_reported = anyio.Event()
+        reported_users: list[str] = []
+        setup_results: list[bool] = []
+
+        class PainterStub:
+            def __init__(self, user: Any) -> None:
+                self.user = user
+
+            async def run(self) -> None:
+                if self.user.identifier == "failed-user":
+                    raise TokenExpired("expired")
+                healthy_started.set()
+                await keep_healthy_running.wait()
+
+        monkeypatch.setattr(paint_module, "Painter", PainterStub)
+
+        def report_failure(identifier: str) -> None:
+            reported_users.append(identifier)
+            failure_reported.set()
+
+        async def run_setup() -> None:
+            setup_results.append(await paint_module.setup_paint(report_failure))
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(run_setup)
+            await failure_reported.wait()
+            await healthy_started.wait()
+
+            assert reported_users == ["failed-user"]
+            assert setup_results == []
+            task_group.cancel_scope.cancel()
+
+    anyio.run(exercise)
 
 
 class FakeMouse:

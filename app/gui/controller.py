@@ -75,6 +75,7 @@ class Controller:
         self.bridge.new_line.connect(self.window.append_log)
         self.runtime.signals.state_changed.connect(self._handle_runtime_state)
         self.runtime.signals.config_error_occurred.connect(self.handle_config_error)
+        self.runtime.signals.user_failed.connect(self._handle_user_failure)
         self.updater.state_changed.connect(self.window.set_update_state)
         self.updater.progress_changed.connect(self.window.set_update_progress)
         self.updater.error_occurred.connect(self._handle_update_error)
@@ -168,6 +169,25 @@ class Controller:
                 QSystemTrayIcon.MessageIcon.Warning,
                 10000,
             )
+
+    def _handle_user_failure(self, identifier: str) -> None:
+        message = tr("controller.runtime.user_failed", identifier=identifier)
+        if not self.window.isVisible():
+            self._show_tray_message(
+                message,
+                QSystemTrayIcon.MessageIcon.Warning,
+                10000,
+            )
+            return
+
+        InfoBar.warning(
+            tr("controller.runtime.title"),
+            message,
+            orient=Qt.Orientation.Horizontal,
+            position=InfoBarPosition.TOP,
+            duration=10000,
+            parent=self.window,
+        )
 
     def _show_tray_hint(self) -> None:
         if self._tray_hint_shown:

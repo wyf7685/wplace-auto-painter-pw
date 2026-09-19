@@ -58,6 +58,7 @@
   "controller.runtime.title": "运行时",
   "controller.runtime.already_running": "运行时已在执行中。",
   "controller.runtime.failed": "绘制任务因错误停止，请打开日志查看详情。",
+  "controller.runtime.user_failed": "用户 {identifier} 的绘制任务因错误停止，其他用户将继续运行。请打开日志查看详情。",
   "controller.update_blocked.title": "暂时无法更新",
   "controller.update_blocked.content": "请先停止正在运行的绘制任务，再安装更新。",
   "tray.open": "打开",
