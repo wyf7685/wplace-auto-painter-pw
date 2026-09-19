@@ -49,3 +49,4 @@ check.sequence = ["lint", "test"]
 build-updater.cmd = "pyinstaller --clean --noconfirm updater.spec"
 build-app.cmd = "pyinstaller --clean --noconfirm build.spec"
 build.sequence = ["check", "build-updater", "build-app"]
+release.cmd = "python scripts/release.py"

@@ -6,6 +6,7 @@ on:
       - master
     tags:
       - "v*.*.*"
+  pull_request:
   workflow_dispatch:
     inputs:
       release_tag:
@@ -14,8 +15,8 @@ on:
         type: string
 
 jobs:
-  lint:
-    name: Lint on ${{ matrix.platform.os }}
+  check:
+    name: Check on ${{ matrix.platform.os }}
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: false
@@ -39,18 +40,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Ruff check
-        run: uv run ruff check --output-format=github
-
-      - name: Ruff format check
-        run: uv run ruff format --check
-
-      - name: Type check
-        run: uv run ty check --python-platform all
+      - name: Check
+        run: uv run poe check
 
   build:
     name: Build ${{ matrix.platform.key }}
-    needs: lint
+    if: github.event_name != 'pull_request'
+    needs: check
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: false
@@ -97,7 +93,7 @@ jobs:
             git merge-base --is-ancestor "$release_commit" origin/master
           fi
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          uv run python scripts/release.py build-info --tag "$RELEASE_TAG"
+          uv run poe release build-info --tag "$RELEASE_TAG"
 
       - name: Install UPX
         uses: crazy-max/ghaction-upx@v4
@@ -107,14 +103,14 @@ jobs:
       - name: Build standalone updater
         env:
           BUILD_CI: "true"
-        run: uv run pyinstaller --clean --noconfirm updater.spec
+        run: uv run poe build-updater
 
       - name: Build onedir application
         env:
           BUILD_CI: "true"
           BUILD_COMMIT: ${{ steps.metadata.outputs.commit }}
           BUILD_TAG: ${{ steps.metadata.outputs.tag }}
-        run: uv run pyinstaller --clean --noconfirm build.spec
+        run: uv run poe build-app
 
       - name: Smoke test packaged version
         shell: bash
@@ -123,7 +119,7 @@ jobs:
       - name: Create release archive
         id: package
         run: >-
-          uv run python scripts/release.py package
+          uv run poe release package
           --bundle-dir dist/wplace-auto-painter
           --platform ${{ matrix.platform.key }}
           --output-dir release
@@ -172,7 +168,7 @@ jobs:
 
       - name: Generate update manifest
         run: >-
-          uv run python scripts/release.py build-manifest
+          uv run poe release build-manifest
           --assets-dir release
           --tag "${{ inputs.release_tag || github.ref_name }}"
           --commit "$(git rev-parse HEAD)"
@@ -183,6 +179,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          uv run python scripts/release.py publish-release
+          uv run poe release publish-release
           --assets-dir release
           --tag "${{ inputs.release_tag || github.ref_name }}"

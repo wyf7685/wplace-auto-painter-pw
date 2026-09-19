@@ -48,9 +48,8 @@ uv run main.py
 Build the standalone updater before building the main application. Do not set `BUILD_CI=true` for local builds: `build.spec` and `updater.spec` isolate the build from DLLs that may be introduced through the local `PATH`.
 
 ```bash
-uv run pyinstaller --clean --noconfirm updater.spec
-uv run pyinstaller --clean --noconfirm build.spec
-uv run python scripts/release.py package --bundle-dir dist/wplace-auto-painter --platform windows-x86_64 --output-dir release
+uv run poe build
+uv run poe release package --bundle-dir dist/wplace-auto-painter --platform windows-x86_64 --output-dir release
 ```
 
 For Linux builds, use `linux-x86_64` as the `--platform` value.
