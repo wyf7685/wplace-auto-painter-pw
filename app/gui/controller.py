@@ -39,7 +39,6 @@ class Controller:
         self.app.setQuitOnLastWindowClosed(False)
         self.app.setStyle("Fusion")
         self._ready_file = ready_file
-        self._pending_update_install = False
         self._tray_hint_shown = False
         self._update_exit_preapproved = False
 
@@ -169,9 +168,6 @@ class Controller:
                 QSystemTrayIcon.MessageIcon.Warning,
                 10000,
             )
-        if self._pending_update_install and state != "running":
-            self._pending_update_install = False
-            self._install_update()
 
     def _show_tray_hint(self) -> None:
         if self._tray_hint_shown:
@@ -202,11 +198,16 @@ class Controller:
                 self.updater.download()
             case "ready":
                 if self.runtime.is_running:
-                    self._pending_update_install = True
-                    self.window.set_update_state("applying", self.updater.version, self.updater.release_notes)
-                    self.stop_runtime()
-                else:
-                    self._install_update()
+                    InfoBar.warning(
+                        tr("controller.update_blocked.title"),
+                        tr("controller.update_blocked.content"),
+                        orient=Qt.Orientation.Horizontal,
+                        position=InfoBarPosition.TOP,
+                        duration=5000,
+                        parent=self.window,
+                    )
+                    return
+                self._install_update()
 
     def _install_update(self) -> None:
         if not self._confirm_unsaved_changes():

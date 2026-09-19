@@ -19,6 +19,7 @@ from app.gui.controller import Controller
 from app.gui.main_window import MainWindow
 from app.gui.runtime import TaskRuntime
 from app.gui.tray_icon import AppTrayIcon
+from app.i18n import tr
 
 
 @pytest.fixture
@@ -185,6 +186,34 @@ def test_tray_actions_follow_runtime_state(qt_app: QApplication) -> None:
         assert not tray.stop_action.isEnabled()
     finally:
         tray.deleteLater()
+        qt_app.processEvents()
+
+
+def test_update_is_blocked_while_runtime_is_running(qt_app: QApplication) -> None:
+    class UpdaterStub:
+        state = "ready"
+
+    class RuntimeStub:
+        is_running = True
+
+    window = QWidget()
+    window.show()
+    controller: Any = object.__new__(Controller)
+    controller.updater = UpdaterStub()
+    controller.runtime = RuntimeStub()
+    controller.window = window
+    controller._install_update = lambda: pytest.fail("Update installation must not start while painting")
+
+    try:
+        Controller.handle_update_action(controller)
+        qt_app.processEvents()
+
+        info_bars = window.findChildren(controller_module.InfoBar)
+        assert len(info_bars) == 1
+        assert info_bars[0].contentLabel.text() == tr("controller.update_blocked.content")
+    finally:
+        window.close()
+        window.deleteLater()
         qt_app.processEvents()
 
 

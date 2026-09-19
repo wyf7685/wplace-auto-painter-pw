@@ -20,7 +20,7 @@ async def run_painter() -> bool:
             tg.start_soon(shutdown_idle_playwright_loop)
 
             try:
-                await setup_paint()
+                failed = not await setup_paint()
             finally:
                 tg.cancel_scope.cancel()
 

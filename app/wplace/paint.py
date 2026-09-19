@@ -337,9 +337,11 @@ class Painter:
     async def _run_once_with_catch(self) -> float | None:
         try:
             wait_secs = await self._run_once()
-        except ShouldQuit as error:
+        except PaintFinished as error:
             self.log.warning(f"{type(error).__name__}: {error}; exiting paint loop")
             return None
+        except ShouldQuit:
+            raise
         except PaintRequestFailed:
             wait_secs = random.uniform(5, 10) * 60
             self.log.exception("Paint request failed")
@@ -389,9 +391,23 @@ class Painter:
             await anyio.sleep(max(wait_secs, 0))
 
 
-async def setup_paint() -> None:
+async def setup_paint() -> bool:
+    failed = False
+
+    async def run_user(user: UserConfig) -> None:
+        nonlocal failed
+
+        try:
+            await Painter(user).run()
+        except Exception:
+            failed = True
+            logger.exception(f"Paint loop failed for user: <lm>{escape_tag(user.identifier)}</>")
+
     async with anyio.create_task_group() as tg:
-        for user in Config.load().users:
+        for index, user in enumerate(Config.load().users):
+            if index:
+                await anyio.sleep(30)
             logger.info(f"Starting paint loop for user: <lm>{escape_tag(user.identifier)}</>")
-            tg.start_soon(Painter(user).run)
-            await anyio.sleep(30)
+            tg.start_soon(run_user, user)
+
+    return not failed

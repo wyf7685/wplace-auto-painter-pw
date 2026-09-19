@@ -1,9 +1,12 @@
 import asyncio
 from itertools import pairwise
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 
+import app.wplace.paint as paint_module
+from app.exception import PaintFinished, TokenExpired
 from app.wplace.page import WplacePage
 from app.wplace.paint import Pixel, plan_space_drag_strokes
 
@@ -58,6 +61,25 @@ def test_space_drag_strokes_stay_within_anchor_radius() -> None:
     pixels = [Pixel(x, 0, 1) for x in range(5)]
 
     assert plan_space_drag_strokes(pixels, max_radius=2) == [pixels[:3], pixels[3:]]
+
+
+def test_setup_paint_distinguishes_completion_from_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = cast("Any", SimpleNamespace(identifier="test-user"))
+    monkeypatch.setattr(
+        paint_module.Config,
+        "load",
+        staticmethod(lambda: SimpleNamespace(users=[user])),
+    )
+
+    async def run_with(error: Exception) -> bool:
+        async def stop_painter(_self: paint_module.Painter) -> float:
+            raise error
+
+        monkeypatch.setattr(paint_module.Painter, "_run_once", stop_painter)
+        return await paint_module.setup_paint()
+
+    assert asyncio.run(run_with(PaintFinished("complete")))
+    assert not asyncio.run(run_with(TokenExpired("expired")))
 
 
 class FakeMouse:
