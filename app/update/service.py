@@ -19,7 +19,7 @@ from app.version import UNKNOWN_VERSION, get_build_info
 from .client import ReleaseClient
 from .model import PackageManifest, PreparedUpdate, UpdateError, UpdateInfo, expected_executable_name
 
-ProgressCallback = Callable[[int, int], None]
+type ProgressCallback = Callable[[int, int], None]
 CHUNK_SIZE = 1024 * 1024
 MAX_UNPACKED_SIZE = 2 * 1024 * 1024 * 1024
 MAX_EXPANSION_RATIO = 12

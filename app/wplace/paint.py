@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import NamedTuple
 
 import anyio
-import httpx
+import httpx2
 from bot7685_ext.wplace import ColorEntry, group_adjacent
 from bot7685_ext.wplace.consts import COLORS_NAME, ColorName
 
@@ -347,7 +347,7 @@ class Painter:
             wait_secs = random.uniform(5, 10) * 60
             self.log.exception("Paint request failed")
             self.log.info(f"Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
-        except httpx.RequestError:
+        except httpx2.RequestError:
             wait_secs = random.uniform(0.5, 1.5) * 60  # 0.5-1.5 minutes
             self.log.exception("Request error occurred")
             self.log.info(f"Maybe network issue? Sleeping for <y>{wait_secs / 60:.2f}</> minutes before retrying...")
