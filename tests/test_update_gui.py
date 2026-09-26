@@ -2,10 +2,13 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from app.gui.about_page import AboutPage
+from app.gui.main_window import MainWindow
 
 
 def test_update_card_state_and_action() -> None:
@@ -43,3 +46,40 @@ def test_update_card_state_and_action() -> None:
 
     page.deleteLater()
     app.processEvents()
+
+
+def test_about_page_initializes_with_latest_update_state() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(
+        QIcon(),
+        on_start=lambda: None,
+        on_stop=lambda: None,
+        on_save=lambda: None,
+        on_update=lambda: None,
+        on_exit=lambda: None,
+    )
+    try:
+        assert window._about_content is None
+        window.set_update_state("downloading", "1.2.3", "## Changes")
+        window.set_update_progress(25, 100)
+        window.show_main_window()
+        app.processEvents()
+        navigation_item = window.navigationInterface.widget("AboutPage")
+        assert navigation_item is not None
+        QTest.mouseClick(navigation_item.itemWidget, Qt.MouseButton.LeftButton)
+        app.processEvents()
+        page = window._about_content
+        assert page is not None
+        assert window.stackedWidget.currentWidget() is window.about_page
+        assert page.update_progress_bar.value() == 25
+        assert "25%" in page.update_card.contentLabel.text()
+
+        window.set_update_state("ready", "1.2.3", "## Changes")
+        assert page.update_progress_bar.isHidden()
+        assert "Changes" in page.release_notes_browser.toPlainText()
+        window.goto_config_page()
+        window.switchTo(window.about_page)
+        assert window._about_content is page
+    finally:
+        window.deleteLater()
+        app.processEvents()

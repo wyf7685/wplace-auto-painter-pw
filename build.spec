@@ -174,8 +174,7 @@ executable = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=["python3.dll"],
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -189,8 +188,7 @@ collection = COLLECT(
     analysis.binaries,
     analysis.datas,
     strip=False,
-    upx=True,
-    upx_exclude=["python3.dll"],
+    upx=False,
     name=APP_NAME,
 )
 

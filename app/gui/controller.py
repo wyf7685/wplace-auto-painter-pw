@@ -2,12 +2,14 @@ import contextlib
 import importlib
 import sys
 from pathlib import Path
-from typing import NoReturn
+from time import perf_counter
+from typing import NoReturn, override
 
+# qfluentwidgets.common.config has a print statement, suppress it
 with contextlib.redirect_stdout(None):
     importlib.import_module("qfluentwidgets")
 
-from PySide6.QtCore import QLockFile, Qt, QTimer, QUrl
+from PySide6.QtCore import QEvent, QLockFile, QObject, Qt, QTimer, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 from qfluentwidgets import InfoBar, InfoBarPosition, Theme, setTheme
@@ -33,14 +35,41 @@ class _ApplicationAlreadyRunning(RuntimeError):
     pass
 
 
+class _StartupPaintFilter(QObject):
+    def __init__(self, window: MainWindow, marks: list[tuple[str, float]]) -> None:
+        super().__init__(window)
+        self.window = window
+        self.marks = marks
+
+    @override
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.window and event.type() == QEvent.Type.Paint:
+            self.marks.append(("first_window_paint", perf_counter()))
+            self.window.removeEventFilter(self)
+            QTimer.singleShot(0, self._report)
+        return False
+
+    def _report(self) -> None:
+        first = self.marks[0][1]
+        stages = ", ".join(
+            f"{name}={(timestamp - previous) * 1000:.0f}ms"
+            for (name, timestamp), (_, previous) in zip(self.marks[1:], self.marks, strict=False)
+        )
+        painted_at = next(timestamp for name, timestamp in self.marks if name == "first_window_paint")
+        logger.info(f"Startup timing: {stages}; python_to_first_paint={(painted_at - first) * 1000:.0f}ms")
+
+
 class Controller:
-    def __init__(self, ready_file: Path | None = None) -> None:
+    def __init__(self, ready_file: Path | None = None, startup_marks: list[tuple[str, float]] | None = None) -> None:
         self.app = QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
         self.app.setStyle("Fusion")
+        if startup_marks is not None:
+            startup_marks.append(("qt_application", perf_counter()))
         self._ready_file = ready_file
         self._tray_hint_shown = False
         self._update_exit_preapproved = False
+        self._startup_paint_filter: _StartupPaintFilter | None = None
 
         self._instance_lock = QLockFile(str(DATA_DIR / f".{APP_NAME}.lock"))
         if not self._instance_lock.tryLock(0):
@@ -65,6 +94,10 @@ class Controller:
             on_update=self.handle_update_action,
             on_exit=self.exit_app,
         )
+        if startup_marks is not None:
+            startup_marks.append(("window_construction", perf_counter()))
+            self._startup_paint_filter = _StartupPaintFilter(self.window, startup_marks)
+            self.window.installEventFilter(self._startup_paint_filter)
         self.tray = AppTrayIcon(self.icon, parent=self.app)
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
         self.window.set_close_to_tray(self._tray_available)
@@ -88,15 +121,20 @@ class Controller:
             on_stop=self.stop_runtime,
             on_exit=self.exit_app,
         )
+        if startup_marks is not None:
+            startup_marks.append(("controller_ready", perf_counter()))
 
     def run(self) -> NoReturn:
         logger.opt(colors=True).info(f"Starting GUI (version=<c>{get_version_display()}</>)")
         if self._tray_available:
             self.tray.show()
         self.window.show_main_window()
+        if self._startup_paint_filter is not None:
+            self._startup_paint_filter.marks.append(("show_returned", perf_counter()))
         self.updater.emit_current_state()
         if self._ready_file is not None:
             QTimer.singleShot(0, self._mark_update_ready)
+        QTimer.singleShot(250, self.updater.cleanup_old_helpers)
         if self._auto_update_check_enabled():
             QTimer.singleShot(1000, self._automatic_update_check)
             self._update_timer.start()
@@ -329,9 +367,9 @@ class Controller:
         GUIState.save()
 
 
-def run_gui(ready_file: Path | None = None) -> NoReturn:
+def run_gui(ready_file: Path | None = None, startup_marks: list[tuple[str, float]] | None = None) -> NoReturn:
     try:
-        Controller(ready_file).run()
+        Controller(ready_file, startup_marks).run()
     except _ApplicationAlreadyRunning:
         sys.exit(0)
     except Exception:
