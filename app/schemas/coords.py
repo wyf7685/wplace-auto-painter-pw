@@ -35,7 +35,7 @@ class LatLon(NamedTuple):
         return WplacePixelCoords.from_lat_lon(self.lat, self.lon)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class WplacePixelCoords:
     tlx: int  # tile X, 0 to 2047
     tly: int  # tile Y, 0 to 2047
