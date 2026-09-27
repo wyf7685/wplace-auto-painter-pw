@@ -2,6 +2,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtTest import QTest
@@ -48,6 +49,9 @@ def test_update_card_state_and_action() -> None:
     app.processEvents()
 
 
+# qfluentwidgets/components/navigation/navigation_widget.py:366 `.contains(e.pos())`
+# DeprecationWarning: Function: 'QMouseEvent.pos() const' is marked as deprecated
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_about_page_initializes_with_latest_update_state() -> None:
     app = QApplication.instance() or QApplication([])
     window = MainWindow(
