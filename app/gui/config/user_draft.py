@@ -71,7 +71,7 @@ def normalize_user(user: dict[str, Any]) -> dict[str, Any]:
     if isinstance(auto_purchase, dict):
         result["auto_purchase"] = auto_purchase
     paint_input_mode = user.get("paint_input_mode")
-    if paint_input_mode in {"click", "space_drag"}:
+    if paint_input_mode in {"click", "space_drag", "space_drag_retrace"}:
         result["paint_input_mode"] = paint_input_mode
 
     min_charges = user.get("min_paint_charges")
