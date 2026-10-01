@@ -16,12 +16,6 @@ Download the release archive for your platform from [GitHub Releases](https://gi
 
 When migrating from the legacy single-file build, extract the new release into the directory containing the old executable. Release archives do not contain `data/` or `logs/`, so existing configuration, templates, and Playwright browser data are preserved. After this one-time manual migration, future releases can be checked, downloaded, and installed from the Update card on the GUI About page.
 
-## 模板选区
-
-`selected_area` 使用模板原始像素坐标，格式为 `(x, y, width, height)`；留空则使用完整模板。绘制时会将选区与当前模板范围求交，画布预览下载、像素差异计算和终端预览均使用该有效区域。超出模板右侧或底部的部分不参与选区绘制；完全没有重叠的选区会报错，需要重新设置。
-
-选区内没有可用的待绘制颜色时，程序会回退到完整模板。
-
 ## Develop
 
 Before setting up this project, ensure you have the following installed:
