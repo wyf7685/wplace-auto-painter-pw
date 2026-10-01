@@ -1,11 +1,15 @@
 import threading
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
 from app.const import IS_FROZEN
 from app.log import logger
-from app.update import PreparedUpdate, UpdateInfo, UpdateService
+from app.update import PreparedUpdate, UpdateInfo
+
+if TYPE_CHECKING:
+    from app.update.service import UpdateService
 
 
 class GuiUpdateController(QObject):
@@ -22,6 +26,11 @@ class GuiUpdateController(QObject):
         self._service: UpdateService | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+
+    @staticmethod
+    def cleanup_old_helpers() -> None:
+        from app.update.service import UpdateService
+
         UpdateService.cleanup_old_helpers()
 
     @property
@@ -81,6 +90,8 @@ class GuiUpdateController(QObject):
 
     def _check_worker(self, notify_errors: bool) -> None:
         try:
+            from app.update.service import UpdateService
+
             service = UpdateService()
             info = service.check()
         except Exception as exc:
@@ -96,8 +107,10 @@ class GuiUpdateController(QObject):
         self._set_state("available" if info else "current")
 
     def _download_worker(self, info: UpdateInfo) -> None:
-        service = self._service or UpdateService()
         try:
+            from app.update.service import UpdateService
+
+            service = self._service or UpdateService()
             prepared = service.prepare(info, self.progress_changed.emit)
         except Exception as exc:
             logger.opt(exception=exc).error("Update download failed")

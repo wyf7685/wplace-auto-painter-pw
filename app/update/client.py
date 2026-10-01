@@ -1,7 +1,7 @@
 import contextlib
 from collections.abc import Generator
 
-import httpx
+import httpx2
 from packaging.version import InvalidVersion, Version
 
 from app.const import REPOSITORY_API_URL
@@ -11,15 +11,15 @@ from .model import GitHubRelease, UpdateError, UpdateInfo, UpdateManifest, Updat
 
 API_VERSION = "2026-03-10"
 MANIFEST_ASSET_NAME = "update-manifest.json"
-REQUEST_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+REQUEST_TIMEOUT = httpx2.Timeout(30.0, connect=10.0)
 
 
 class ReleaseClient:
     def __init__(self, *, proxy: str | None = None) -> None:
         self._proxy = proxy
 
-    def _client(self) -> httpx.Client:
-        return httpx.Client(
+    def _client(self) -> httpx2.Client:
+        return httpx2.Client(
             proxy=self._proxy,
             follow_redirects=True,
             timeout=REQUEST_TIMEOUT,
@@ -80,7 +80,7 @@ class ReleaseClient:
         )
 
     @contextlib.contextmanager
-    def stream_download(self, info: UpdateInfo) -> Generator[httpx.Response]:
+    def stream_download(self, info: UpdateInfo) -> Generator[httpx2.Response]:
         with self._client() as client, client.stream("GET", info.asset_url) as response:
             response.raise_for_status()
             yield response

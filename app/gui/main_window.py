@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from PySide6.QtCore import QPoint, Signal
 from PySide6.QtGui import QCloseEvent, QIcon
@@ -10,11 +10,13 @@ from app.const import APP_NAME
 from app.i18n import tr
 
 from ._window import FluentWindow
-from .about_page import AboutPage
 from .config import ConfigEditorWidget
 from .logging import AnsiLogViewer
 from .state import GUIState
 from .tool_row import ToolRowWidget
+
+if TYPE_CHECKING:
+    from .about_page import AboutPage
 
 
 class MainWindow(FluentWindow):
@@ -42,6 +44,9 @@ class MainWindow(FluentWindow):
         self._on_exit = on_exit
 
         self._tool_rows: list[ToolRowWidget] = []
+        self._about_content: AboutPage | None = None
+        self._update_state = ("idle", "", "")
+        self._update_progress: tuple[int, int] | None = None
 
         self.setWindowTitle(tr("main.window_title", app_name=APP_NAME))
         self.setWindowIcon(icon)
@@ -53,7 +58,8 @@ class MainWindow(FluentWindow):
 
         self.config_page = self._build_page(self.config_editor, "ConfigPage")
         self.logs_page = self._build_page(self.log_viewer, "LogsPage")
-        self.about_page = AboutPage(icon, self._on_update, self)
+        self.about_page = QWidget(self)
+        self.about_page.setObjectName("AboutPage")
 
         self.addSubInterface(self.config_page, FluentIcon.SETTING, tr("main.nav.config"))
         self.addSubInterface(self.logs_page, FluentIcon.DOCUMENT, tr("main.nav.logs"))
@@ -86,6 +92,21 @@ class MainWindow(FluentWindow):
         self._tool_rows.append(tool_row)
         return tool_row
 
+    @override
+    def switchTo(self, interface: QWidget) -> None:
+        if interface is self.about_page and self._about_content is None:
+            from .about_page import AboutPage
+
+            content = AboutPage(self.windowIcon(), self._on_update, self.about_page)
+            layout = QVBoxLayout(self.about_page)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(content)
+            self._about_content = content
+            content.set_update_state(*self._update_state)
+            if self._update_progress is not None:
+                content.set_update_progress(*self._update_progress)
+        super().switchTo(interface)
+
     def set_runtime_state(self, state: str) -> None:
         for tool_row in self._tool_rows:
             tool_row.state_changed.emit(state)
@@ -100,10 +121,15 @@ class MainWindow(FluentWindow):
         self.switchTo(self.logs_page)
 
     def set_update_state(self, state: str, version: str = "", release_notes: str = "") -> None:
-        self.about_page.set_update_state(state, version, release_notes)
+        self._update_state = (state, version, release_notes)
+        self._update_progress = None
+        if self._about_content is not None:
+            self._about_content.set_update_state(state, version, release_notes)
 
     def set_update_progress(self, downloaded: int, total: int) -> None:
-        self.about_page.set_update_progress(downloaded, total)
+        self._update_progress = (downloaded, total)
+        if self._about_content is not None:
+            self._about_content.set_update_progress(downloaded, total)
 
     def _move_to_screen_center(self) -> None:
         geometry = self.screen().availableGeometry()

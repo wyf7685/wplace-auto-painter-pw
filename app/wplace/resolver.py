@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 import anyio
 import ayafileio
-import httpx
+import httpx2
 
 from app.browser import get_browser
 from app.config import Config
@@ -155,7 +155,7 @@ async def prepare_chunks(chunk_names: set[str]) -> Chunks:
 
     downloaded = 0
 
-    @with_retry(httpx.RequestError, retries=3, delay=1)
+    @with_retry(httpx2.RequestError, retries=3, delay=1)
     @with_semaphore(16)
     async def download_js_chunk(chunk_name: str) -> None:
         nonlocal downloaded
@@ -192,7 +192,7 @@ async def prepare_chunks(chunk_names: set[str]) -> Chunks:
 
     try:
         async with (
-            httpx.AsyncClient(proxy=Config.load().proxy, timeout=30) as client,
+            httpx2.AsyncClient(proxy=Config.load().proxy, timeout=30) as client,
             anyio.create_task_group() as tg,
         ):
             for chunk_name in chunk_names:

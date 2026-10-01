@@ -3,7 +3,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from app.update.client import ReleaseClient
@@ -127,9 +127,9 @@ def test_release_client_selects_newer_platform_asset() -> None:
         },
     }
 
-    def handle_request(request: httpx.Request) -> httpx.Response:
+    def handle_request(request: httpx2.Request) -> httpx2.Response:
         if request.url.path.endswith("/releases/latest"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "tag_name": "v1.1.0",
@@ -153,9 +153,9 @@ def test_release_client_selects_newer_platform_asset() -> None:
                     ],
                 },
             )
-        return httpx.Response(200, json=manifest)
+        return httpx2.Response(200, json=manifest)
 
-    http_client = httpx.Client(transport=httpx.MockTransport(handle_request))
+    http_client = httpx2.Client(transport=httpx2.MockTransport(handle_request))
     release_client = ReleaseClient()
     local = BuildInfo("1.0.0", "v1.0.0", "a" * 40, 1)
     with (
