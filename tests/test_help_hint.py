@@ -9,7 +9,7 @@ import pytest
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QEnterEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
 from qfluentwidgets import TeachingTip
 
 import app.gui.config.editor as editor_module
@@ -69,6 +69,13 @@ def _visible_tips(root: QWidget) -> list[TeachingTip]:
     return [tip for tip in root.findChildren(TeachingTip) if tip.isVisible()]
 
 
+def _assert_unwrapped_lines(label: QLabel, line_count: int) -> None:
+    """Reject an extra wrapped line without depending on one platform's font padding."""
+    spacing = label.fontMetrics().lineSpacing()
+    assert spacing > 0
+    assert label.height() < spacing * (line_count + 1)
+
+
 def _cleanup(root: QWidget) -> None:
     HelpHintButton.close_tip()
     root.close()
@@ -99,7 +106,7 @@ def test_help_hint_opens_on_hover_and_closes_on_click(qapp: QApplication) -> Non
         assert label.wordWrap() is False
         longest = max(label.fontMetrics().horizontalAdvance(line) for line in text.splitlines())
         assert label.minimumWidth() >= longest
-        assert label.height() <= label.fontMetrics().lineSpacing() * len(text.splitlines()) + 4
+        _assert_unwrapped_lines(label, len(text.splitlines()))
 
         QTest.mouseClick(button, Qt.MouseButton.LeftButton)
         qapp.processEvents()
@@ -134,7 +141,7 @@ def test_help_tip_keeps_each_sentence_on_one_line(qapp: QApplication) -> None:
     assert label.maximumWidth() >= advance
     view.show()
     qapp.processEvents()
-    assert label.height() <= label.fontMetrics().lineSpacing() * 2 + 4
+    _assert_unwrapped_lines(label, 2)
     view.close()
     view.deleteLater()
     qapp.processEvents()
