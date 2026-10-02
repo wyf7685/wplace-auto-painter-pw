@@ -68,12 +68,13 @@ class UserDetailCard(ElevatedCardWidget):
 
         self.preferred_colors_editor = PreferredColorsEditor()
         self.paint_input_mode_cb = ComboBox()
-        self._paint_input_mode_values = ["click", "space_drag"]
+        self._paint_input_mode_values = ["click", "space_drag", "space_drag_retrace"]
         self._paint_input_mode_index = {value: index for index, value in enumerate(self._paint_input_mode_values)}
         self.paint_input_mode_cb.addItems(
             [
                 tr("config.paint_input_mode.click"),
                 tr("config.paint_input_mode.space_drag"),
+                tr("config.paint_input_mode.space_drag_retrace"),
             ]
         )
 

@@ -16,6 +16,18 @@ Download the release archive for your platform from [GitHub Releases](https://gi
 
 When migrating from the legacy single-file build, extract the new release into the directory containing the old executable. Release archives do not contain `data/` or `logs/`, so existing configuration, templates, and Playwright browser data are preserved. After this one-time manual migration, future releases can be checked, downloaded, and installed from the Update card on the GUI About page.
 
+## Paint Input Modes
+
+Choose a mode for each user through **Paint Input Mode** in the GUI, or set `paint_input_mode` in the user configuration. The default is `click`.
+
+| Configuration value | Painting behavior |
+| --- | --- |
+| `click` | Move the map and click each pixel individually. |
+| `space_drag` | Connect adjacent same-color pixels in input order, starting a new stroke at gaps, color changes, or the stroke radius limit. |
+| `space_drag_retrace` | Retrace already covered same-color target pixels to reach remaining targets within the stroke radius. |
+
+Repeated pixels in retracing paths are used only for pointer movement. Charge accounting and submission still use the original target pixels.
+
 ## Develop
 
 Before setting up this project, ensure you have the following installed:
