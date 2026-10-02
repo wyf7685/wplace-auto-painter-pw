@@ -61,7 +61,7 @@ class UserConfig(BaseModel):
         default=None,
         description="Optional automatic charge purchasing configuration",
     )
-    paint_input_mode: Literal["click", "space_drag"] = Field(
+    paint_input_mode: Literal["click", "space_drag", "space_drag_retrace"] = Field(
         default="click",
         description="Browser input method used to queue pixels before submission",
     )

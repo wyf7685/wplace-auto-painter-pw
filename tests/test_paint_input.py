@@ -9,7 +9,8 @@ import pytest
 import app.wplace.paint as paint_module
 from app.exception import PaintFinished, TokenExpired
 from app.wplace.page import WplacePage
-from app.wplace.paint import Pixel, plan_space_drag_strokes
+from app.wplace.paint_input.common import Pixel
+from app.wplace.paint_input.space_drag_retrace import plan_space_drag_strokes
 
 
 def _bresenham(start: tuple[int, int], end: tuple[int, int]) -> set[tuple[int, int]]:
