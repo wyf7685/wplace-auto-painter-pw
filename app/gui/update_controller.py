@@ -4,9 +4,10 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
-from app.const import IS_FROZEN
+from app.const import INSTALL_DIR, IS_FROZEN
 from app.log import logger
 from app.update import PreparedUpdate, UpdateInfo
+from app.version import get_version_display
 
 if TYPE_CHECKING:
     from app.update.service import UpdateService
@@ -65,6 +66,15 @@ class GuiUpdateController(QObject):
         prepared = self._prepared
         service = self._service
         if prepared is None or service is None:
+            logger.error(
+                "Cannot install GUI update: prepared update or service is unavailable; state={}, "
+                "target_version={!r}, has_prepared_update={}, has_service={}, install_dir={!s}",
+                self._state,
+                self.version,
+                prepared is not None,
+                service is not None,
+                INSTALL_DIR,
+            )
             self._set_state("error")
             self.error_occurred.emit("Prepared update is unavailable")
             return
@@ -73,7 +83,17 @@ class GuiUpdateController(QObject):
         try:
             service.launch_helper(prepared)
         except Exception as exc:
-            logger.opt(exception=exc).error("Failed to launch update helper")
+            logger.opt(exception=exc).error(
+                "Failed to launch update helper; state={}, current_version={}, target_version={}, "
+                "install_dir={!s}, archive_path={!s}, payload_dir={!s}, executable={!r}",
+                self._state,
+                get_version_display(),
+                prepared.info.manifest.version,
+                INSTALL_DIR,
+                prepared.archive_path,
+                prepared.payload_dir,
+                prepared.package_manifest.executable,
+            )
             self._set_state("error")
             self.error_occurred.emit(str(exc))
             return
@@ -95,7 +115,14 @@ class GuiUpdateController(QObject):
             service = UpdateService()
             info = service.check()
         except Exception as exc:
-            logger.opt(exception=exc).warning("Update check failed")
+            logger.opt(exception=exc).error(
+                "GUI update check failed; state={}, current_version={}, install_dir={!s}, notify_errors={}, thread={}",
+                self._state,
+                get_version_display(),
+                INSTALL_DIR,
+                notify_errors,
+                threading.current_thread().name,
+            )
             self._set_state("error")
             if notify_errors:
                 self.error_occurred.emit(str(exc))
@@ -113,7 +140,18 @@ class GuiUpdateController(QObject):
             service = self._service or UpdateService()
             prepared = service.prepare(info, self.progress_changed.emit)
         except Exception as exc:
-            logger.opt(exception=exc).error("Update download failed")
+            logger.opt(exception=exc).error(
+                "GUI update download failed; state={}, target_version={}, release_tag={}, asset_name={!r}, "
+                "expected_size={}, expected_sha256={}, install_dir={!s}, thread={}",
+                self._state,
+                info.manifest.version,
+                info.manifest.tag,
+                info.asset.name,
+                info.asset.size,
+                info.asset.sha256,
+                INSTALL_DIR,
+                threading.current_thread().name,
+            )
             self._set_state("error")
             self.error_occurred.emit(str(exc))
             return

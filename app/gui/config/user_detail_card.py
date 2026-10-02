@@ -18,6 +18,7 @@ from qfluentwidgets import (
 )
 
 from app.i18n import tr
+from app.log import logger
 
 from .area_editor_dialog import AreaEditorDialog
 from .preferred_colors import PreferredColorsEditor
@@ -220,6 +221,13 @@ class UserDetailCard(ElevatedCardWidget):
         try:
             selected_area = parse_selected_area(self.selected_area_edit.text())
         except Exception as exc:
+            logger.exception(
+                "Failed to parse selected area before opening area editor; user={!r}, template_file_id={!r}, "
+                "selected_area={!r}",
+                self.identifier_edit.text(),
+                self.file_id_edit.text(),
+                self.selected_area_edit.text(),
+            )
             InfoBar.warning(
                 title=tr("config.selected_area.title"),
                 content=tr("config.selected_area.parse_failed", detail=str(exc)),
