@@ -1,4 +1,3 @@
-import contextlib
 from pathlib import Path
 from typing import override
 
@@ -17,6 +16,7 @@ from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 from qfluentwidgets import isDarkTheme, qconfig, themeColor
 
 from app.i18n import tr
+from app.log import logger
 
 _MIN_SCALE = 0.1
 _MAX_SCALE = 8.0
@@ -245,8 +245,18 @@ class ImageDropLabel(QLabel):
         if event.button() == Qt.MouseButton.RightButton:
             self._panning = True
             self._pan_last_pos = event.pos()
-            with contextlib.suppress(Exception):
+            try:
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            except Exception:
+                logger.exception(
+                    "Failed to set image panning cursor; image_path={!r}, pointer_position={}, "
+                    "scale={}, offset=({}, {})",
+                    self.filepath,
+                    event.position(),
+                    self._scale,
+                    self._offset_x,
+                    self._offset_y,
+                )
         elif event.button() == Qt.MouseButton.LeftButton:
             self._sel_start = self._sel_end = self._to_origin(event.pos())
             self._is_drawing = self._sel_start is not None
@@ -275,8 +285,18 @@ class ImageDropLabel(QLabel):
         elif event.button() == Qt.MouseButton.RightButton and self._panning:
             self._panning = False
             self._pan_last_pos = None
-            with contextlib.suppress(Exception):
+            try:
                 self.unsetCursor()
+            except Exception:
+                logger.exception(
+                    "Failed to restore cursor after image panning; image_path={!r}, pointer_position={}, "
+                    "scale={}, offset=({}, {})",
+                    self.filepath,
+                    event.position(),
+                    self._scale,
+                    self._offset_x,
+                    self._offset_y,
+                )
             self.update()
 
     @override

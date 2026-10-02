@@ -5,6 +5,7 @@ from pydantic import TypeAdapter
 from PySide6.QtCore import QPoint, QSize
 
 from app.const import DATA_DIR
+from app.log import logger
 
 _GUI_STATE_FILE = DATA_DIR / "gui_state.json"
 
@@ -56,6 +57,10 @@ class GUIState:
             try:
                 state = _state_ta.validate_json(_GUI_STATE_FILE.read_bytes())
             except Exception:
+                logger.exception(
+                    "Failed to load GUI state; state_file={!s}; restoring default window geometry",
+                    _GUI_STATE_FILE,
+                )
                 state = cls()
         else:
             state = cls()

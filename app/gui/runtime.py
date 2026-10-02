@@ -4,6 +4,7 @@ import anyio
 import anyio.to_thread
 from PySide6.QtCore import QObject, Signal
 
+from app.const import CONFIG_FILE
 from app.exception import ConfigError
 from app.log import logger
 
@@ -76,11 +77,21 @@ class TaskRuntime:
             if failed:
                 state = "error"
         except ConfigError as e:
-            logger.exception("Configuration error occurred in runtime")
+            logger.exception(
+                "Configuration error occurred in GUI runtime; config_file={!s}, thread={}, stop_requested={}",
+                CONFIG_FILE,
+                threading.current_thread().name,
+                self._stop_event.is_set(),
+            )
             self.signals.config_error_occurred.emit(e)
             state = "error"
         except Exception:
-            logger.exception("Background runtime crashed")
+            logger.exception(
+                "GUI background runtime crashed; thread={}, stop_requested={}, painter_failed={}",
+                threading.current_thread().name,
+                self._stop_event.is_set(),
+                failed,
+            )
             state = "error"
         finally:
             self._stop_event.set()

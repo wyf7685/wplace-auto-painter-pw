@@ -3,7 +3,7 @@ import json
 from collections import Counter
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.const import CONFIG_FILE, CONFIG_SCHEMA_FILE
 from app.exception import ConfigNotFound, ConfigParseFailed, NoUsersConfigured, UserTemplateInvalid
@@ -11,6 +11,8 @@ from app.schemas import UserConfig
 
 
 class Config(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     _cache: ClassVar[Config | None] = None
 
     users: list[UserConfig] = Field(description="List of user configurations")

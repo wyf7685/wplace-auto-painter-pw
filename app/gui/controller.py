@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 from qfluentwidgets import InfoBar, InfoBarPosition, Theme, setTheme
 
 from app.config import Config
-from app.const import APP_NAME, DATA_DIR, REPOSITORY_RELEASES_URL, assets
+from app.const import APP_NAME, CONFIG_FILE, DATA_DIR, REPOSITORY_RELEASES_URL, assets
 from app.exception import ConfigError
 from app.i18n import tr
 from app.log import logger
@@ -163,6 +163,10 @@ class Controller:
         try:
             return Config.load().check_update
         except Exception:
+            logger.exception(
+                "Failed to read automatic update setting; config_file={!s}; disabling automatic update checks",
+                CONFIG_FILE,
+            )
             return False
 
     def _automatic_update_check(self) -> None:
@@ -177,7 +181,11 @@ class Controller:
             ready_file.parent.mkdir(parents=True, exist_ok=True)
             ready_file.write_text("ready\n", encoding="utf-8")
         except OSError:
-            logger.exception("Failed to report updated application readiness")
+            logger.exception(
+                "Failed to report updated application readiness; ready_file={!s}, app_version={}; exiting with code 1",
+                ready_file,
+                get_version_display(),
+            )
             self.app.exit(1)
 
     @staticmethod
@@ -185,6 +193,10 @@ class Controller:
         try:
             return not Config.load().disable_notifications
         except Exception:
+            logger.exception(
+                "Failed to read desktop notification setting; config_file={!s}; keeping notifications enabled",
+                CONFIG_FILE,
+            )
             return True
 
     def _show_tray_message(
@@ -278,7 +290,13 @@ class Controller:
             self._update_exit_preapproved = False
 
     def handle_config_error(self, exc: ConfigError) -> None:
-        logger.opt(exception=exc).error(f"Configuration error: {exc!r}")
+        logger.opt(exception=exc).error(
+            "GUI received runtime configuration error; config_file={!s}, runtime_running={}, window_visible={}; "
+            "opening configuration editor",
+            CONFIG_FILE,
+            self.runtime.is_running,
+            self.window.isVisible(),
+        )
         logger.info("Please turn to Config tab to fix the error and save before restart.")
         if not self.window.isVisible():
             self.window.show_main_window()
@@ -371,7 +389,19 @@ def run_gui(ready_file: Path | None = None, startup_marks: list[tuple[str, float
     try:
         Controller(ready_file, startup_marks).run()
     except _ApplicationAlreadyRunning:
+        logger.info(
+            "Skipping GUI startup because another instance holds the application lock; lock_file={!s}, ready_file={!s}",
+            DATA_DIR / f".{APP_NAME}.lock",
+            ready_file,
+        )
         sys.exit(0)
     except Exception:
-        logger.opt(exception=True).critical("Unhandled exception in GUI")
+        logger.opt(exception=True).critical(
+            "Unhandled exception in GUI; app_version={}, platform={}, ready_file={!s}, startup_stage={}; "
+            "exiting with code 1",
+            get_version_display(),
+            sys.platform,
+            ready_file,
+            startup_marks[-1][0] if startup_marks else "unknown",
+        )
         sys.exit(1)
