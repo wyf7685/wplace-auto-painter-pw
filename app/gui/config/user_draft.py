@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 
 from app.const import TEMPLATES_DIR
+from app.log import logger
 
 
 def default_user(identifier: str) -> dict[str, Any]:
@@ -47,6 +48,13 @@ def normalize_user(user: dict[str, Any]) -> dict[str, Any]:
                 f"Px X: {int(coords['pxx'])}, Px Y: {int(coords['pxy'])})"
             )
         except Exception:
+            logger.exception(
+                "Failed to normalize template coordinates; user={!r}, template_file_id={!r}, coords={!r}; "
+                "clearing coordinate draft",
+                result["identifier"],
+                template.get("file_id"),
+                coords,
+            )
             coords_text = ""
     elif isinstance(coords, str):
         coords_text = coords
@@ -61,6 +69,11 @@ def normalize_user(user: dict[str, Any]) -> dict[str, Any]:
         try:
             result["selected_area"] = tuple(int(v) for v in selected_area)
         except Exception:
+            logger.exception(
+                "Failed to normalize selected area; user={!r}, selected_area={!r}; clearing selected area draft",
+                result["identifier"],
+                selected_area,
+            )
             result["selected_area"] = None
 
     preferred = user.get("preferred_colors")
@@ -71,7 +84,7 @@ def normalize_user(user: dict[str, Any]) -> dict[str, Any]:
     if isinstance(auto_purchase, dict):
         result["auto_purchase"] = auto_purchase
     paint_input_mode = user.get("paint_input_mode")
-    if paint_input_mode in {"click", "space_drag"}:
+    if paint_input_mode in {"click", "space_drag", "space_drag_retrace"}:
         result["paint_input_mode"] = paint_input_mode
 
     min_charges = user.get("min_paint_charges")

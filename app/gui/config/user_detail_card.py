@@ -18,6 +18,7 @@ from qfluentwidgets import (
 )
 
 from app.i18n import tr
+from app.log import logger
 
 from .area_editor_dialog import AreaEditorDialog
 from .preferred_colors import PreferredColorsEditor
@@ -68,12 +69,13 @@ class UserDetailCard(ElevatedCardWidget):
 
         self.preferred_colors_editor = PreferredColorsEditor()
         self.paint_input_mode_cb = ComboBox()
-        self._paint_input_mode_values = ["click", "space_drag"]
+        self._paint_input_mode_values = ["click", "space_drag", "space_drag_retrace"]
         self._paint_input_mode_index = {value: index for index, value in enumerate(self._paint_input_mode_values)}
         self.paint_input_mode_cb.addItems(
             [
                 tr("config.paint_input_mode.click"),
                 tr("config.paint_input_mode.space_drag"),
+                tr("config.paint_input_mode.space_drag_retrace"),
             ]
         )
 
@@ -219,6 +221,13 @@ class UserDetailCard(ElevatedCardWidget):
         try:
             selected_area = parse_selected_area(self.selected_area_edit.text())
         except Exception as exc:
+            logger.exception(
+                "Failed to parse selected area before opening area editor; user={!r}, template_file_id={!r}, "
+                "selected_area={!r}",
+                self.identifier_edit.text(),
+                self.file_id_edit.text(),
+                self.selected_area_edit.text(),
+            )
             InfoBar.warning(
                 title=tr("config.selected_area.title"),
                 content=tr("config.selected_area.parse_failed", detail=str(exc)),

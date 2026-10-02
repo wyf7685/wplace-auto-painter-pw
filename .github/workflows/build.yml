@@ -51,7 +51,6 @@ jobs:
 
   build:
     name: Build ${{ matrix.platform.key }}
-    if: github.event_name != 'pull_request'
     needs: check
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -100,11 +99,6 @@ jobs:
           fi
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           uv run poe release build-info --tag "$RELEASE_TAG"
-
-      - name: Install UPX
-        uses: crazy-max/ghaction-upx@v4
-        with:
-          install-only: true
 
       - name: Build standalone updater
         env:

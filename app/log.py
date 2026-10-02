@@ -94,7 +94,7 @@ logger.add(
     str(LOGS_DIR / "{time:YYYY-MM-DD}.log"),
     rotation="00:00",
     level="DEBUG",
-    diagnose=True,
+    diagnose=False,
     enqueue=True,
     format=log_format,
     encoding="utf-8",

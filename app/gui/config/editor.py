@@ -26,6 +26,7 @@ from qfluentwidgets import (
 from app.config import Config, export_config_schema
 from app.const import CONFIG_FILE, TEMPLATES_DIR
 from app.i18n import lang, tr
+from app.log import logger
 from app.schemas import WplacePixelCoords
 
 from .constants import BROWSER_TYPES, LANGUAGE_CODES, LOG_LEVELS
@@ -273,6 +274,13 @@ class ConfigEditorWidget(QWidget):
         try:
             self._store_current_user()
         except Exception:
+            logger.exception(
+                "Failed to inspect unsaved GUI configuration changes; config_file={!s}, current_user_row={}, "
+                "user_count={}; treating draft as modified",
+                CONFIG_FILE,
+                self._current_user_row,
+                len(self._users),
+            )
             return True
         return self._snapshot() != self._saved_snapshot
 
@@ -282,6 +290,10 @@ class ConfigEditorWidget(QWidget):
             try:
                 raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             except Exception as exc:
+                logger.exception(
+                    "Failed to read GUI configuration; config_file={!s}; loading default editor values",
+                    CONFIG_FILE,
+                )
                 InfoBar.warning(
                     title=tr("config.title"),
                     content=tr("config.load.parse_failed", detail=str(exc)),
@@ -319,6 +331,14 @@ class ConfigEditorWidget(QWidget):
             try:
                 self._store_current_user()
             except Exception as exc:
+                logger.exception(
+                    "Failed to store user draft before switching users; config_file={!s}, previous_user_row={}, "
+                    "requested_user_row={}, user_count={}; keeping previous selection",
+                    CONFIG_FILE,
+                    self._current_user_row,
+                    row,
+                    len(self._users),
+                )
                 InfoBar.warning(
                     title=tr("config.title"),
                     content=tr("config.user.switch_failed", detail=str(exc)),
@@ -364,6 +384,13 @@ class ConfigEditorWidget(QWidget):
             try:
                 self._store_current_user()
             except Exception as exc:
+                logger.exception(
+                    "Failed to store user draft before adding a user; config_file={!s}, current_user_row={}, "
+                    "user_count={}",
+                    CONFIG_FILE,
+                    self._current_user_row,
+                    len(self._users),
+                )
                 InfoBar.warning(
                     title=tr("config.title"),
                     content=tr("config.user.add_failed", detail=str(exc)),
@@ -419,6 +446,10 @@ class ConfigEditorWidget(QWidget):
 
     def save_to_disk(self, show_message: bool = True) -> ConfigSaveResult:
         selected_language = self._current_language_code()
+        stage = "store_current_user"
+        user_index = self._current_user_row
+        source = ""
+        dest: Path | None = None
         try:
             self._store_current_user()
             source_user_indices: list[int] = []
@@ -426,6 +457,8 @@ class ConfigEditorWidget(QWidget):
             users_payload: list[dict[str, Any]] = []
             seen_identifiers: set[str] = set()
             for user_index, user in enumerate(self._users):
+                stage = "validate_user"
+                dest = None
                 identifier = str(user["identifier"] or "").strip()
                 token = str(user["credentials"]["token"] or "").strip()
                 file_id = str(user["template"]["file_id"] or "").strip()
@@ -521,6 +554,7 @@ class ConfigEditorWidget(QWidget):
                     "max_paint_charges": max_charges,
                 }
 
+                stage = "prepare_template"
                 if source:
                     src = Path(source)
                     if not src.is_file():
@@ -555,9 +589,13 @@ class ConfigEditorWidget(QWidget):
                 "language": selected_language,
             }
 
+            stage = "validate_config"
             config = Config.model_validate(payload)
+            stage = "export_config_schema"
             export_config_schema()
+            stage = "save_config"
             config.save()
+            stage = "refresh_saved_draft"
             for user_index in source_user_indices:
                 self._users[user_index]["_template_source"] = ""
             if self._current_user_row in source_user_indices:
@@ -565,6 +603,16 @@ class ConfigEditorWidget(QWidget):
             self._saved_snapshot = self._snapshot()
 
         except _ConfigFieldError as exc:
+            logger.exception(
+                "Failed to save GUI configuration: invalid field; config_file={!s}, stage={}, user_index={}, "
+                "field={}, user_count={}, show_message={}",
+                CONFIG_FILE,
+                stage,
+                exc.user_index,
+                exc.field,
+                len(self._users),
+                show_message,
+            )
             result = ConfigSaveResult(error=str(exc), user_index=exc.user_index, field=exc.field)
             if show_message:
                 InfoBar.error(
@@ -576,6 +624,16 @@ class ConfigEditorWidget(QWidget):
             return result
         except ValidationError as exc:
             result = self._validation_result(exc)
+            logger.exception(
+                "Failed to validate GUI configuration; config_file={!s}, user_index={}, field={}, "
+                "validation_error_count={}, user_count={}, show_message={}",
+                CONFIG_FILE,
+                result.user_index,
+                result.field,
+                exc.error_count(),
+                len(self._users),
+                show_message,
+            )
             if show_message:
                 InfoBar.error(
                     title=tr("config.save.validation_error.title"),
@@ -584,6 +642,19 @@ class ConfigEditorWidget(QWidget):
                 )
             return result
         except Exception as exc:
+            logger.exception(
+                "Failed to save GUI configuration; config_file={!s}, stage={}, current_user_row={}, "
+                "processing_user_index={}, user_count={}, template_source={!r}, template_destination={!s}, "
+                "show_message={}",
+                CONFIG_FILE,
+                stage,
+                self._current_user_row,
+                user_index,
+                len(self._users),
+                source,
+                dest,
+                show_message,
+            )
             result = ConfigSaveResult(error=str(exc))
             if show_message:
                 InfoBar.error(
