@@ -6,6 +6,7 @@ from qfluentwidgets import BodyLabel, InfoBar, InfoBarPosition, MessageBoxBase, 
 
 from app.i18n import tr
 
+from .help_hint import HelpHintButton
 from .image_drop_label import ImageDropLabel
 
 
@@ -51,7 +52,15 @@ class AreaEditorDialog(MessageBoxBase):
         tools.addStretch(1)
         tools.addWidget(browse_btn)
         tools.addWidget(sync_btn)
+        tools.addWidget(
+            HelpHintButton("area_editor.help.use_current_selection", self),
+            alignment=Qt.AlignmentFlag.AlignVCenter,
+        )
         tools.addWidget(clear_btn)
+        tools.addWidget(
+            HelpHintButton("area_editor.help.clear_selection", self),
+            alignment=Qt.AlignmentFlag.AlignVCenter,
+        )
         tools.setContentsMargins(0, 10, 0, 10)
 
         self.viewLayout.addWidget(title)

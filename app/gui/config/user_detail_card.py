@@ -21,6 +21,7 @@ from app.i18n import tr
 from app.log import logger
 
 from .area_editor_dialog import AreaEditorDialog
+from .help_hint import help_field_label
 from .preferred_colors import PreferredColorsEditor
 from .user_draft import format_selected_area, parse_selected_area, resolve_template_image
 
@@ -132,33 +133,69 @@ class UserDetailCard(ElevatedCardWidget):
 
         form.addRow(tr("config.field.identifier"), self.identifier_edit)
         form.addRow(tr("config.field.token"), self.token_edit)
-        form.addRow(tr("config.field.cf_clearance"), self.cf_clearance_edit)
-        form.addRow(tr("config.field.template_file_id"), self.file_id_edit)
-        form.addRow(tr("config.field.template_coords"), self.coords_edit)
+        form.addRow(
+            help_field_label("config.field.cf_clearance", "config.help.cf_clearance", form_host),
+            self.cf_clearance_edit,
+        )
+        form.addRow(
+            help_field_label("config.field.template_file_id", "config.help.template_file_id", form_host),
+            self.file_id_edit,
+        )
+        form.addRow(
+            help_field_label("config.field.template_coords", "config.help.template_coords", form_host),
+            self.coords_edit,
+        )
 
         source_row = QHBoxLayout()
         source_row.addWidget(self.template_source_edit)
         source_row.addWidget(self.template_source_btn)
-        form.addRow(tr("config.field.template_source"), source_row)
+        form.addRow(
+            help_field_label("config.field.template_source", "config.help.template_source", form_host),
+            source_row,
+        )
 
         selected_area_row = QHBoxLayout()
         selected_area_row.addWidget(self.selected_area_edit)
         selected_area_row.addWidget(self.edit_area_btn)
-        form.addRow(tr("config.field.selected_area"), selected_area_row)
+        form.addRow(
+            help_field_label("config.field.selected_area", "config.help.selected_area", form_host),
+            selected_area_row,
+        )
 
-        form.addRow(tr("config.field.preferred_colors"), self.preferred_colors_editor)
-        form.addRow(tr("config.field.paint_input_mode"), self.paint_input_mode_cb)
-        form.addRow(tr("config.field.min_paint_charges"), self.min_charges_spin)
+        form.addRow(
+            help_field_label("config.field.preferred_colors", "config.help.preferred_colors", form_host),
+            self.preferred_colors_editor,
+        )
+        form.addRow(
+            help_field_label("config.field.paint_input_mode", "config.help.paint_input_mode", form_host),
+            self.paint_input_mode_cb,
+        )
+        form.addRow(
+            help_field_label("config.field.min_paint_charges", "config.help.min_paint_charges", form_host),
+            self.min_charges_spin,
+        )
 
         max_row = QHBoxLayout()
         max_row.addWidget(self.max_enable_cb)
         max_row.addWidget(self.max_charges_spin)
         max_row.addStretch()
-        form.addRow(tr("config.field.max_paint_charges"), max_row)
+        form.addRow(
+            help_field_label("config.field.max_paint_charges", "config.help.max_paint_charges", form_host),
+            max_row,
+        )
 
-        form.addRow(tr("config.field.auto_purchase"), self.auto_purchase_cb)
-        form.addRow(tr("config.field.auto_target_max"), self.auto_target_spin)
-        form.addRow(tr("config.field.auto_retain_droplets"), self.auto_retain_spin)
+        form.addRow(
+            help_field_label("config.field.auto_purchase", "config.help.auto_purchase", form_host),
+            self.auto_purchase_cb,
+        )
+        form.addRow(
+            help_field_label("config.field.auto_target_max", "config.help.auto_target_max", form_host),
+            self.auto_target_spin,
+        )
+        form.addRow(
+            help_field_label("config.field.auto_retain_droplets", "config.help.auto_retain_droplets", form_host),
+            self.auto_retain_spin,
+        )
 
         scroll = SmoothScrollArea(self)
         scroll.setObjectName("userProfileScroll")
