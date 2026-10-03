@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from bot7685_ext.wplace import template_dimensions
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.const import TEMPLATES_DIR
 
@@ -55,6 +55,15 @@ class CroppedTemplateConfig(TemplateConfig):
         if w <= 0 or h <= 0:
             raise ValueError("selected_area width/height must be > 0")
         return value
+
+    @model_validator(mode="after")
+    def clip_selected(self) -> CroppedTemplateConfig:
+        width, height = template_dimensions(self.read_bytes())
+        x, y, w, h = self.selected
+        if x >= width or y >= height:
+            raise ValueError(f"Selected area {self.selected} does not overlap template dimensions {width}x{height}.")
+        self.selected = x, y, min(w, width - x), min(h, height - y)
+        return self
 
     @property
     def crop_area(self) -> tuple[int, int, int, int]:
