@@ -27,7 +27,7 @@ dev = [
   { include-group = "test" },
   "poethepoet>=0.48.0",
 ]
-lint = ["ruff>=0.16.9", "prek>=0.5.3", "ty>=0.0.84"]
+lint = ["ruff>=0.16.10", "prek>=0.5.4", "ty>=0.0.84"]
 build = ["pyinstaller>=6.22.3"]
 test = ["pytest>=8.4.0"]
 
