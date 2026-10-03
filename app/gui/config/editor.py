@@ -30,6 +30,7 @@ from app.log import logger
 from app.schemas import WplacePixelCoords
 
 from .constants import BROWSER_TYPES, LANGUAGE_CODES, LOG_LEVELS
+from .help_hint import help_field_label
 from .user_detail_card import UserDetailCard
 from .user_draft import default_user, normalize_user
 
@@ -155,7 +156,7 @@ class ConfigEditorWidget(QWidget):
 
         proxy_col = QVBoxLayout()
         proxy_col.setSpacing(4)
-        proxy_col.addWidget(BodyLabel(tr("config.global.proxy")))
+        proxy_col.addWidget(help_field_label("config.global.proxy", "config.help.proxy", card))
         proxy_col.addWidget(self.proxy_edit)
 
         top_row.addLayout(browser_col, 2)
