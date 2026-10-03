@@ -1,7 +1,7 @@
 from typing import ClassVar, override
 
-from PySide6.QtCore import QEvent, QObject, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QEnterEvent, QHideEvent, QPainter, QPaintEvent, QPen, QShowEvent
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRectF, Qt, QTimer
+from PySide6.QtGui import QColor, QEnterEvent, QHideEvent, QPainter, QPaintEvent, QPen, QRegion, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractScrollArea,
@@ -10,11 +10,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from qfluentwidgets import BodyLabel, TeachingTip, TeachingTipTailPosition, TeachingTipView, isDarkTheme, themeColor
+from qfluentwidgets.components.widgets.teaching_tip import BottomTailTeachingTipManager, TopTailTeachingTipManager
 from shiboken6 import isValid
 
 from app.i18n import tr
 
 HOVER_OPEN_DELAY_MS = 200
+_HELP_TIP_GAP = 4
 # Short tips stay at least this wide. Longer tips grow with the longest sentence.
 _HELP_TEXT_MIN_WIDTH = 160
 
@@ -39,6 +41,65 @@ class _HelpTipView(TeachingTipView):
         width = max(text_width + 4, _HELP_TEXT_MIN_WIDTH)
         self.contentLabel.setMinimumWidth(width)
         self.contentLabel.setMaximumWidth(width)
+
+
+class _HelpTipPositionManager(BottomTailTeachingTipManager):
+    @override
+    def position(self, tip: TeachingTip) -> QPoint:
+        position = super()._pos(tip) - QPoint(0, _HELP_TIP_GAP)
+        target_rect = QRect(tip.target.mapToGlobal(QPoint()), tip.target.size())
+        margins = tip.hBoxLayout.contentsMargins()
+        size = tip.sizeHint()
+        screen = tip.target.screen().availableGeometry()
+        above = position.y() + margins.top() >= screen.top()
+        if not above:
+            position.setY(target_rect.bottom() + 1 + _HELP_TIP_GAP - margins.top())
+        position.setX(max(screen.left(), min(position.x(), screen.right() - size.width() + 1)))
+
+        manager_type = BottomTailTeachingTipManager if above else TopTailTeachingTipManager
+        if not isinstance(tip.bubble.manager, manager_type):
+            manager = manager_type()
+            tip.bubble.manager = manager
+            tip.view.manager = manager
+            manager.doLayout(tip.bubble)
+            tip.bubble.update()
+        # Native mask scaling can round an edge inward at fractional DPI.
+        input_exclusion = target_rect.adjusted(-1, -1, 1, 1).translated(-position)
+        tip.setMask(QRegion(QRect(QPoint(), size)).subtracted(QRegion(input_exclusion)))
+        return position
+
+
+class _HelpTip(TeachingTip):
+    def __init__(self, view: TeachingTipView, target: QWidget) -> None:
+        super().__init__(
+            view,
+            target,
+            duration=-1,
+            tailPosition=TeachingTipTailPosition.BOTTOM,
+            parent=target.window(),
+            isDeleteOnClose=True,
+        )
+        # Shadow repaint regions must stay inside the native window when the arrow changes sides.
+        bubble_rect = self.bubble.rect()
+        shadow_rect = self.shadowEffect.boundingRectFor(QRectF(bubble_rect)).toAlignedRect()
+        self.hBoxLayout.setContentsMargins(
+            bubble_rect.left() - shadow_rect.left(),
+            bubble_rect.top() - shadow_rect.top(),
+            shadow_rect.right() - bubble_rect.right(),
+            shadow_rect.bottom() - bubble_rect.bottom(),
+        )
+        self.manager = _HelpTipPositionManager()
+        widget: QWidget | None = target
+        while widget is not None:
+            widget.installEventFilter(self)
+            widget = widget.parentWidget()
+
+    @override
+    def eventFilter(self, obj: QObject, e: QEvent) -> bool:
+        if e.type() in (QEvent.Type.Move, QEvent.Type.Resize, QEvent.Type.WindowStateChange):
+            self.move(self.manager.position(self))
+            return False
+        return super().eventFilter(obj, e)
 
 
 class _OutsideClickFilter(QObject):
@@ -74,7 +135,10 @@ def help_field_label(title_key: str, help_key: str, parent: QWidget) -> QWidget:
 
 
 class HelpHintButton(QAbstractButton):
-    """Circular question mark. Hover opens one shared tip; clicking the mark closes it."""
+    """Question mark with one shared tip anchored to the visible button.
+
+    The popup shadow must not increase the visible gap or intercept clicks on the button.
+    """
 
     _owner: ClassVar[HelpHintButton | None] = None
     _tip: ClassVar[TeachingTip | None] = None
@@ -202,15 +266,8 @@ class HelpHintButton(QAbstractButton):
             return
         text = tr(self.help_key)
         self.setAccessibleDescription(text)
-        parent = self.window() or self
-        tip = TeachingTip.make(
-            _HelpTipView(text),
-            target=self,
-            duration=-1,
-            tailPosition=TeachingTipTailPosition.BOTTOM,
-            parent=parent,
-            isDeleteOnClose=True,
-        )
+        tip = _HelpTip(_HelpTipView(text), self)
+        tip.show()
         generation = HelpHintButton._open_generation
         HelpHintButton._tip = tip
         HelpHintButton._owner = self
@@ -238,8 +295,9 @@ class HelpHintButton(QAbstractButton):
             widget = widget.parentWidget()
 
     def _on_scrolled(self, _value: int) -> None:
-        if self._owns_open_tip():
-            self.dismiss(suppress=False)
+        owner = HelpHintButton._owner
+        if owner is not None and isValid(owner) and owner.window() is self.window():
+            owner.dismiss(suppress=False)
 
     def _release_tip(self, _obj: QObject | None = None) -> None:
         if HelpHintButton._owner is self:
