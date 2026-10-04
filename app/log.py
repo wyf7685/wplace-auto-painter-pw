@@ -81,7 +81,7 @@ def log_level_filter() -> Callable[[loguru.Record], bool]:
 
 
 if sys.stdout:
-    logger.add(
+    stdout_id = logger.add(
         sys.stdout,
         level="DEBUG",
         diagnose=False,
@@ -90,7 +90,7 @@ if sys.stdout:
         filter=log_level_filter(),
     )
 
-logger.add(
+file_id = logger.add(
     str(LOGS_DIR / "{time:YYYY-MM-DD}.log"),
     rotation="00:00",
     level="DEBUG",

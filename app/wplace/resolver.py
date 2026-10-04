@@ -1,7 +1,6 @@
 import json
 import re
 import time
-from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -53,10 +52,13 @@ class Chunks:
         self._cached[chunk_path] = content
         return content
 
-    def iter_chunks(self) -> Iterable[tuple[str, str]]:
+    def match(self, pattern: re.Pattern[str]) -> tuple[str, re.Match[str]] | None:
         for file in self.root.glob("*/*.js"):
             chunk_path = file.relative_to(self.root).as_posix()
-            yield chunk_path, self.read(chunk_path)
+            content = self.read(chunk_path)
+            if match := pattern.search(content):
+                return chunk_path, match
+        return None
 
     def path(self, chunk_path: str) -> Path:
         return self.root / chunk_path
@@ -213,19 +215,18 @@ PATTERN_PAINT_FN = re.compile(r"await\s+(?P<name>[a-zA-Z0-9_$]+)\.paint\s*\(")
 
 
 def find_paint_fn(chunks: Chunks) -> tuple[str, str]:
-    for chunk_path, content in chunks.iter_chunks():  # noqa: B007
-        if match := PATTERN_PAINT_FN.search(content):
-            obj_name = match.group("name")
-            break
-    else:
+    found = chunks.match(PATTERN_PAINT_FN)
+    if found is None:
         raise ResolveFailed("paint function object not found")
+    chunk_path, match = found
+    obj_name = match.group("name")
 
     pattern = (
         r"import\s*\{[^}]*?\b(?P<source>[a-zA-Z0-9_$]+)\s+as\s+"
         + re.escape(obj_name)
         + r"[^}]*?\}\s*from\s*[\"'](?P<chunk>[^\"']+)[\"'];"
     )
-    match = re.search(pattern, content)
+    match = re.search(pattern, chunks.read(chunk_path))
     if match is None:
         raise ResolveFailed("import source for paint function object not found")
 
@@ -259,14 +260,13 @@ def _find_exported_name(content: str, local_name: str) -> str | None:
 
 
 def find_worker_fn(chunks: Chunks) -> tuple[str, str]:
-    for chunk_path, content in chunks.iter_chunks():  # noqa: B007
-        if match := PATTERN_WORKER_FN.search(content):
-            wrapper_name = match.group("name")
-            break
-    else:
+    found = chunks.match(PATTERN_WORKER_FN)
+    if found is None:
         raise ResolveFailed("service worker wrapper not found")
+    chunk_path, match = found
+    wrapper_name = match.group("name")
 
-    export_name = _find_exported_name(content, wrapper_name)
+    export_name = _find_exported_name(chunks.read(chunk_path), wrapper_name)
     if export_name is None:
         raise ResolveFailed("exported name for wrapper not found")
 
@@ -277,14 +277,13 @@ PATTERN_SEASON_NUM_ASSIGN = re.compile(r",(?P<name>[a-zA-Z0-9_$]+)=[a-zA-Z0-9_$]
 
 
 def find_season_num(chunks: Chunks) -> tuple[str, str]:
-    for chunk_path, content in chunks.iter_chunks():  # noqa: B007
-        if match := PATTERN_SEASON_NUM_ASSIGN.search(content):
-            obj_name = match.group("name")
-            break
-    else:
+    found = chunks.match(PATTERN_SEASON_NUM_ASSIGN)
+    if found is None:
         raise ResolveFailed("season number assignment not found")
+    chunk_path, match = found
+    obj_name = match.group("name")
 
-    export_name = _find_exported_name(content, obj_name)
+    export_name = _find_exported_name(chunks.read(chunk_path), obj_name)
     if export_name is None:
         raise ResolveFailed("exported name for season number not found")
 
@@ -300,31 +299,23 @@ PATTERN_PATCHES_DIRECT = re.compile(
 
 
 def find_patch_logs(chunks: Chunks) -> tuple[str, str]:
-    array_name: str | None = None
-    patches_map_name: str | None = None
-    for chunk_path, content in chunks.iter_chunks():  # noqa: B007
-        if match := PATTERN_PATCHES_DIRECT.search(content):
-            array_name = match.group("name")
-            break
-        if match := PATTERN_PATCHES_MAP.search(content):
-            patches_map_name = match.group("name")
-            break
-    else:
-        raise ResolveFailed("patches source not found")
-
-    if array_name is None:
-        if patches_map_name is None:
-            raise ResolveFailed("patches map not found")
+    if found := chunks.match(PATTERN_PATCHES_DIRECT):
+        chunk_path, match = found
+        array_name = match.group("name")
+    elif found := chunks.match(PATTERN_PATCHES_MAP):
+        chunk_path, match = found
+        patches_map_name = match.group("name")
         pattern = (
             r",\s*(?P<name>[a-zA-Z0-9_$]+)\s*=\s*Object\.entries\(\s*" + re.escape(patches_map_name) + r"\s*\)\.map\("
         )
-        match = re.search(pattern, content)
+        match = re.search(pattern, chunks.read(chunk_path))
         if match is None:
             raise ResolveFailed("patches array not found")
         array_name = match.group("name")
+    else:
+        raise ResolveFailed("patches source not found")
 
-    assert array_name is not None
-    export_name = _find_exported_name(content, array_name)
+    export_name = _find_exported_name(chunks.read(chunk_path), array_name)
     if export_name is None:
         raise ResolveFailed("exported name for patches array not found")
 

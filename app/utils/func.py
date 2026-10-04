@@ -12,7 +12,7 @@ from json import JSONEncoder
 from typing import TYPE_CHECKING, Any, Literal, NotRequired, Self, TypedDict, cast
 
 import anyio
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from tzlocal import get_localzone
 
 from app.log import escape_tag, logger
@@ -188,8 +188,8 @@ def with_semaphore[T: Callable](initial_value: int) -> Callable[[T], T]:
 
 
 class _TokenPayload(BaseModel):
-    userId: int  # noqa: N815
-    sessionId: str  # noqa: N815
+    user_id: int = Field(alias="userId")
+    session_id: str = Field(alias="sessionId")
     iss: str
     exp: int
     iat: int

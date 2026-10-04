@@ -98,3 +98,6 @@ keep-runtime-typing = true
 "scripts/*.py" = [
   "T201",   # print
 ]
+"*.spec" = [
+  "T201",   # print
+]

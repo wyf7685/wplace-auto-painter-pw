@@ -16,7 +16,7 @@ import os
 from collections.abc import Awaitable, Callable, Generator
 from urllib.parse import urlparse
 
-from app.log import logger
+from app.log import escape_tag, logger
 from app.utils import subprocess_options
 
 from .const import MIRRORS, PLAYWRIGHT_BROWSERS_PATH, MirrorSource
@@ -26,7 +26,7 @@ def setup_playwright_env() -> None:
     """Point Playwright at the project-local browser cache directory."""
     path = str(PLAYWRIGHT_BROWSERS_PATH.resolve())
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = path
-    logger.debug(f'PLAYWRIGHT_BROWSERS_PATH="{path}"')
+    logger.opt(colors=True).debug(f'<g>PLAYWRIGHT_BROWSERS_PATH</> set to "<c>{escape_tag(path)}</>"')
 
 
 def clear_playwright_env() -> None:
@@ -180,7 +180,8 @@ async def install_playwright_browser(browser: str, timeout: float = 300.0) -> bo
             stderr_task = asyncio.create_task(read_stream(process.stderr, stderr_callback))
 
             try:
-                _, stderr_data = await asyncio.wait_for(asyncio.gather(stdout_task, stderr_task), timeout=timeout)
+                async with asyncio.timeout(timeout):
+                    _, stderr_data = await asyncio.gather(stdout_task, stderr_task)
             except TimeoutError:
                 process.kill()
                 await process.wait()
@@ -195,8 +196,8 @@ async def install_playwright_browser(browser: str, timeout: float = 300.0) -> bo
                 )
                 return False
 
-        except Exception as exc:
-            logger.error(f"Unexpected error during Playwright browser installation: {exc}")
+        except Exception:
+            logger.exception("Unexpected error during Playwright browser installation")
             return False
 
         else:

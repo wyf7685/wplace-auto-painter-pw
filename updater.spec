@@ -1,4 +1,3 @@
-# ruff: noqa: T201
 import contextlib
 import os
 from collections.abc import Generator
