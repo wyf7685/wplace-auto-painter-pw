@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import TYPE_CHECKING, override
 
-from PySide6.QtCore import QPoint, Signal
+from PySide6.QtCore import QPoint, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QIcon
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, NavigationItemPosition
@@ -11,7 +11,7 @@ from app.i18n import tr
 
 from ._window import FluentWindow
 from .config import ConfigEditorWidget
-from .logging import AnsiLogViewer
+from .logging import AnsiLogViewer, LogEntry
 from .state import GUIState
 from .tool_row import ToolRowWidget
 
@@ -28,6 +28,7 @@ class MainWindow(FluentWindow):
         self,
         icon: QIcon,
         *,
+        latest_log_sequence: Callable[[], int],
         on_start: Callable[[], None],
         on_stop: Callable[[], None],
         on_save: Callable[[], None],
@@ -56,7 +57,7 @@ class MainWindow(FluentWindow):
         self.navigationInterface.setExpandWidth(160)
 
         self.config_editor = ConfigEditorWidget()
-        self.log_viewer = AnsiLogViewer()
+        self.log_viewer = AnsiLogViewer(latest_sequence=latest_log_sequence)
 
         self.config_page = self._build_page(self.config_editor, "ConfigPage")
         self.logs_page = self._build_page(self.log_viewer, "LogsPage")
@@ -113,8 +114,9 @@ class MainWindow(FluentWindow):
         for tool_row in self._tool_rows:
             tool_row.state_changed.emit(state)
 
-    def append_log(self, line: str) -> None:
-        self.log_viewer.append_line(line)
+    @Slot(object)
+    def append_log(self, entry: LogEntry) -> None:
+        self.log_viewer.append_entry(entry)
 
     def goto_config_page(self) -> None:
         self.switchTo(self.config_page)

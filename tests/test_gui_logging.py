@@ -12,7 +12,9 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 import app.gui.config.editor as editor_module
+import app.gui.logging.log_viewer as log_viewer_module
 import app.gui.state as state_module
+from app.gui.logging import AnsiLogViewer, LogEntry
 from app.log import logger
 
 
@@ -22,6 +24,18 @@ def qt_app() -> Iterator[QApplication]:
     app = app_instance if isinstance(app_instance, QApplication) else QApplication([])
     yield app
     app.processEvents()
+
+
+@pytest.fixture
+def log_viewer(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> Iterator[AnsiLogViewer]:
+    monkeypatch.setattr(log_viewer_module, "_MAX_BLOCK_COUNT", 8)
+    viewer = AnsiLogViewer(latest_sequence=lambda: 0)
+    try:
+        yield viewer
+    finally:
+        viewer.close()
+        viewer.deleteLater()
+        qt_app.processEvents()
 
 
 @pytest.fixture
@@ -155,3 +169,229 @@ editor.close()
     ):
         assert secret not in output
         assert secret not in result.stdout
+
+
+def test_log_filter_uses_numeric_levels_and_restores_colored_records(log_viewer: AnsiLogViewer) -> None:
+    log_viewer.append_entry(LogEntry(text="info contains [ERROR]", level_no=20, sequence=1))
+    log_viewer.append_entry(LogEntry(text="success", level_no=25, sequence=2))
+    log_viewer.append_entry(LogEntry(text="warning", level_no=30, sequence=3))
+    log_viewer.append_entry(LogEntry(text="\x1b[31mfailure\ntraceback-detail\x1b[0m", level_no=40, sequence=4))
+    log_viewer.append_entry(LogEntry(text="critical", level_no=50, sequence=5))
+    document = log_viewer._text.document()
+    error_color = document.find("failure").charFormat().foreground().color()
+    assert error_color != document.find("info").charFormat().foreground().color()
+
+    log_viewer._level_filter.setCurrentText("WARNING")
+    assert log_viewer._text.toPlainText() == "warning\nfailure\ntraceback-detail\ncritical"
+    log_viewer.append_entry(LogEntry(text="hidden debug", level_no=10, sequence=6))
+    log_viewer._level_filter.setCurrentText("INFO")
+    assert log_viewer._text.toPlainText() == (
+        "info contains [ERROR]\nsuccess\nwarning\nfailure\ntraceback-detail\ncritical"
+    )
+    assert document.find("failure").charFormat().foreground().color() == error_color
+    log_viewer._level_filter.setCurrentIndex(0)
+    assert log_viewer._text.toPlainText().endswith("critical\nhidden debug")
+
+
+def test_clear_discards_hidden_history_and_resets_the_first_visible_record(log_viewer: AnsiLogViewer) -> None:
+    log_viewer._level_filter.setCurrentText("ERROR")
+    log_viewer.append_entry(LogEntry(text="hidden", level_no=10, sequence=1))
+    log_viewer.append_entry(LogEntry(text="visible", level_no=40, sequence=2))
+    assert log_viewer._text.toPlainText() == "visible"
+    log_viewer.clear()
+    log_viewer._level_filter.setCurrentIndex(0)
+    assert log_viewer._text.toPlainText() == ""
+    log_viewer.append_entry(LogEntry(text="new record", level_no=20, sequence=3))
+    assert log_viewer._text.toPlainText() == "new record"
+
+
+def test_history_budget_evicts_whole_records_even_when_new_records_are_hidden(log_viewer: AnsiLogViewer) -> None:
+    log_viewer._level_filter.setCurrentText("WARNING")
+    log_viewer.append_entry(
+        LogEntry(text="first\r\nsecond\rthird\u2029fourth\nfifth\u2028sixth", level_no=40, sequence=1)
+    )
+    log_viewer.append_entry(LogEntry(text="warning", level_no=30, sequence=3))
+    log_viewer.append_entry(LogEntry(text="debug-1\ndebug-2", level_no=10, sequence=4))
+    assert log_viewer._text.toPlainText() == "first\nsecond\nthird\nfourth\nfifth\nsixth\nwarning"
+
+    log_viewer.append_entry(LogEntry(text="new debug", level_no=10, sequence=5))
+    assert log_viewer._text.toPlainText() == "warning"
+    log_viewer._level_filter.setCurrentIndex(0)
+    assert log_viewer._text.toPlainText() == "warning\ndebug-1\ndebug-2\nnew debug"
+
+    log_viewer._level_filter.setCurrentText("WARNING")
+    log_viewer.append_entry(LogEntry(text="a\nb\nc\nd\ne", level_no=10, sequence=6))
+    assert log_viewer._text.toPlainText() == ""
+    log_viewer._level_filter.setCurrentIndex(0)
+    assert log_viewer._text.toPlainText() == "debug-1\ndebug-2\nnew debug\na\nb\nc\nd\ne"
+
+
+def test_oversized_record_keeps_document_limit_and_expires_as_a_whole(log_viewer: AnsiLogViewer) -> None:
+    log_viewer.append_entry(LogEntry(text="\n".join(f"line-{index}" for index in range(9)), level_no=40, sequence=1))
+    expected = "\n".join(f"line-{index}" for index in range(1, 9))
+    assert log_viewer._text.toPlainText() == expected
+    log_viewer._level_filter.setCurrentText("ERROR")
+    assert log_viewer._text.toPlainText() == expected
+    log_viewer.append_entry(LogEntry(text="next record", level_no=5, sequence=2))
+    assert log_viewer._text.toPlainText() == ""
+    log_viewer._level_filter.setCurrentIndex(0)
+    assert log_viewer._text.toPlainText() == "next record"
+
+
+def test_gui_captures_trace_independently_of_console_level(tmp_path: Path) -> None:
+    script = """
+import sys
+from pathlib import Path
+from PySide6.QtWidgets import QApplication
+import app.const as constants
+constants.LOGS_DIR = Path(sys.argv[1]) / "logs"
+constants.CONFIG_FILE = Path(sys.argv[1]) / "config.json"
+import app.log as log_module
+from app.log import logger
+from app.gui.logging import AnsiLogViewer, LogBridge
+log_module.get_log_level = lambda: 50
+app = QApplication([])
+bridge = LogBridge()
+viewer = AnsiLogViewer(latest_sequence=bridge.latest_sequence)
+bridge.connect_receiver(viewer.append_entry)
+bridge.start()
+try:
+    logger.trace("trace-event")
+    logger.debug("debug-event")
+    logger.complete()
+    app.processEvents()
+    assert "trace-event" in viewer._text.toPlainText()
+    assert "debug-event" in viewer._text.toPlainText()
+    viewer._level_filter.setCurrentText("ERROR")
+    assert viewer._text.toPlainText() == ""
+    viewer._level_filter.setCurrentText("TRACE")
+    assert "trace-event" in viewer._text.toPlainText()
+    assert "debug-event" in viewer._text.toPlainText()
+finally:
+    bridge.stop()
+    viewer.close()
+"""
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", script, str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=Path(__file__).resolve().parent.parent,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_log_handoff_reconciles_records_on_both_sides_of_snapshot(tmp_path: Path) -> None:
+    script = """
+import sys
+from pathlib import Path
+from PySide6.QtWidgets import QApplication
+import app.const as constants
+constants.LOGS_DIR = Path(sys.argv[1]) / "logs"
+constants.CONFIG_FILE = Path(sys.argv[1]) / "config.json"
+import app.log as log_module
+from app.log import logger
+from app.gui.logging import AnsiLogViewer, LogBridge
+log_module.get_log_level = lambda: 50
+app = QApplication([])
+bridge = LogBridge()
+viewer = AnsiLogViewer(latest_sequence=bridge.latest_sequence)
+bridge.start()
+original_buffer = LogBridge.buffer
+def snapshot_with_arrivals(instance):
+    logger.trace("before-snapshot")
+    logger.complete()
+    snapshot = original_buffer.fget(instance)
+    logger.info("after-snapshot")
+    logger.complete()
+    return snapshot
+try:
+    logger.debug("before-subscription")
+    logger.complete()
+    LogBridge.buffer = property(snapshot_with_arrivals)
+    bridge.connect_receiver(viewer.append_entry)
+    app.processEvents()
+    text = viewer._text.toPlainText()
+    markers = ("before-subscription", "before-snapshot", "after-snapshot")
+    assert all(text.count(marker) == 1 for marker in markers)
+    assert text.index(markers[0]) < text.index(markers[1]) < text.index(markers[2])
+finally:
+    LogBridge.buffer = original_buffer
+    bridge.stop()
+    viewer.close()
+"""
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", script, str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=Path(__file__).resolve().parent.parent,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_clear_rejects_pending_events_and_keeps_new_logs_after_sink_restart(tmp_path: Path) -> None:
+    script = """
+import sys
+from pathlib import Path
+from PySide6.QtWidgets import QApplication
+import app.const as constants
+constants.LOGS_DIR = Path(sys.argv[1]) / "logs"
+constants.CONFIG_FILE = Path(sys.argv[1]) / "config.json"
+import app.log as log_module
+from app.log import logger
+from app.gui.logging import AnsiLogViewer, LogBridge
+log_module.get_log_level = lambda: 50
+app = QApplication([])
+bridge = LogBridge()
+viewer = AnsiLogViewer(latest_sequence=bridge.latest_sequence)
+bridge.connect_receiver(viewer.append_entry)
+bridge.start()
+try:
+    logger.warning("queued-before-first-clear")
+    logger.complete()
+    assert viewer._text.toPlainText() == ""
+    viewer.clear()
+    viewer._level_filter.setCurrentText("ERROR")
+    logger.error("queued-before-second-clear")
+    logger.complete()
+    viewer.clear()
+    logger.debug("new-hidden-record")
+    logger.opt(colors=True).error("<red>new-visible-record</red>")
+    logger.complete()
+    app.processEvents()
+    text = viewer._text.toPlainText()
+    assert "new-visible-record" in text
+    assert "new-hidden-record" not in text
+    assert "queued-before" not in text
+    color = viewer._text.document().find("new-visible-record").charFormat().foreground().color()
+    viewer._level_filter.setCurrentIndex(0)
+    text = viewer._text.toPlainText()
+    assert text.count("new-hidden-record") == 1
+    assert text.count("new-visible-record") == 1
+    assert text.index("new-hidden-record") < text.index("new-visible-record")
+    assert "queued-before" not in text
+    assert viewer._text.document().find("new-visible-record").charFormat().foreground().color() == color
+    bridge.stop()
+    bridge.start()
+    logger.trace("after-restart")
+    logger.complete()
+    app.processEvents()
+    assert viewer._text.toPlainText().count("after-restart") == 1
+finally:
+    bridge.stop()
+    viewer.close()
+"""
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", script, str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=Path(__file__).resolve().parent.parent,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -70,6 +70,8 @@
   "notification.open_browser.confirm": "Confirm",
   "notification.captcha.body": "Captcha detected. Open the browser and complete verification to continue.",
   "log.auto_scroll": "Auto Scroll",
+  "log.minimum_level": "Minimum Level",
+  "log.all_levels": "All",
   "log.clear": "Clear",
   "config.title": "Configuration",
   "config.global.title": "Global Settings",
