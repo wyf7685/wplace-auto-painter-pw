@@ -71,6 +71,8 @@ uv run poe release package --bundle-dir dist/wplace-auto-painter --platform wind
 - `Config.load()` is cached. Save through `Config.save()` to synchronize configuration, log-level, and proxy caches. Configuration-field changes must update models, GUI drafts/serialization, both locales for visible text, and relevant tests.
 - The GUI editor preserves unsaved drafts; painting may start only after successful validation and saving. When exiting or installing an update, cancellation or a failed save must block the operation.
 - Qt list and selection changes may emit signals synchronously; preserve model/draft state before mutating widgets. Workers communicate with the GUI through signals and never mutate widgets directly.
+- GUI logging captures TRACE and above independently of `Config.log_level`. Pass immutable `LogEntry` objects through Qt signals, preserving ANSI text and numeric severity; do not retain Loguru records or exception objects in GUI history.
+- The log viewer filters whole records by minimum severity and keeps a 5000-text-block history budget. Evict complete records; keep the newest oversized record under the document's display limit. Clearing logs must discard visible and hidden history; disabling auto-scroll must preserve the scroll position when refiltering.
 
 ### Updates and Releases
 

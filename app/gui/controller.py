@@ -103,9 +103,9 @@ class Controller:
         self.window.set_close_to_tray(self._tray_available)
         self.window.hidden_to_tray.connect(self._show_tray_hint)
 
-        for line in self.bridge.buffer:
-            self.window.append_log(line)
-        self.bridge.new_line.connect(self.window.append_log)
+        for entry in self.bridge.buffer:
+            self.window.append_log(entry)
+        self.bridge.new_entry.connect(self.window.append_log)
         self.runtime.signals.state_changed.connect(self._handle_runtime_state)
         self.runtime.signals.config_error_occurred.connect(self.handle_config_error)
         self.runtime.signals.user_failed.connect(self._handle_user_failure)

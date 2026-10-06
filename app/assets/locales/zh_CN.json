@@ -70,6 +70,8 @@
   "notification.open_browser.confirm": "确认",
   "notification.captcha.body": "检测到验证码，请打开浏览器完成验证后继续。",
   "log.auto_scroll": "自动滚动",
+  "log.minimum_level": "最低等级",
+  "log.all_levels": "全部",
   "log.clear": "清空",
   "config.title": "配置",
   "config.global.title": "全局设置",
