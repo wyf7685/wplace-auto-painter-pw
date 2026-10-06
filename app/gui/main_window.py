@@ -26,6 +26,7 @@ class MainWindow(FluentWindow):
         self,
         icon: QIcon,
         *,
+        latest_log_sequence: Callable[[], int],
         on_start: Callable[[], None],
         on_stop: Callable[[], None],
         on_save: Callable[[], None],
@@ -54,7 +55,7 @@ class MainWindow(FluentWindow):
         self.navigationInterface.setExpandWidth(160)
 
         self.config_editor = ConfigEditorWidget()
-        self.log_viewer = AnsiLogViewer()
+        self.log_viewer = AnsiLogViewer(latest_sequence=latest_log_sequence)
 
         self.config_page = self._build_page(self.config_editor, "ConfigPage")
         self.logs_page = self._build_page(self.log_viewer, "LogsPage")

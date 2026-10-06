@@ -88,6 +88,7 @@ class Controller:
         self._update_timer.timeout.connect(self._automatic_update_check)
         self.window = MainWindow(
             self.icon,
+            latest_log_sequence=self.bridge.latest_sequence,
             on_start=self.start_runtime,
             on_stop=self.stop_runtime,
             on_save=self.save_config,
@@ -103,9 +104,7 @@ class Controller:
         self.window.set_close_to_tray(self._tray_available)
         self.window.hidden_to_tray.connect(self._show_tray_hint)
 
-        for entry in self.bridge.buffer:
-            self.window.append_log(entry)
-        self.bridge.new_entry.connect(self.window.append_log)
+        self.bridge.connect_receiver(self.window.append_log)
         self.runtime.signals.state_changed.connect(self._handle_runtime_state)
         self.runtime.signals.config_error_occurred.connect(self.handle_config_error)
         self.runtime.signals.user_failed.connect(self._handle_user_failure)

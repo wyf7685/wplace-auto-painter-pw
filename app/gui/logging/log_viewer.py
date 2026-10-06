@@ -1,4 +1,5 @@
 from collections import deque
+from collections.abc import Callable
 
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QFont, QTextCursor
@@ -17,8 +18,10 @@ _MAX_BLOCK_COUNT = 5000
 class AnsiLogViewer(QWidget):
     """ANSI log viewer with bounded history and numeric minimum-level filtering."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, latest_sequence: Callable[[], int]) -> None:
         super().__init__()
+        self._latest_sequence = latest_sequence
+        self._last_sequence = 0
         self._entries: deque[tuple[LogEntry, int]] = deque()
         self._history_blocks = 0
         self._minimum_level = 0
@@ -58,6 +61,10 @@ class AnsiLogViewer(QWidget):
 
     @Slot(object)
     def append_entry(self, entry: LogEntry) -> None:
+        if entry.sequence <= self._last_sequence:
+            return
+        self._last_sequence = entry.sequence
+
         # Match Qt paragraph breaks without counting CRLF twice.
         blocks = (
             entry.text.count("\n") + entry.text.count("\r") - entry.text.count("\r\n") + entry.text.count("\u2029") + 1
@@ -126,6 +133,8 @@ class AnsiLogViewer(QWidget):
             scrollbar.setValue(scroll_position)
 
     def clear(self) -> None:
+        # The bridge watermark includes events that Qt has not delivered yet.
+        self._last_sequence = max(self._last_sequence, self._latest_sequence())
         self._entries.clear()
         self._history_blocks = 0
         self._clear_document()

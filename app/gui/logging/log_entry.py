@@ -3,7 +3,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class LogEntry:
-    """Immutable ANSI text and severity passed from log workers to Qt."""
+    """Immutable ANSI log record sequenced within a bridge's lifetime."""
 
     text: str
     level_no: int
+    sequence: int

@@ -56,6 +56,7 @@ def test_about_page_initializes_with_latest_update_state() -> None:
     app = QApplication.instance() or QApplication([])
     window = MainWindow(
         QIcon(),
+        latest_log_sequence=lambda: 0,
         on_start=lambda: None,
         on_stop=lambda: None,
         on_save=lambda: None,

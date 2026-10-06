@@ -72,6 +72,8 @@ uv run poe release package --bundle-dir dist/wplace-auto-painter --platform wind
 - The GUI editor preserves unsaved drafts; painting may start only after successful validation and saving. When exiting or installing an update, cancellation or a failed save must block the operation.
 - Qt list and selection changes may emit signals synchronously; preserve model/draft state before mutating widgets. Workers communicate with the GUI through signals and never mutate widgets directly.
 - GUI logging captures TRACE and above independently of `Config.log_level`. Pass immutable `LogEntry` objects through Qt signals, preserving ANSI text and numeric severity; do not retain Loguru records or exception objects in GUI history.
+- GUI log records carry monotonically increasing per-bridge sequences. Subscribe with `LogBridge.connect_receiver()` on the GUI thread before replay, use locked buffer snapshots, and deduplicate in the viewer. Preserve sequences across sink restarts.
+- Clearing a log viewer records `LogBridge.latest_sequence()` as its cutoff and rejects earlier queued records. Pass the real bridge watermark provider through `MainWindow` to `AnsiLogViewer`; the last consumed event alone does not cover pending Qt deliveries.
 - The log viewer filters whole records by minimum severity and keeps a 5000-text-block history budget. Evict complete records; keep the newest oversized record under the document's display limit. Clearing logs must discard visible and hidden history; disabling auto-scroll must preserve the scroll position when refiltering.
 
 ### Updates and Releases

@@ -132,6 +132,7 @@ def test_main_window_loads_saved_geometry_only_once(
     monkeypatch.setattr(editor_module, "TEMPLATES_DIR", tmp_path / "templates")
     window = MainWindow(
         QIcon(),
+        latest_log_sequence=lambda: 0,
         on_start=lambda: None,
         on_stop=lambda: None,
         on_save=lambda: None,
