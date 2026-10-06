@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Literal
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QFontDatabase, QIcon
@@ -22,6 +23,30 @@ from qfluentwidgets import (
 from app.const import APP_NAME, REPOSITORY_RELEASES_URL, REPOSITORY_URL
 from app.i18n import tr
 from app.version import get_commit_hash, get_version_display
+
+type UpdateState = Literal[
+    "idle",
+    "unsupported",
+    "checking",
+    "current",
+    "available",
+    "downloading",
+    "ready",
+    "applying",
+    "error",
+]
+
+UPDATE_BUTTON_ACTION_MAP: dict[UpdateState, str] = {
+    "idle": "check",
+    "unsupported": "open_releases",
+    "checking": "checking",
+    "current": "check_again",
+    "available": "download",
+    "downloading": "downloading",
+    "ready": "restart",
+    "applying": "applying",
+    "error": "retry",
+}
 
 
 class AboutPage(SmoothScrollArea):
@@ -172,18 +197,8 @@ class AboutPage(SmoothScrollArea):
         self.release_notes_browser.setMarkdown(release_notes.strip() or tr("update.release_notes.empty"))
         self.release_notes_card.show()
 
-    def set_update_state(self, state: str, version: str = "", release_notes: str = "") -> None:
-        button_key = {
-            "idle": "update.action.check",
-            "unsupported": "update.action.open_releases",
-            "checking": "update.action.checking",
-            "current": "update.action.check_again",
-            "available": "update.action.download",
-            "downloading": "update.action.downloading",
-            "ready": "update.action.restart",
-            "applying": "update.action.applying",
-            "error": "update.action.retry",
-        }.get(state, "update.action.check")
+    def set_update_state(self, state: UpdateState, version: str = "", release_notes: str = "") -> None:
+        button_key = f"update.action.{UPDATE_BUTTON_ACTION_MAP.get(state, 'check')}"
         content_key = f"update.state.{state}"
         self.update_card.button.setText(tr(button_key, version=version))
         self.update_card.contentLabel.setText(tr(content_key, version=version, percent=0))

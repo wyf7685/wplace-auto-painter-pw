@@ -16,7 +16,9 @@ from .state import GUIState
 from .tool_row import ToolRowWidget
 
 if TYPE_CHECKING:
-    from .about_page import AboutPage
+    from .about_page import AboutPage, UpdateState
+
+    type UpdateStateTuple = tuple[UpdateState, str, str]
 
 
 class MainWindow(FluentWindow):
@@ -45,7 +47,7 @@ class MainWindow(FluentWindow):
 
         self._tool_rows: list[ToolRowWidget] = []
         self._about_content: AboutPage | None = None
-        self._update_state = ("idle", "", "")
+        self._update_state: UpdateStateTuple = ("idle", "", "")
         self._update_progress: tuple[int, int] | None = None
 
         self.setWindowTitle(tr("main.window_title", app_name=APP_NAME))
@@ -120,7 +122,7 @@ class MainWindow(FluentWindow):
     def goto_logs_page(self) -> None:
         self.switchTo(self.logs_page)
 
-    def set_update_state(self, state: str, version: str = "", release_notes: str = "") -> None:
+    def set_update_state(self, state: UpdateState, version: str = "", release_notes: str = "") -> None:
         self._update_state = (state, version, release_notes)
         self._update_progress = None
         if self._about_content is not None:
