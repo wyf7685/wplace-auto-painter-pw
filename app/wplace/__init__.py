@@ -1,8 +1,6 @@
 from collections.abc import Callable
 
-import anyio
-
-from app.browser import shutdown_idle_playwright_loop, shutdown_playwright
+from app.browser import create_playwright_context
 from app.config import ensure_config_ready
 from app.exception import AppException
 from app.log import logger
@@ -18,13 +16,8 @@ async def run_painter(on_user_failed: Callable[[str], None] | None = None) -> bo
 
     failed = False
     try:
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(shutdown_idle_playwright_loop)
-
-            try:
-                failed = not await setup_paint(on_user_failed)
-            finally:
-                tg.cancel_scope.cancel()
+        async with create_playwright_context():
+            failed = not await setup_paint(on_user_failed)
 
     except* KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
@@ -35,8 +28,6 @@ async def run_painter(on_user_failed: Callable[[str], None] | None = None) -> bo
         failed = True
         logger.exception("Unexpected error occurred")
     finally:
-        with anyio.CancelScope(shield=True):
-            await shutdown_playwright()
         logger.info("Painter stopped")
 
     return not failed
