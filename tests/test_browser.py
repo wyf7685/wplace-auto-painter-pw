@@ -54,6 +54,46 @@ def test_playwright_context_finishes_cleanup_when_cancelled(playwright_state: ma
     anyio.run(run)
 
 
+def test_playwright_context_waits_for_in_progress_idle_shutdown(
+    monkeypatch: pytest.MonkeyPatch,
+    playwright_state: manager._PlaywrightState,
+) -> None:
+    monkeypatch.setattr(manager, "PLAYWRIGHT_IDLE_TIMEOUT", 0)
+
+    async def run() -> None:
+        stop_started = anyio.Event()
+        release_stop = anyio.Event()
+        lifecycle_exited = anyio.Event()
+
+        class DelayedPlaywright(FakePlaywright):
+            async def stop(self) -> None:
+                stop_started.set()
+                await release_stop.wait()
+                await super().stop()
+
+        playwright = DelayedPlaywright()
+        playwright_state.instance = cast("Playwright", playwright)
+
+        async def owner() -> None:
+            async with manager.create_playwright_context():
+                playwright_state.idle_event.set()
+                await stop_started.wait()
+            assert playwright.stopped
+            lifecycle_exited.set()
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(owner)
+            await stop_started.wait()
+            await anyio.lowlevel.checkpoint()
+            assert not lifecycle_exited.is_set()
+            release_stop.set()
+
+        assert lifecycle_exited.is_set()
+        assert playwright_state.instance is None
+
+    anyio.run(run)
+
+
 @pytest.mark.usefixtures("forbid_browser_start")
 @pytest.mark.parametrize("persistent", [False, True])
 def test_browser_acquisition_requires_lifecycle_context(persistent: bool) -> None:
