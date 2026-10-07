@@ -10,6 +10,10 @@ Architecture
   timer is armed.  If no new browser is requested within
   ``PLAYWRIGHT_IDLE_TIMEOUT`` seconds the Playwright instance is stopped to
   reclaim memory.  It will be restarted transparently on the next call.
+* ``get_browser()`` and ``get_persistent_context()`` require an active
+  ``create_playwright_context()`` in the calling task, inherited by child tasks.
+* Lifecycle contexts on the same event loop share the idle shutdown task.
+  The last context waits for final cleanup, shielded from AnyIO cancellation.
 
 Idle shutdown
 -------------
@@ -28,8 +32,11 @@ import dataclasses
 import functools
 import re
 import time
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import anyio
 
 from app.config import Config
 from app.exception import BrowserNotAvailable
@@ -56,9 +63,21 @@ class _PlaywrightState:
     last_use_ended: float = 0.0
     instance_lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock)
     idle_event: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
+    context_users: int = 0
+    context_lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock)
+    shutdown_loop_task: asyncio.Task[None] | None = None
 
 
 _pw_states: dict[asyncio.AbstractEventLoop, _PlaywrightState] = {}
+
+
+@dataclasses.dataclass
+class _PlaywrightContext:
+    state: _PlaywrightState
+    active: bool = True
+
+
+_playwright_context: ContextVar[_PlaywrightContext | None] = ContextVar("playwright_context", default=None)
 
 
 def _cleanup_states() -> None:
@@ -191,7 +210,13 @@ async def get_browser(*, headless: bool = False) -> AsyncGenerator[Browser]:
 
     The Playwright instance is shared and reused; only the browser process is
     created and destroyed per invocation.
+
+    Requires an active :func:`create_playwright_context` in the calling task.
     """
+    playwright_context = _playwright_context.get()
+    if playwright_context is None or not playwright_context.active or playwright_context.state is not _get_state():
+        raise RuntimeError("get_browser() must be called inside create_playwright_context()")
+
     browser_type, name, channel = await _get_browser_type()
     display = f"{name} ({channel})" if channel else name
     logger.opt(colors=True).debug(f"Launching browser <g>{display}</> with <c>headless</>=<y>{headless}</>")
@@ -212,6 +237,11 @@ async def get_persistent_context(
     *,
     headless: bool = False,
 ) -> AsyncGenerator[BrowserContext]:
+    """Launch a persistent browser context inside an active Playwright lifecycle."""
+    playwright_context = _playwright_context.get()
+    if playwright_context is None or not playwright_context.active or playwright_context.state is not _get_state():
+        raise RuntimeError("get_persistent_context() must be called inside create_playwright_context()")
+
     browser_type, name, channel = await _get_browser_type()
     display = f"{name} ({channel})" if channel else name
 
@@ -248,11 +278,7 @@ async def shutdown_idle_playwright_loop() -> None:
     """Background coroutine that stops Playwright after it has been idle for
     ``PLAYWRIGHT_IDLE_TIMEOUT`` seconds.
 
-    Designed to be run as a long-lived task alongside the main work tasks::
-
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(setup_paint)
-            tg.start_soon(shutdown_idle_playwright_loop)
+    Owned by :func:`create_playwright_context` and stopped when the last lifecycle context exits.
 
     **Algorithm** (event-based, no polling):
 
@@ -290,6 +316,42 @@ async def shutdown_idle_playwright_loop() -> None:
         if state.instance is not None:
             logger.debug(f"Playwright has been idle for {PLAYWRIGHT_IDLE_TIMEOUT}s; shutting down.")
             await shutdown_playwright()
+
+
+@contextlib.asynccontextmanager
+async def create_playwright_context() -> AsyncGenerator[None]:
+    """Provide a task-local lifecycle context for browser acquisition.
+
+    Child tasks inherit this context only while its owner remains active.
+    Nested and concurrent contexts on the same loop share one idle task.
+    The final owner awaits cleanup shielded from AnyIO cancellation.
+    """
+    state = _get_state()
+    async with state.context_lock:
+        if state.context_users == 0:
+            state.shutdown_loop_task = asyncio.create_task(shutdown_idle_playwright_loop())
+        state.context_users += 1
+
+    context = _PlaywrightContext(state)
+    token = _playwright_context.set(context)
+    try:
+        yield
+    finally:
+        context.active = False
+        _playwright_context.reset(token)
+        with anyio.CancelScope(shield=True):
+            async with state.context_lock:
+                state.context_users -= 1
+                if state.context_users == 0:
+                    shutdown_loop_task = state.shutdown_loop_task
+                    state.shutdown_loop_task = None
+                    assert shutdown_loop_task is not None
+                    try:
+                        shutdown_loop_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await shutdown_loop_task
+                    finally:
+                        await shutdown_playwright()
 
 
 @functools.cache
