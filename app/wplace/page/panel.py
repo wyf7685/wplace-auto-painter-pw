@@ -26,17 +26,25 @@ class PaintPanel:
         await self.close()
 
     async def open(self) -> None:
-        paint_btn = await self.wplace_page.find_paint_button()
-        self.log.debug("Found paint button")
-        await paint_btn.click()
-        self.log.info("Clicked paint button")
+        paint_open_btn = await self.wplace_page.find_paint_open_button()
+        self.log.debug("Found paint opener")
+        await paint_open_btn.click()
+        self.log.info("Clicked paint opener")
+
+        try:
+            await self.page.wait_for_selector(
+                self.wplace_page.submit_bridge_selector,
+                timeout=10_000,
+                state="attached",
+            )
+        except pw_timeout_error() as e:
+            raise ElementNotFound("Submit bridge not found after opening the paint panel") from e
 
     async def close(self) -> None:
-        btns = await self.page.query_selector_all(".w-full > .relative > .items-center > .btn.btn-circle.btn-sm")
-        if not btns:
+        close_btn = await self.page.query_selector('.paint-panel button.paint-panel-action[aria-label="Close"]')
+        if close_btn is None:
             self.log.warning("No close button found on the paint panel")
             return
-        close_btn = btns[-1]
         self.log.debug("Found close button")
         await close_btn.click()
         self.log.info("Closed paint panel")

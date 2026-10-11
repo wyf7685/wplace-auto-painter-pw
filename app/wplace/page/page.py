@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 else:
     ConsoleMessage = ElementHandle = Page = Response = Any
 
-PAINT_BTN_SELECTOR = ".disable-pinch-zoom > div.absolute .btn.btn-primary.btn-lg"
+PAINT_OPEN_SELECTOR = ".disable-pinch-zoom > div.absolute button:has(> .paint-button-content):not(.paint-panel *)"
 PAINT_REQUEST_URL = "https://backend.wplace.live/paint"
 
 # Map zoom level the injected script writes into `localStorage.location`. Passed
@@ -71,12 +71,9 @@ class WplacePage:
             await page.goto("https://wplace.live/", timeout=60_000, wait_until="domcontentloaded")
 
             try:
-                await page.wait_for_selector(PAINT_BTN_SELECTOR, timeout=10_000, state="visible")
-                await page.wait_for_selector(self.submit_bridge_selector, timeout=10_000, state="attached")
+                await page.wait_for_selector(PAINT_OPEN_SELECTOR, timeout=10_000, state="visible")
             except pw_timeout_error() as e:
-                raise ElementNotFound(
-                    "Required paint button or submit bridge not found, is the injected script broken?"
-                ) from e
+                raise ElementNotFound("Required paint opener not found, is the injected script broken?") from e
 
             self.page = page
             try:
@@ -213,20 +210,23 @@ class WplacePage:
         if not self._submit_succeeded:
             raise PaintRequestFailed("Paint submit did not report success")
 
-    async def find_paint_button(self) -> ElementHandle:
-        paint_btn = await self.page.query_selector(PAINT_BTN_SELECTOR)
+    async def find_paint_open_button(self) -> ElementHandle:
+        try:
+            paint_btn = await self.page.wait_for_selector(PAINT_OPEN_SELECTOR, timeout=10_000, state="visible")
+        except pw_timeout_error() as e:
+            raise ElementNotFound("No visible paint opener found on the page") from e
         if paint_btn is None:
-            raise ElementNotFound("No paint button found on the page")
+            raise ElementNotFound("No visible paint opener found on the page")
         return paint_btn
 
     async def find_and_close_modal(self) -> None:
         if modal := await self.page.query_selector(".modal[open]"):
             self.log.info("Found modal dialog")
-            for el in await modal.query_selector_all("button.btn"):
-                if await el.text_content() == "Close":
-                    await el.click()
-                    self.log.info("Closed modal dialog")
-                    return
+            close_btn = await modal.query_selector('button[aria-label="Close"]')
+            if close_btn is not None:
+                await close_btn.click()
+                self.log.info("Closed modal dialog")
+                return
             self.log.warning("No Close button found in modal dialog")
 
     @contextlib.asynccontextmanager
