@@ -61,6 +61,9 @@ uv run poe release package --bundle-dir dist/wplace-auto-painter --platform wind
 - Keep `paint_input_mode` models, GUI drafts/options, dispatch, translations, and tests synchronized. Retracing paths may revisit pixels, but charge accounting and submission use the original target pixels.
 - `CANVAS_ZOOM` and `CANVAS_PX_PER_PIXEL` are one calibrated contract. Re-measure against the live site if either changes.
 - Keep `Painter.paint_pixels` script data, `app/assets/js/paint_btn.js`, and `WplacePage` console topics synchronized. Batch completion requires `submit-success`, not merely successful individual responses.
+- `resolve_js()` returns ordered painter, worker, and season module references plus the latest numeric markdown patch version. Pass that version in `script_data` and initialize `last_seen_patch_version` and `last_shown_patch_version` synchronously before WPlace startup.
+- `WplacePage.create()` waits for the paint opener; `PaintPanel.open()` waits for the submit bridge after opening the panel. Bind the bridge to the visible panel-submit control, reuse its node across expanded/minimized layouts, and retain one submission guard per page payload. Scope icon-only Close lookups to the paint panel or opened modal.
+- Keep `.local/paint_btn.ts` and `app/assets/js/paint_btn.js` synchronized. Regenerate the asset with `npx esbuild .local/paint_btn.ts --bundle --minify --outfile=app/assets/js/paint_btn.js`.
 - Preserve distinct handling for expired tokens, policy blocks, challenges, verification, account timeouts, and generic failures. Purchases run inside the browser context without an explicit `Content-Type` header (see `tests/test_purchase.py`).
 - The resolver inspects unstable minified bundles; never assume symbol names are stable.
 

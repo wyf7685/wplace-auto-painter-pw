@@ -174,9 +174,10 @@ class Painter:
             script_data = [
                 uuid.uuid4().hex[:8],
                 [[*base.offset(x, y).as_dtuple(), color_id] for x, y, color_id in pixels],
-                resolved_js,
+                resolved_js.modules,
                 [*base.offset(*pixels[0][:2]).to_lat_lon()],
                 CANVAS_ZOOM,
+                resolved_js.patch_version,
             ]
 
             async with WplacePage.create(self.context, script_data) as page:

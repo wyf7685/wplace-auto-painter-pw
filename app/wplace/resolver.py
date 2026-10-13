@@ -1,6 +1,7 @@
 import json
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -22,6 +23,15 @@ CHUNKS_DIR = DATA_DIR / "js_chunks"
 CHUNK_ETAG_FILE = CHUNKS_DIR / "etag.json"
 # Chunk URLs are content-hashed; avoid browser startup on every painting cycle.
 JS_RESOLUTION_CACHE_TTL = 60 * 60
+
+
+type ModuleReference = tuple[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedJs:
+    modules: tuple[ModuleReference, ModuleReference, ModuleReference]
+    patch_version: str
 
 
 async def load_chunk_etags() -> dict[str, str]:
@@ -290,44 +300,103 @@ def find_season_num(chunks: Chunks) -> tuple[str, str]:
     return export_name, chunks.url(chunk_path)
 
 
-PATTERN_PATCHES_MAP = re.compile(
-    r",\s*(?P<name>[a-zA-Z0-9_$]+)\s*=\s*Object.assign\(\{(?P<quote>['\"`])\./markdown/.+(?P=quote):\s*[a-zA-Z0-9_$]+,"
+JS_STRING = r""""(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`"""
+OBJECT_ASSIGN_OBJECT = re.compile(
+    rf"(?:{JS_STRING})|//[^\r\n]*|/\*.*?\*/|(?P<object>\bObject\s*\.\s*assign\s*\(\s*\{{)",
+    re.DOTALL,
 )
-PATTERN_PATCHES_DIRECT = re.compile(
-    r",\s*(?P<name>[a-zA-Z0-9_$]+)\s*=\s*Object\.entries\(\s*Object\.assign\(\{(?P<quote>['\"`])\./markdown/.+(?P=quote):\s*[a-zA-Z0-9_$]+,"
-)
+OBJECT_STRING_KEY = re.compile(r"(?P<quote>['\"`])(?P<key>(?:\\.|(?!(?P=quote))[^\\\r\n])*)(?P=quote)\s*:")
+PATCH_VERSION_FILENAME = re.compile(r"(?P<version>[0-9]+\.[0-9]+\.[0-9]+)(?: - .+)?\.md\Z")
 
 
-def find_patch_logs(chunks: Chunks) -> tuple[str, str]:
-    if found := chunks.match(PATTERN_PATCHES_DIRECT):
-        chunk_path, match = found
-        array_name = match.group("name")
-    elif found := chunks.match(PATTERN_PATCHES_MAP):
-        chunk_path, match = found
-        patches_map_name = match.group("name")
-        pattern = (
-            r",\s*(?P<name>[a-zA-Z0-9_$]+)\s*=\s*Object\.entries\(\s*" + re.escape(patches_map_name) + r"\s*\)\.map\("
-        )
-        match = re.search(pattern, chunks.read(chunk_path))
-        if match is None:
-            raise ResolveFailed("patches array not found")
-        array_name = match.group("name")
-    else:
-        raise ResolveFailed("patches source not found")
+def _object_entries(content: str, opening_brace: int) -> list[str] | None:
+    entries: list[str] = []
+    entry_start = opening_brace + 1
+    brace_depth = 1
+    bracket_depth = 0
+    parenthesis_depth = 0
+    quote: str | None = None
+    index = entry_start
 
-    export_name = _find_exported_name(chunks.read(chunk_path), array_name)
-    if export_name is None:
-        raise ResolveFailed("exported name for patches array not found")
+    while index < len(content):
+        char = content[index]
+        if quote is not None:
+            if char == "\\":
+                index += 2
+                continue
+            if char == quote:
+                quote = None
+        elif content.startswith("//", index):
+            newline = content.find("\n", index + 2)
+            index = len(content) if newline == -1 else newline + 1
+            continue
+        elif content.startswith("/*", index):
+            closing = content.find("*/", index + 2)
+            if closing == -1:
+                return None
+            index = closing + 2
+            continue
+        elif char in "'\"`":
+            quote = char
+        elif char == "{":
+            brace_depth += 1
+        elif char == "}":
+            brace_depth -= 1
+            if brace_depth == 0:
+                entries.append(content[entry_start:index])
+                return entries
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            bracket_depth -= 1
+        elif char == "(":
+            parenthesis_depth += 1
+        elif char == ")":
+            parenthesis_depth -= 1
+        elif char == "," and brace_depth == 1 and bracket_depth == 0 and parenthesis_depth == 0:
+            entries.append(content[entry_start:index])
+            entry_start = index + 1
+        index += 1
 
-    return export_name, chunks.url(chunk_path)
+    return None
 
 
-_resolve_cache: tuple[float, list[tuple[str, str]]] | None = None
-_resolvers = find_paint_fn, find_worker_fn, find_season_num, find_patch_logs
+def find_patch_version(chunks: Chunks) -> str:
+    versions: list[tuple[tuple[int, int, int], str]] = []
+
+    for file in chunks.root.glob("*/*.js"):
+        chunk_path = file.relative_to(chunks.root).as_posix()
+        content = chunks.read(chunk_path)
+        for match in OBJECT_ASSIGN_OBJECT.finditer(content):
+            if match.group("object") is None:
+                continue
+            entries = _object_entries(content, match.end() - 1)
+            if entries is None:
+                continue
+            for entry in entries:
+                key_match = OBJECT_STRING_KEY.match(entry.lstrip())
+                if key_match is None:
+                    continue
+                key = key_match.group("key")
+                if not key.startswith("./markdown/"):
+                    continue
+                filename_match = PATCH_VERSION_FILENAME.fullmatch(key.rsplit("/", 1)[-1])
+                if filename_match is None:
+                    continue
+                version = filename_match.group("version")
+                major, minor, patch = map(int, version.split("."))
+                versions.append(((major, minor, patch), version))
+
+    if not versions:
+        raise ResolveFailed("patch version source not found")
+    return max(versions, key=lambda item: item[0])[1]
+
+
+_resolve_cache: tuple[float, ResolvedJs] | None = None
 
 
 @with_semaphore(1)
-async def resolve_js() -> list[tuple[str, str]]:
+async def resolve_js() -> ResolvedJs:
     global _resolve_cache
     now = time.monotonic()
     if _resolve_cache is not None and now - _resolve_cache[0] < JS_RESOLUTION_CACHE_TTL:
@@ -336,6 +405,9 @@ async def resolve_js() -> list[tuple[str, str]]:
 
     chunk_names = await find_chunk_names()
     chunks = await prepare_chunks(chunk_names)
-    result = [fn(chunks) for fn in _resolvers]
+    result = ResolvedJs(
+        modules=(find_paint_fn(chunks), find_worker_fn(chunks), find_season_num(chunks)),
+        patch_version=find_patch_version(chunks),
+    )
     _resolve_cache = (time.monotonic(), result)
     return result
